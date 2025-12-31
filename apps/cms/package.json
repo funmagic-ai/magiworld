@@ -1,0 +1,36 @@
+{
+  "name": "cms",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --turbopack -p 3001",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "generate:types": "payload generate:types"
+  },
+  "dependencies": {
+    "@magiworld/types": "workspace:*",
+    "@magiworld/utils": "workspace:*",
+    "@payloadcms/db-postgres": "^3.69.0",
+    "@payloadcms/next": "^3.69.0",
+    "@payloadcms/richtext-lexical": "^3.69.0",
+    "@payloadcms/storage-s3": "^3.69.0",
+    "next": "16.1.1",
+    "payload": "^3.69.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "sass": "^1.97.1",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.1",
+    "typescript": "^5"
+  }
+}

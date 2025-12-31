@@ -1,0 +1,53 @@
+{
+  "common": {
+    "appName": "Magiworld",
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "retry": "Try again",
+    "viewAll": "View all",
+    "learnMore": "Learn more"
+  },
+  "nav": {
+    "home": "Home",
+    "studio": "Studio",
+    "assets": "My Assets",
+    "login": "Login",
+    "signup": "Sign up"
+  },
+  "home": {
+    "hero": {
+      "title": "Create Magic with AI",
+      "subtitle": "Transform your ideas into stunning visuals, 3D models, and more"
+    },
+    "categories": {
+      "title": "Explore Tools",
+      "subtitle": "Discover AI-powered creative tools"
+    },
+    "featured": {
+      "title": "Featured",
+      "new": "New",
+      "popular": "Popular"
+    }
+  },
+  "tools": {
+    "stylize": "Stylize",
+    "edit": "Edit",
+    "3d_gen": "3D Generation",
+    "crystal_engrave": "Crystal Engrave",
+    "tryNow": "Try Now",
+    "lastUpdated": "Last updated"
+  },
+  "assets": {
+    "title": "My Assets",
+    "empty": "No assets yet",
+    "emptyDescription": "Your created assets will appear here",
+    "recreate": "Recreate",
+    "download": "Download",
+    "delete": "Delete"
+  },
+  "footer": {
+    "rights": "All rights reserved",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service"
+  }
+}

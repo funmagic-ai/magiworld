@@ -1,0 +1,53 @@
+{
+  "common": {
+    "appName": "Magiworld",
+    "loading": "加载中...",
+    "error": "出错了",
+    "retry": "重试",
+    "viewAll": "查看全部",
+    "learnMore": "了解更多"
+  },
+  "nav": {
+    "home": "首页",
+    "studio": "工作室",
+    "assets": "我的作品",
+    "login": "登录",
+    "signup": "注册"
+  },
+  "home": {
+    "hero": {
+      "title": "用AI创造魔法",
+      "subtitle": "将您的想法转化为精美的视觉效果、3D模型等"
+    },
+    "categories": {
+      "title": "探索工具",
+      "subtitle": "发现AI驱动的创意工具"
+    },
+    "featured": {
+      "title": "精选",
+      "new": "最新",
+      "popular": "热门"
+    }
+  },
+  "tools": {
+    "stylize": "风格化",
+    "edit": "编辑",
+    "3d_gen": "3D生成",
+    "crystal_engrave": "水晶雕刻",
+    "tryNow": "立即尝试",
+    "lastUpdated": "最后更新"
+  },
+  "assets": {
+    "title": "我的作品",
+    "empty": "暂无作品",
+    "emptyDescription": "您创建的作品将显示在这里",
+    "recreate": "重新创建",
+    "download": "下载",
+    "delete": "删除"
+  },
+  "footer": {
+    "rights": "版权所有",
+    "privacy": "隐私政策",
+    "terms": "服务条款"
+  }
+}

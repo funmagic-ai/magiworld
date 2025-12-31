@@ -1,0 +1,140 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
+import Image from 'next/image';
+import { Link } from '@/i18n/navigation';
+
+interface Banner {
+  id: string;
+  image: string;
+  title: string;
+  subtitle?: string;
+  link?: string;
+}
+
+interface HeroSectionProps {
+  mainBanners: Banner[];
+  sideBanners: Banner[];
+}
+
+export function HeroSection({ mainBanners, sideBanners }: HeroSectionProps) {
+  const t = useTranslations('home.hero');
+
+  // For now, use placeholder data if no banners provided
+  const defaultMainBanners: Banner[] = mainBanners.length > 0 ? mainBanners : [
+    {
+      id: '1',
+      image: '/placeholder-banner.jpg',
+      title: t('title'),
+      subtitle: t('subtitle'),
+    },
+  ];
+
+  const defaultSideBanners: Banner[] = sideBanners.length > 0 ? sideBanners : [
+    { id: 's1', image: '/placeholder-side1.jpg', title: 'AI Stylize' },
+    { id: 's2', image: '/placeholder-side2.jpg', title: '3D Generation' },
+  ];
+
+  return (
+    <section className="container py-4 lg:py-6">
+      {/* Desktop Layout: 12-column grid */}
+      <div className="hidden lg:grid lg:grid-cols-12 lg:gap-3 lg:items-stretch">
+        {/* Main Carousel - 8 columns */}
+        <div className="lg:col-span-8">
+          <MainCarousel banners={defaultMainBanners} />
+        </div>
+
+        {/* Side Banners - 4 columns, stacked to match main carousel height */}
+        <div className="lg:col-span-4 flex flex-col gap-3 h-full">
+          {defaultSideBanners.map((banner) => (
+            <SideBanner key={banner.id} banner={banner} />
+          ))}
+        </div>
+      </div>
+
+      {/* Mobile Layout: Stacked */}
+      <div className="lg:hidden space-y-3">
+        {/* Main Carousel - Full width */}
+        <MainCarousel banners={defaultMainBanners} />
+
+        {/* Side Banners - 2 column grid */}
+        <div className="grid grid-cols-2 gap-3">
+          {defaultSideBanners.map((banner) => (
+            <SideBanner key={banner.id} banner={banner} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MainCarousel({ banners }: { banners: Banner[] }) {
+  // Simple carousel - just show first banner for now
+  // TODO: Add proper carousel with navigation
+  const banner = banners[0];
+
+  return (
+    <div className="relative aspect-[2/1] lg:aspect-[2.5/1] overflow-hidden rounded-lg bg-muted">
+      {/* Placeholder gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-background" />
+
+      {/* Content overlay */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
+        <h1 className="text-xl md:text-2xl lg:text-3xl font-bold tracking-tight mb-2">
+          {banner.title}
+        </h1>
+        {banner.subtitle && (
+          <p className="text-sm md:text-base text-muted-foreground max-w-xl">
+            {banner.subtitle}
+          </p>
+        )}
+        {banner.link && (
+          <Link
+            href={banner.link}
+            className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Get Started
+          </Link>
+        )}
+      </div>
+
+      {/* Carousel dots indicator */}
+      {banners.length > 1 && (
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+          {banners.map((_, index) => (
+            <button
+              key={index}
+              className={`h-1.5 w-1.5 rounded-full transition-colors ${
+                index === 0 ? 'bg-primary' : 'bg-primary/30'
+              }`}
+              aria-label={`Go to slide ${index + 1}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SideBanner({ banner }: { banner: Banner }) {
+  const content = (
+    <div className="relative aspect-[2/1] lg:aspect-auto lg:flex-1 overflow-hidden rounded-lg bg-muted group cursor-pointer">
+      {/* Placeholder gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-secondary via-muted to-background transition-transform group-hover:scale-105" />
+
+      {/* Content */}
+      <div className="absolute inset-0 flex items-end p-3">
+        <h3 className="text-sm font-semibold">{banner.title}</h3>
+      </div>
+
+      {/* Hover overlay */}
+      <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/5 transition-colors" />
+    </div>
+  );
+
+  if (banner.link) {
+    return <Link href={banner.link}>{content}</Link>;
+  }
+
+  return content;
+}

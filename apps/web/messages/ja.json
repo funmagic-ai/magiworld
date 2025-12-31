@@ -1,0 +1,53 @@
+{
+  "common": {
+    "appName": "Magiworld",
+    "loading": "読み込み中...",
+    "error": "エラーが発生しました",
+    "retry": "再試行",
+    "viewAll": "すべて見る",
+    "learnMore": "詳細を見る"
+  },
+  "nav": {
+    "home": "ホーム",
+    "studio": "スタジオ",
+    "assets": "マイアセット",
+    "login": "ログイン",
+    "signup": "新規登録"
+  },
+  "home": {
+    "hero": {
+      "title": "AIで魔法を創造",
+      "subtitle": "アイデアを美しいビジュアル、3Dモデルなどに変換"
+    },
+    "categories": {
+      "title": "ツールを探索",
+      "subtitle": "AI搭載のクリエイティブツールを発見"
+    },
+    "featured": {
+      "title": "注目",
+      "new": "新着",
+      "popular": "人気"
+    }
+  },
+  "tools": {
+    "stylize": "スタイライズ",
+    "edit": "編集",
+    "3d_gen": "3D生成",
+    "crystal_engrave": "クリスタル彫刻",
+    "tryNow": "今すぐ試す",
+    "lastUpdated": "最終更新"
+  },
+  "assets": {
+    "title": "マイアセット",
+    "empty": "アセットがありません",
+    "emptyDescription": "作成したアセットがここに表示されます",
+    "recreate": "再作成",
+    "download": "ダウンロード",
+    "delete": "削除"
+  },
+  "footer": {
+    "rights": "全著作権所有",
+    "privacy": "プライバシーポリシー",
+    "terms": "利用規約"
+  }
+}

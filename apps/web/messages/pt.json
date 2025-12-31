@@ -1,0 +1,53 @@
+{
+  "common": {
+    "appName": "Magiworld",
+    "loading": "Carregando...",
+    "error": "Algo deu errado",
+    "retry": "Tentar novamente",
+    "viewAll": "Ver todos",
+    "learnMore": "Saiba mais"
+  },
+  "nav": {
+    "home": "Início",
+    "studio": "Estúdio",
+    "assets": "Meus Arquivos",
+    "login": "Entrar",
+    "signup": "Cadastrar"
+  },
+  "home": {
+    "hero": {
+      "title": "Crie Magia com IA",
+      "subtitle": "Transforme suas ideias em visuais incríveis, modelos 3D e mais"
+    },
+    "categories": {
+      "title": "Explorar Ferramentas",
+      "subtitle": "Descubra ferramentas criativas com IA"
+    },
+    "featured": {
+      "title": "Destaques",
+      "new": "Novo",
+      "popular": "Popular"
+    }
+  },
+  "tools": {
+    "stylize": "Estilizar",
+    "edit": "Editar",
+    "3d_gen": "Geração 3D",
+    "crystal_engrave": "Gravação em Cristal",
+    "tryNow": "Experimente Agora",
+    "lastUpdated": "Última atualização"
+  },
+  "assets": {
+    "title": "Meus Arquivos",
+    "empty": "Nenhum arquivo ainda",
+    "emptyDescription": "Seus arquivos criados aparecerão aqui",
+    "recreate": "Recriar",
+    "download": "Baixar",
+    "delete": "Excluir"
+  },
+  "footer": {
+    "rights": "Todos os direitos reservados",
+    "privacy": "Política de Privacidade",
+    "terms": "Termos de Serviço"
+  }
+}
