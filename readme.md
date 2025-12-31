@@ -1,96 +1,94 @@
- **Project Target**
+# Magiworld AI Platform
 
-Magiworld AI Platform Development Specification
- 
-**1. Core Architecture Principles**
-Tech Stack: Next.js 16.1.1 (App Router), Payload CMS, Tailwind CSS v4,shadcn ui.
--monorepo project
--use turborepo and pnpm  to create monorepo project 
+Magiworld is an AI-powered creative platform with tools for image stylization, editing, 3D generation, and physical fabrication.
 
--Configuration-Driven: The frontend page.tsx must not hard-code business logic. UI rendering and algorithm scheduling are determined by the toolType returned from Payload CMS.
+## Tech Stack
 
-- MUST design for Responsible layout
--
-Component Registry: Establish a one-to-one mapping between toolType and React components.
+- **Framework**: Next.js 16.1.1 (App Router)
+- **Database**: PostgreSQL with Drizzle ORM
+- **Styling**: Tailwind CSS v4, shadcn/ui
+- **Monorepo**: Turborepo + pnpm
+- **i18n**: next-intl (en, ja, pt, zh)
 
--Dynamic Imports: Use next/dynamic to load tool-specific interfaces only when needed to optimize performance.
+## Project Structure
 
-**2. Data Model Design (Payload CMS)**
--Implement the following Collections and Globals:
+```
+magiworld/
+├── apps/
+│   ├── web/      # Frontend application (port 3000)
+│   └── admin/    # Admin dashboard (port 3002)
+├── packages/
+│   ├── db/       # Shared database schema (@magiworld/db)
+│   ├── types/    # Shared TypeScript types (@magiworld/types)
+│   └── utils/    # Shared utilities (@magiworld/utils)
+```
 
-A. Global: HomeConfig (Marketing Control)
-mainBanners: Array (Max 3). Fields: image, title, link (Relationship to Tools).
+## Getting Started
 
-sideBanners: Array (Fixed 2). Fields: image, title, link (Relationship to Tools).
+### Prerequisites
 
-B. Collection: Tools & Categories
-Categories: name, slug, icon.
+- Node.js 20+
+- pnpm 9+
+- PostgreSQL (Docker recommended)
 
-Tools:
+### Setup
 
-Base: title, slug, category (Relational), thumbnail.
+1. Install dependencies:
+```bash
+pnpm install
+```
 
-Type Dispatcher: toolType (Select: stylize, edit, 3d_gen, crystal_engrave).
+2. Start PostgreSQL (Docker):
+```bash
+docker run --name magi-db -e POSTGRES_PASSWORD=yourpassword -p 9000:5432 -d postgres
+```
 
-Conditional Logic: Show promptTemplate for stylize types; show configJson for 3D/Edit types.
+3. Create database:
+```bash
+docker exec -it magi-db psql -U postgres -c "CREATE DATABASE \"magi-db\";"
+```
 
-C. Collection: Tasks (Unified Asset Model)
-Purpose: To unify diverse outputs (2D images, 3D models, fabrication parameters) into a single management system.
+4. Push schema and seed data:
+```bash
+pnpm db:push
+pnpm db:seed
+```
 
-Fields:
+5. Start development:
+```bash
+pnpm dev        # Start all apps
+pnpm dev:web    # Start web only
+pnpm dev:admin  # Start admin only
+```
 
-user: Relationship to Users.
+## Scripts
 
-parentTool: Relationship to Tools.
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Start all apps in development |
+| `pnpm dev:web` | Start web app only |
+| `pnpm dev:admin` | Start admin app only |
+| `pnpm build` | Build all apps |
+| `pnpm lint` | Lint all packages |
+| `pnpm typecheck` | Type check all packages |
+| `pnpm db:push` | Push database schema |
+| `pnpm db:seed` | Seed database with sample data |
+| `pnpm db:studio` | Open Drizzle Studio |
 
-inputParams: JSON (Stores prompts, seeds, or uploaded image refs).
+## App URLs
 
-outputData: JSON (Stores previewUrl, downloadUrl, and metadata like dimensions or point cloud density).
+| App | URL |
+|-----|-----|
+| Web | http://localhost:3000 |
+| Admin | http://localhost:3002 |
 
-status: pending | processing | success | failed.
+## Database
 
-**3. Module Requirements**
-Module 1: Explore (Homepage)
-Responsive Hero Layout:
+PostgreSQL connection string format:
+```
+postgresql://user:password@localhost:9000/magi-db
+```
 
-Desktop (lg): Use a 12-column grid. The MainCarousel (sourced from mainBanners) spans 8 columns. The two SideBanners (sourced from sideBanners) occupy the remaining 4 columns and are stacked vertically to match the height of the main carousel.
+## License
 
-Mobile: Stacked layout. The MainCarousel takes full width on top. Below it, the two SideBanners are displayed side-by-side in a 2-column grid (grid-cols-2).
-
-Tool Discovery: Display tool cards grouped by category, showing thumbnail, title, and last updated time.
-
-Module 2: Studio (Dynamic Workspace)
-Dynamic Routing: /[toolTypeSlug]/[toolSlug].
-
-Interface Injection: Fetch tool data by slug, look up the toolType in the TOOL_COMPONENTS registry, and dynamically render the corresponding interface (e.g., StylizeInterface).
-
-Interaction: Support search, filtering, and masonry/waterfall layout for the tool list.
-
-Module 3: Assets (Personal Library)
-Unified Renderer: Iterate through the Tasks collection. Use a "Polymorphic Viewer" to render the asset based on outputType (e.g., NextImage for images, <model-viewer> for 3D GLB files).
-
-"Re-create" Workflow: Allow users to click an asset to return to the original Studio tool with inputParams pre-filled for fine-tuning.
-
-**4. Technical Constraints**
-Safety: All AI API calls must be proxied via Next.js API Routes to protect backend API Keys.
-
-Performance: Implement aggressive code splitting for tool interfaces.
-
-Scalability: The Task schema must remain flexible (JSON-based) to support future fabrication devices without database migrations.
-**5.monorepo Apps**
--web,pls use "pnpm dlx shadcn@latest create --preset 
-"https://ui.shadcn.com/init?base=base&style=nova&baseColor=neutral&theme=neutral&iconLibrary=hugeicons&font=inter&menuAccent=subtle&menuC
-olor=default&radius=default&template=next" --template next" to create, and always use shadcn ui component.
--cms,  payload cms project, pls use "npxcreate-payload-app", and remember we use postgresql as our db
-**6.Database url**
-postgresql://postgres:88665575@localhost:9000/magi-db
-
-**7.Internationalization**
-we use latest next-intl to support  Internationalization, at this stage we only need english,Japanese,portuguese and Chinese.use https://next-intl.dev/docs/ as your search to get information 
-**8.MCP Use**
-Always remember to use registered MCP servers to get information before web search
-
-**9.Payload CMS**
-usenpx create-payload-app to create and consider https://payloadcms.com/docs as your search source since it does not have MCP server.
-**Layout Reference for Header**
-refer to reference/layout.png, and more layout or component layout i will put picture here for your reference.
+Private

@@ -4,11 +4,14 @@
   "scripts": {
     "dev": "turbo dev",
     "dev:web": "turbo dev --filter=web",
-    "dev:cms": "turbo dev --filter=cms",
+    "dev:admin": "turbo dev --filter=admin",
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
-    "clean": "turbo clean && rm -rf node_modules"
+    "clean": "turbo clean && rm -rf node_modules",
+    "db:push": "pnpm --filter @magiworld/db db:push",
+    "db:seed": "pnpm --filter @magiworld/db db:seed",
+    "db:studio": "pnpm --filter @magiworld/db db:studio"
   },
   "devDependencies": {
     "turbo": "^2.3.3",

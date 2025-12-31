@@ -4,110 +4,96 @@ import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-
-interface Tool {
-  id: string;
-  title: string;
-  slug: string;
-  toolType: string;
-  thumbnail?: string;
-  category: {
-    name: string;
-    slug: string;
-  };
-  updatedAt: string;
-}
-
-interface Category {
-  id: string;
-  name: string;
-  slug: string;
-  icon?: string;
-  tools: Tool[];
-}
+import type { ToolListItem } from '@magiworld/types';
 
 interface ToolDiscoveryProps {
-  categories: Category[];
+  tools: ToolListItem[];
 }
 
-export function ToolDiscovery({ categories }: ToolDiscoveryProps) {
+export function ToolDiscovery({ tools }: ToolDiscoveryProps) {
   const t = useTranslations('home.categories');
-  const tTools = useTranslations('tools');
+  const tCommon = useTranslations('common');
 
-  // Use placeholder data if no categories provided
-  const defaultCategories: Category[] = categories.length > 0 ? categories : [
+  // Use placeholder data if no tools provided
+  // In production, this data comes from the database with localized toolType.name
+  const defaultTools: ToolListItem[] = tools.length > 0 ? tools : [
     {
-      id: '1',
-      name: 'AI Stylize',
-      slug: 'stylize',
-      tools: [
-        { id: 't1', title: 'Anime Style', slug: 'anime-style', toolType: 'stylize', category: { name: 'AI Stylize', slug: 'stylize' }, updatedAt: new Date().toISOString() },
-        { id: 't2', title: 'Oil Painting', slug: 'oil-painting', toolType: 'stylize', category: { name: 'AI Stylize', slug: 'stylize' }, updatedAt: new Date().toISOString() },
-        { id: 't3', title: 'Watercolor', slug: 'watercolor', toolType: 'stylize', category: { name: 'AI Stylize', slug: 'stylize' }, updatedAt: new Date().toISOString() },
-      ],
+      id: 't1',
+      title: 'Anime Style',
+      slug: 'anime-style',
+      toolType: { slug: 'stylize', name: 'Stylize', badgeColor: 'default' },
+      updatedAt: new Date().toISOString()
     },
     {
-      id: '2',
-      name: '3D Generation',
-      slug: '3d-gen',
-      tools: [
-        { id: 't4', title: 'Image to 3D', slug: 'image-to-3d', toolType: '3d_gen', category: { name: '3D Generation', slug: '3d-gen' }, updatedAt: new Date().toISOString() },
-        { id: 't5', title: 'Text to 3D', slug: 'text-to-3d', toolType: '3d_gen', category: { name: '3D Generation', slug: '3d-gen' }, updatedAt: new Date().toISOString() },
-      ],
+      id: 't2',
+      title: 'Oil Painting',
+      slug: 'oil-painting',
+      toolType: { slug: 'stylize', name: 'Stylize', badgeColor: 'default' },
+      updatedAt: new Date().toISOString()
     },
     {
-      id: '3',
-      name: 'Crystal Engrave',
-      slug: 'crystal-engrave',
-      tools: [
-        { id: 't6', title: 'Photo Crystal', slug: 'photo-crystal', toolType: 'crystal_engrave', category: { name: 'Crystal Engrave', slug: 'crystal-engrave' }, updatedAt: new Date().toISOString() },
-      ],
+      id: 't3',
+      title: 'Watercolor',
+      slug: 'watercolor',
+      toolType: { slug: 'stylize', name: 'Stylize', badgeColor: 'default' },
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: 't4',
+      title: 'Image to 3D',
+      slug: 'image-to-3d',
+      toolType: { slug: '3d_gen', name: '3D Generation', badgeColor: 'secondary' },
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: 't5',
+      title: 'Text to 3D',
+      slug: 'text-to-3d',
+      toolType: { slug: '3d_gen', name: '3D Generation', badgeColor: 'secondary' },
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: 't6',
+      title: 'Photo Crystal',
+      slug: 'photo-crystal',
+      toolType: { slug: 'crystal_engrave', name: 'Crystal Engrave', badgeColor: 'secondary' },
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: 't7',
+      title: 'Portrait Edit',
+      slug: 'portrait-edit',
+      toolType: { slug: 'edit', name: 'Edit', badgeColor: 'outline' },
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: 't8',
+      title: 'Background Remove',
+      slug: 'background-remove',
+      toolType: { slug: 'edit', name: 'Edit', badgeColor: 'outline' },
+      updatedAt: new Date().toISOString()
     },
   ];
 
   return (
-    <section className="container py-10">
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
+    <section className="container py-8">
+      <div className="mb-6">
+        <h2 className="text-xl font-bold tracking-tight md:text-2xl">
           {t('title')}
         </h2>
-        <p className="text-muted-foreground mt-2">{t('subtitle')}</p>
+        <p className="text-sm text-muted-foreground mt-1">{t('subtitle')}</p>
       </div>
 
-      <div className="space-y-12">
-        {defaultCategories.map((category) => (
-          <CategorySection key={category.id} category={category} />
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        {defaultTools.map((tool) => (
+          <ToolCard key={tool.id} tool={tool} />
         ))}
       </div>
     </section>
   );
 }
 
-function CategorySection({ category }: { category: Category }) {
-  const t = useTranslations('common');
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xl font-semibold">{category.name}</h3>
-        <Link
-          href={`/studio?category=${category.slug}`}
-          className="text-sm text-muted-foreground hover:text-primary transition-colors"
-        >
-          {t('viewAll')} →
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-        {category.tools.map((tool) => (
-          <ToolCard key={tool.id} tool={tool} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ToolCard({ tool }: { tool: Tool }) {
+function ToolCard({ tool }: { tool: ToolListItem }) {
   const t = useTranslations('tools');
 
   // Use a stable date format to avoid hydration mismatch
@@ -119,32 +105,39 @@ function ToolCard({ tool }: { tool: Tool }) {
   };
 
   return (
-    <Link href={`/studio/${tool.toolType}/${tool.slug}`}>
-      <Card className="group overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1">
+    <Link href={`/studio/${tool.toolType.slug}/${tool.slug}`}>
+      <Card className="group overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5">
         {/* Thumbnail */}
         <div className="aspect-square bg-muted relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-secondary/20" />
 
+          {/* Tool Type Badge - name is already localized from database */}
+          <div className="absolute top-2 left-2">
+            <Badge variant={tool.toolType.badgeColor} className="text-xs">
+              {tool.toolType.name}
+            </Badge>
+          </div>
+
           {/* Placeholder icon */}
           <div className="absolute inset-0 flex items-center justify-center">
-            <ToolIcon type={tool.toolType} className="h-12 w-12 text-muted-foreground/50" />
+            <ToolIcon type={tool.toolType.slug} className="h-10 w-10 text-muted-foreground/50" />
           </div>
 
           {/* Hover overlay */}
           <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-            <span className="text-sm font-medium bg-background/90 px-3 py-1.5 rounded-full">
+            <span className="text-xs font-medium bg-background/90 px-2 py-1 rounded-full">
               {t('tryNow')}
             </span>
           </div>
         </div>
 
-        <CardContent className="p-3">
-          <h4 className="font-medium truncate">{tool.title}</h4>
+        <CardContent className="p-2">
+          <h4 className="text-sm font-medium truncate">{tool.title}</h4>
         </CardContent>
 
-        <CardFooter className="p-3 pt-0">
+        <CardFooter className="p-2 pt-0">
           <span className="text-xs text-muted-foreground">
-            {t('lastUpdated')}: {formatDate(tool.updatedAt)}
+            {formatDate(tool.updatedAt)}
           </span>
         </CardFooter>
       </Card>
