@@ -13,7 +13,7 @@
  * @module apps/admin/app/page
  */
 
-import { db, tools, toolTypes, categories, media, homeBanners } from '@magiworld/db';
+import { db, tools, toolTypes, media, homeBanners } from '@magiworld/db';
 import { count } from 'drizzle-orm';
 
 /**
@@ -25,8 +25,6 @@ interface DashboardStats {
   tools: number;
   /** Total number of tool type classifications */
   toolTypes: number;
-  /** Total number of categories */
-  categories: number;
   /** Total number of uploaded media files */
   media: number;
   /** Total number of homepage banners */
@@ -44,14 +42,12 @@ interface DashboardStats {
 async function getStats(): Promise<DashboardStats> {
   const [toolCount] = await db.select({ count: count() }).from(tools);
   const [toolTypeCount] = await db.select({ count: count() }).from(toolTypes);
-  const [categoryCount] = await db.select({ count: count() }).from(categories);
   const [mediaCount] = await db.select({ count: count() }).from(media);
   const [bannerCount] = await db.select({ count: count() }).from(homeBanners);
 
   return {
     tools: toolCount.count,
     toolTypes: toolTypeCount.count,
-    categories: categoryCount.count,
     media: mediaCount.count,
     banners: bannerCount.count,
   };
@@ -81,7 +77,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Statistics Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Tools"
           value={stats.tools}
@@ -102,16 +98,6 @@ export default async function DashboardPage() {
               <rect x="14" y="3" width="7" height="7" />
               <rect x="14" y="14" width="7" height="7" />
               <rect x="3" y="14" width="7" height="7" />
-            </svg>
-          }
-        />
-        <StatCard
-          title="Categories"
-          value={stats.categories}
-          href="/categories"
-          icon={
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
             </svg>
           }
         />

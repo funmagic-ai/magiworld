@@ -19,8 +19,6 @@ import {
   toolTypes,
   toolTypeTranslations,
   toolTranslations,
-  categories,
-  categoryTranslations,
   homeBanners,
   homeBannerTranslations,
   media,
@@ -323,41 +321,8 @@ export async function getHomeConfig(locale: Locale = 'en'): Promise<HomeBannerRe
 }
 
 // ============================================
-// Category and Tool Type Functions
+// Tool Type Functions
 // ============================================
-
-/**
- * Fetch all categories with localized names.
- *
- * Categories are used for organizing tools into logical groups.
- * Returns categories ordered by display order.
- *
- * @param locale - The locale code for content translation (default: 'en')
- * @returns Promise resolving to an array of category objects
- *
- * @example
- * ```typescript
- * const categories = await getCategories('en');
- * // [{ id: '...', slug: 'creative', icon: 'palette', name: 'Creative' }, ...]
- * ```
- */
-export async function getCategories(locale: Locale = 'en') {
-  const result = await db
-    .select({
-      id: categories.id,
-      slug: categories.slug,
-      icon: categories.icon,
-      name: categoryTranslations.name,
-    })
-    .from(categories)
-    .innerJoin(
-      categoryTranslations,
-      and(eq(categoryTranslations.categoryId, categories.id), eq(categoryTranslations.locale, locale))
-    )
-    .orderBy(asc(categories.order));
-
-  return result;
-}
 
 /**
  * Fetch all active tool types with localized content.

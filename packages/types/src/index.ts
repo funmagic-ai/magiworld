@@ -58,44 +58,12 @@ export interface ToolTypeInfo {
 export type ToolTypeSlug = string;
 
 // ============================================
-// Category Definitions
-// ============================================
-
-/**
- * Category with localized content.
- * Used for organizing and filtering tools.
- *
- * @example
- * ```typescript
- * const category: Category = {
- *   id: 'uuid-here',
- *   name: 'Creative',  // Localized
- *   slug: 'creative',
- *   icon: 'palette',
- *   order: 1
- * };
- * ```
- */
-export interface Category {
-  /** Unique identifier */
-  id: string;
-  /** Localized category name */
-  name: string;
-  /** URL-friendly slug */
-  slug: string;
-  /** Icon identifier (emoji or icon library key) */
-  icon?: string;
-  /** Display order (lower = first) */
-  order: number;
-}
-
-// ============================================
 // Tool Definitions
 // ============================================
 
 /**
  * Full tool definition with related data.
- * Includes tool type, category, and all configuration.
+ * Includes tool type and all configuration.
  *
  * @example
  * ```typescript
@@ -105,7 +73,6 @@ export interface Category {
  *   slug: 'anime-style',
  *   description: 'Transform photos into anime style',
  *   toolType: { ... },
- *   category: { ... },
  *   isActive: true,
  *   isFeatured: true
  * };
@@ -120,8 +87,6 @@ export interface Tool {
   slug: string;
   /** Localized description (optional) */
   description?: string;
-  /** Associated category */
-  category: Category;
   /** Thumbnail image (optional) */
   thumbnail?: Media;
   /** Tool type with full details */
@@ -136,7 +101,7 @@ export interface Tool {
   isActive: boolean;
   /** Whether the tool is featured on homepage */
   isFeatured: boolean;
-  /** Display order within category */
+  /** Display order (lower = first) */
   order: number;
   /** Creation timestamp (ISO string) */
   createdAt: string;

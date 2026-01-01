@@ -100,57 +100,16 @@ export const toolTypeTranslations = pgTable('tool_type_translations', {
 });
 
 /**
- * Categories Table
- *
- * Defines tool categories for organizing and filtering tools.
- * Categories help users discover tools by grouping related functionality.
- *
- * @example
- * { slug: 'creative', icon: 'palette', order: 1 }
- */
-export const categories = pgTable('categories', {
-  /** Unique identifier (UUID v4) */
-  id: uuid('id').primaryKey().defaultRandom(),
-  /** URL-friendly unique identifier */
-  slug: text('slug').notNull().unique(),
-  /** Icon identifier (emoji or icon library key) */
-  icon: text('icon'),
-  /** Display order (lower numbers appear first) */
-  order: integer('order').notNull().default(0),
-  /** Record creation timestamp */
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  /** Record last update timestamp */
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
-
-/**
- * Category Translations Table
- *
- * Stores localized content for categories.
- */
-export const categoryTranslations = pgTable('category_translations', {
-  /** Unique identifier (UUID v4) */
-  id: uuid('id').primaryKey().defaultRandom(),
-  /** Reference to parent category (cascades on delete) */
-  categoryId: uuid('category_id').notNull().references(() => categories.id, { onDelete: 'cascade' }),
-  /** Locale code for this translation */
-  locale: localeEnum('locale').notNull(),
-  /** Localized category name */
-  name: text('name').notNull(),
-});
-
-/**
  * Tools Table
  *
  * Defines individual AI tools available on the platform.
- * Each tool belongs to a tool type and category, and contains
- * configuration for the AI processing pipeline.
+ * Each tool belongs to a tool type and contains configuration
+ * for the AI processing pipeline.
  *
  * @example
  * {
  *   slug: 'anime-style',
  *   toolTypeId: '<uuid>',
- *   categoryId: '<uuid>',
  *   aiEndpoint: '/api/ai/stylize'
  * }
  */
@@ -161,8 +120,6 @@ export const tools = pgTable('tools', {
   slug: text('slug').notNull().unique(),
   /** Reference to tool type (determines UI component) */
   toolTypeId: uuid('tool_type_id').notNull().references(() => toolTypes.id),
-  /** Reference to category (for grouping/filtering) */
-  categoryId: uuid('category_id').notNull().references(() => categories.id),
   /** URL to tool thumbnail image */
   thumbnailUrl: text('thumbnail_url'),
   /** Default prompt template for AI generation */
@@ -341,16 +298,6 @@ export type ToolTypeInsert = typeof toolTypes.$inferInsert;
 export type ToolTypeTranslation = typeof toolTypeTranslations.$inferSelect;
 /** Inferred insert type for tool_type_translations table */
 export type ToolTypeTranslationInsert = typeof toolTypeTranslations.$inferInsert;
-
-/** Inferred select type for categories table */
-export type Category = typeof categories.$inferSelect;
-/** Inferred insert type for categories table */
-export type CategoryInsert = typeof categories.$inferInsert;
-
-/** Inferred select type for category_translations table */
-export type CategoryTranslation = typeof categoryTranslations.$inferSelect;
-/** Inferred insert type for category_translations table */
-export type CategoryTranslationInsert = typeof categoryTranslations.$inferInsert;
 
 /** Inferred select type for tools table */
 export type Tool = typeof tools.$inferSelect;
