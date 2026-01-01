@@ -75,37 +75,52 @@ function MainCarousel({ banners }: { banners: Banner[] }) {
 
   return (
     <div className="relative aspect-[2/1] lg:aspect-[2.5/1] overflow-hidden rounded-lg bg-muted">
-      {/* Placeholder gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-background" />
+      {/* Banner Image */}
+      {banner.image ? (
+        <Image
+          src={banner.image}
+          alt={banner.title}
+          fill
+          className="object-cover"
+          sizes="(max-width: 1024px) 100vw, 66vw"
+          priority
+        />
+      ) : (
+        /* Fallback gradient background */
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-background" />
+      )}
 
-      {/* Content overlay */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
-        <h1 className="text-xl md:text-2xl lg:text-3xl font-bold tracking-tight mb-2">
+      {/* Gradient overlay for text readability */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+
+      {/* Content overlay - bottom left aligned */}
+      <div className="absolute inset-0 flex flex-col items-start justify-end p-4 md:p-6 lg:p-8">
+        <h1 className="text-xl md:text-2xl lg:text-3xl font-bold tracking-tight mb-1 text-white drop-shadow-md">
           {banner.title}
         </h1>
         {banner.subtitle && (
-          <p className="text-sm md:text-base text-muted-foreground max-w-xl">
+          <p className="text-sm md:text-base text-white/90 max-w-xl drop-shadow mb-3">
             {banner.subtitle}
           </p>
         )}
         {banner.link && (
           <Link
             href={banner.link}
-            className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="inline-flex items-center justify-center rounded-md bg-white/20 backdrop-blur-sm border border-white/30 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-primary hover:border-primary hover:text-primary-foreground"
           >
             Get Started
           </Link>
         )}
       </div>
 
-      {/* Carousel dots indicator */}
+      {/* Carousel dots indicator - positioned at bottom right */}
       {banners.length > 1 && (
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+        <div className="absolute bottom-4 right-4 md:bottom-6 md:right-6 lg:bottom-8 lg:right-8 flex gap-1.5">
           {banners.map((_, index) => (
             <button
               key={index}
-              className={`h-1.5 w-1.5 rounded-full transition-colors ${
-                index === 0 ? 'bg-primary' : 'bg-primary/30'
+              className={`h-2 w-2 rounded-full transition-colors ${
+                index === 0 ? 'bg-white' : 'bg-white/40'
               }`}
               aria-label={`Go to slide ${index + 1}`}
             />
@@ -119,16 +134,30 @@ function MainCarousel({ banners }: { banners: Banner[] }) {
 function SideBanner({ banner }: { banner: Banner }) {
   const content = (
     <div className="relative aspect-[2/1] lg:aspect-auto lg:flex-1 overflow-hidden rounded-lg bg-muted group cursor-pointer">
-      {/* Placeholder gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-secondary via-muted to-background transition-transform group-hover:scale-105" />
+      {/* Banner Image */}
+      {banner.image ? (
+        <Image
+          src={banner.image}
+          alt={banner.title}
+          fill
+          className="object-cover transition-transform group-hover:scale-105"
+          sizes="(max-width: 1024px) 50vw, 33vw"
+        />
+      ) : (
+        /* Fallback gradient */
+        <div className="absolute inset-0 bg-gradient-to-br from-secondary via-muted to-background transition-transform group-hover:scale-105" />
+      )}
+
+      {/* Gradient overlay for text readability */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
 
       {/* Content */}
       <div className="absolute inset-0 flex items-end p-3">
-        <h3 className="text-sm font-semibold">{banner.title}</h3>
+        <h3 className="text-sm font-semibold text-white drop-shadow">{banner.title}</h3>
       </div>
 
       {/* Hover overlay */}
-      <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/5 transition-colors" />
+      <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/10 transition-colors" />
     </div>
   );
 

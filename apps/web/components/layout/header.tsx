@@ -1,12 +1,16 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Link } from '@/i18n/navigation';
+import { Link, usePathname } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { LanguageSwitcher } from './language-switcher';
+import { ThemeSwitcher } from '@/components/theme-switcher';
+import { Logo } from '@/components/logo';
+import { cn } from '@/lib/utils';
 
 export function Header() {
   const t = useTranslations('nav');
+  const pathname = usePathname();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -15,31 +19,44 @@ export function Header() {
         <div className="flex items-center gap-8">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg border-2 border-primary bg-background">
-              <span className="text-lg font-bold text-primary">M</span>
-            </div>
+            <Logo className="h-9 w-9 text-primary" />
             <span className="hidden text-xl font-semibold sm:inline-block">
               Magiworld
             </span>
           </Link>
 
           {/* Main Navigation */}
-          <nav className="hidden md:flex items-center gap-6">
+          <nav className="hidden md:flex items-center gap-1">
             <Link
               href="/"
-              className="text-sm font-medium transition-colors hover:text-primary"
+              className={cn(
+                "text-sm font-medium px-3 py-2 rounded-lg transition-all",
+                pathname === "/"
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-primary/10 hover:text-primary"
+              )}
             >
               {t('home')}
             </Link>
             <Link
               href="/studio"
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+              className={cn(
+                "text-sm font-medium px-3 py-2 rounded-lg transition-all",
+                pathname === "/studio" || pathname.startsWith("/studio/")
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-primary/10 hover:text-primary"
+              )}
             >
               {t('studio')}
             </Link>
             <Link
               href="/assets"
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+              className={cn(
+                "text-sm font-medium px-3 py-2 rounded-lg transition-all",
+                pathname === "/assets" || pathname.startsWith("/assets/")
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-primary/10 hover:text-primary"
+              )}
             >
               {t('assets')}
             </Link>
@@ -54,15 +71,20 @@ export function Header() {
             <span className="sr-only">Search</span>
           </Button>
 
+          {/* Theme Switcher */}
+          <ThemeSwitcher />
+
           {/* Language Switcher */}
           <LanguageSwitcher />
 
           {/* Auth Buttons (placeholder for now) */}
           <div className="hidden sm:flex items-center gap-2">
-            <Button variant="ghost" size="sm">
+            <Button  size="sm">
               {t('login')}
             </Button>
-            <Button size="sm">{t('signup')}</Button>
+            <Button size="sm">
+              {t('signup')}
+            </Button>
           </div>
 
           {/* Mobile Menu Button */}
