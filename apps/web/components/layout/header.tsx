@@ -8,7 +8,11 @@ import { ThemeSwitcher } from '@/components/theme-switcher';
 import { Logo } from '@/components/logo';
 import { cn } from '@/lib/utils';
 
-export function Header() {
+type HeaderProps = {
+  authSlot?: React.ReactNode;
+};
+
+export function Header({ authSlot }: HeaderProps) {
   const t = useTranslations('nav');
   const pathname = usePathname();
 
@@ -77,14 +81,9 @@ export function Header() {
           {/* Language Switcher */}
           <LanguageSwitcher />
 
-          {/* Auth Buttons (placeholder for now) */}
+          {/* Auth */}
           <div className="hidden sm:flex items-center gap-2">
-            <Button  size="sm">
-              {t('login')}
-            </Button>
-            <Button size="sm">
-              {t('signup')}
-            </Button>
+            {authSlot}
           </div>
 
           {/* Mobile Menu Button */}

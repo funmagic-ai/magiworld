@@ -6,6 +6,7 @@ import { routing } from '@/i18n/routing';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { ThemeProvider } from '@/components/theme-provider';
+import { AuthStatus } from '@/components/auth/auth-status';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -44,7 +45,7 @@ export default async function LocaleLayout({
         >
           <NextIntlClientProvider messages={messages}>
             <div className="relative flex min-h-screen flex-col">
-              <Header />
+              <Header authSlot={<AuthStatus />} />
               <main className="flex-1">{children}</main>
               <Footer />
             </div>

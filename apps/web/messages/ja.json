@@ -12,7 +12,9 @@
     "studio": "スタジオ",
     "assets": "マイアセット",
     "login": "ログイン",
-    "signup": "新規登録"
+    "signup": "新規登録",
+    "logout": "ログアウト",
+    "profile": "プロフィール"
   },
   "home": {
     "hero": {
@@ -49,5 +51,31 @@
     "rights": "全著作権所有",
     "privacy": "プライバシーポリシー",
     "terms": "利用規約"
+  },
+  "profile": {
+    "sidebar": {
+      "account": "アカウント",
+      "preferences": "設定"
+    },
+    "account": {
+      "title": "アカウント情報",
+      "name": "名前",
+      "email": "メール",
+      "userId": "ユーザーID",
+      "memberSince": "登録日",
+      "verified": "確認済み",
+      "notSet": "未設定",
+      "unknown": "不明"
+    },
+    "preferences": {
+      "title": "設定",
+      "theme": "テーマ",
+      "language": "言語"
+    },
+    "actions": {
+      "title": "アカウント操作",
+      "signOut": "ログアウト",
+      "signOutDescription": "このデバイスからログアウトします。"
+    }
   }
 }
