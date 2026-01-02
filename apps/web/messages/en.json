@@ -12,7 +12,9 @@
     "studio": "Studio",
     "assets": "My Assets",
     "login": "Login",
-    "signup": "Sign up"
+    "signup": "Sign up",
+    "logout": "Log out",
+    "profile": "Profile"
   },
   "home": {
     "hero": {
@@ -49,5 +51,31 @@
     "rights": "All rights reserved",
     "privacy": "Privacy Policy",
     "terms": "Terms of Service"
+  },
+  "profile": {
+    "sidebar": {
+      "account": "Account",
+      "preferences": "Preferences"
+    },
+    "account": {
+      "title": "Account Information",
+      "name": "Name",
+      "email": "Email",
+      "userId": "User ID",
+      "memberSince": "Member since",
+      "verified": "Verified",
+      "notSet": "Not set",
+      "unknown": "Unknown"
+    },
+    "preferences": {
+      "title": "Preferences",
+      "theme": "Theme",
+      "language": "Language"
+    },
+    "actions": {
+      "title": "Account Actions",
+      "signOut": "Sign Out",
+      "signOutDescription": "Sign out of your account on this device."
+    }
   }
 }

@@ -13,6 +13,7 @@
     "@base-ui/react": "^1.0.0",
     "@hugeicons/core-free-icons": "^3.1.1",
     "@hugeicons/react": "^1.1.4",
+    "@logto/next": "^4.2.8",
     "@magiworld/db": "workspace:*",
     "@magiworld/types": "workspace:*",
     "@magiworld/utils": "workspace:*",

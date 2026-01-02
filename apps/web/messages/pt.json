@@ -12,7 +12,9 @@
     "studio": "Estúdio",
     "assets": "Meus Arquivos",
     "login": "Entrar",
-    "signup": "Cadastrar"
+    "signup": "Cadastrar",
+    "logout": "Sair",
+    "profile": "Perfil"
   },
   "home": {
     "hero": {
@@ -49,5 +51,31 @@
     "rights": "Todos os direitos reservados",
     "privacy": "Política de Privacidade",
     "terms": "Termos de Serviço"
+  },
+  "profile": {
+    "sidebar": {
+      "account": "Conta",
+      "preferences": "Preferências"
+    },
+    "account": {
+      "title": "Informações da Conta",
+      "name": "Nome",
+      "email": "Email",
+      "userId": "ID do Usuário",
+      "memberSince": "Membro desde",
+      "verified": "Verificado",
+      "notSet": "Não definido",
+      "unknown": "Desconhecido"
+    },
+    "preferences": {
+      "title": "Preferências",
+      "theme": "Tema",
+      "language": "Idioma"
+    },
+    "actions": {
+      "title": "Ações da Conta",
+      "signOut": "Sair",
+      "signOutDescription": "Sair da sua conta neste dispositivo."
+    }
   }
 }

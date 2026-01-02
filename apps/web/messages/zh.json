@@ -12,7 +12,9 @@
     "studio": "工作室",
     "assets": "我的作品",
     "login": "登录",
-    "signup": "注册"
+    "signup": "注册",
+    "logout": "退出登录",
+    "profile": "个人资料"
   },
   "home": {
     "hero": {
@@ -49,5 +51,31 @@
     "rights": "版权所有",
     "privacy": "隐私政策",
     "terms": "服务条款"
+  },
+  "profile": {
+    "sidebar": {
+      "account": "账户",
+      "preferences": "偏好设置"
+    },
+    "account": {
+      "title": "账户信息",
+      "name": "姓名",
+      "email": "邮箱",
+      "userId": "用户ID",
+      "memberSince": "注册时间",
+      "verified": "已验证",
+      "notSet": "未设置",
+      "unknown": "未知"
+    },
+    "preferences": {
+      "title": "偏好设置",
+      "theme": "主题",
+      "language": "语言"
+    },
+    "actions": {
+      "title": "账户操作",
+      "signOut": "退出登录",
+      "signOutDescription": "从此设备退出您的账户。"
+    }
   }
 }
