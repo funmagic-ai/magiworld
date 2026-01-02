@@ -52,6 +52,26 @@
     "privacy": "プライバシーポリシー",
     "terms": "利用規約"
   },
+  "bgRemove": {
+    "upload": {
+      "title": "元の画像",
+      "dragDrop": "ここに画像をドラッグ＆ドロップ",
+      "or": "または",
+      "browse": "ファイルを選択"
+    },
+    "result": {
+      "title": "結果",
+      "processing": "背景を削除中...",
+      "readyToProcess": "処理をクリックして背景を削除",
+      "uploadFirst": "画像をアップロードして開始"
+    },
+    "actions": {
+      "process": "背景を削除",
+      "processing": "処理中...",
+      "download": "ダウンロード",
+      "tryAnother": "別の画像を試す"
+    }
+  },
   "profile": {
     "sidebar": {
       "account": "アカウント",

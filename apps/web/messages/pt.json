@@ -52,6 +52,26 @@
     "privacy": "Política de Privacidade",
     "terms": "Termos de Serviço"
   },
+  "bgRemove": {
+    "upload": {
+      "title": "Imagem Original",
+      "dragDrop": "Arraste e solte sua imagem aqui",
+      "or": "ou",
+      "browse": "procurar arquivos"
+    },
+    "result": {
+      "title": "Resultado",
+      "processing": "Removendo fundo...",
+      "readyToProcess": "Clique em Processar para remover o fundo",
+      "uploadFirst": "Carregue uma imagem para começar"
+    },
+    "actions": {
+      "process": "Remover Fundo",
+      "processing": "Processando...",
+      "download": "Baixar",
+      "tryAnother": "Tentar Outra"
+    }
+  },
   "profile": {
     "sidebar": {
       "account": "Conta",

@@ -1,6 +1,6 @@
 import { LogtoNextConfig, UserScope } from '@logto/next';
 
-export const logtoConfig: LogtoNextConfig = {
+export const logtoConfig = {
   endpoint: process.env.LOGTO_ENDPOINT!,
   appId: process.env.LOGTO_APP_ID!,
   appSecret: process.env.LOGTO_APP_SECRET!,

@@ -52,6 +52,26 @@
     "privacy": "隐私政策",
     "terms": "服务条款"
   },
+  "bgRemove": {
+    "upload": {
+      "title": "原始图片",
+      "dragDrop": "将图片拖放到此处",
+      "or": "或",
+      "browse": "浏览文件"
+    },
+    "result": {
+      "title": "结果",
+      "processing": "正在移除背景...",
+      "readyToProcess": "点击处理以移除背景",
+      "uploadFirst": "上传图片开始使用"
+    },
+    "actions": {
+      "process": "移除背景",
+      "processing": "处理中...",
+      "download": "下载",
+      "tryAnother": "换一张"
+    }
+  },
   "profile": {
     "sidebar": {
       "account": "账户",

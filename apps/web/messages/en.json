@@ -52,6 +52,26 @@
     "privacy": "Privacy Policy",
     "terms": "Terms of Service"
   },
+  "bgRemove": {
+    "upload": {
+      "title": "Original Image",
+      "dragDrop": "Drag and drop your image here",
+      "or": "or",
+      "browse": "browse files"
+    },
+    "result": {
+      "title": "Result",
+      "processing": "Removing background...",
+      "readyToProcess": "Click Process to remove background",
+      "uploadFirst": "Upload an image to get started"
+    },
+    "actions": {
+      "process": "Remove Background",
+      "processing": "Processing...",
+      "download": "Download",
+      "tryAnother": "Try Another"
+    }
+  },
   "profile": {
     "sidebar": {
       "account": "Account",
