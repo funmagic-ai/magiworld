@@ -8,14 +8,15 @@
 5. [Data Model Design](#5-data-model-design)
 6. [Module Requirements](#6-module-requirements)
 7. [Internationalization](#7-internationalization)
-8. [Authentication & Authorization](#8-authentication--authorization)
-9. [File Storage Strategy](#9-file-storage-strategy)
-10. [Task Processing & Queue](#10-task-processing--queue)
-11. [API Security](#11-api-security)
-12. [Performance Optimization](#12-performance-optimization)
-13. [Environment Configuration](#13-environment-configuration)
-14. [Development Workflow](#14-development-workflow)
-15. [Open Questions](#15-open-questions)
+8. [Theme System](#8-theme-system)
+9. [Authentication & Authorization](#9-authentication--authorization)
+10. [File Storage Strategy](#10-file-storage-strategy)
+11. [Task Processing & Queue](#11-task-processing--queue)
+12. [API Security](#12-api-security)
+13. [Performance Optimization](#13-performance-optimization)
+14. [Environment Configuration](#14-environment-configuration)
+15. [Development Workflow](#15-development-workflow)
+16. [Open Questions](#16-open-questions)
 
 ---
 
@@ -357,7 +358,73 @@ function AssetViewer({ task }: { task: Task }) {
 
 ---
 
-## 8. Authentication & Authorization
+## 8. Theme System
+
+### Solution: next-themes + CSS Custom Properties
+
+The web app supports multiple color themes with light/dark mode variants.
+
+### Available Themes
+
+| Theme | Light Primary | Dark Primary |
+|-------|---------------|--------------|
+| Neutral (default) | Black | White |
+| Green | #00E676 | #00E676 |
+| Blue | #3b82f6 | #3b82f6 |
+| Purple | #a855f7 | #a855f7 |
+| Orange | #f97316 | #f97316 |
+
+### Implementation
+
+#### ThemeProvider Configuration
+```typescript
+// app/[locale]/layout.tsx
+<ThemeProvider
+  attribute="class"
+  defaultTheme="neutral"
+  enableSystem={false}
+  themes={['neutral', 'green', 'blue', 'purple', 'orange',
+           'neutral-dark', 'green-dark', 'blue-dark', 'purple-dark', 'orange-dark']}
+>
+```
+
+#### CSS Variables (globals.css)
+```css
+/* Neutral Theme (default light) */
+:root, :root.neutral, .neutral {
+  --primary: oklch(0.205 0 0);      /* Black */
+  --primary-foreground: oklch(0.985 0 0);
+  /* ... other variables */
+}
+
+/* Neutral Dark Theme */
+:root.neutral-dark, .neutral-dark {
+  --primary: oklch(0.985 0 0);      /* White */
+  --primary-foreground: oklch(0.205 0 0);
+  /* ... other variables */
+}
+
+/* Color themes follow same pattern */
+```
+
+#### Dark Mode Variant
+```css
+@custom-variant dark (&:is(.neutral-dark *, .green-dark *, .blue-dark *, .purple-dark *, .orange-dark *));
+```
+
+### Theme Switcher Component
+
+Location: `components/theme-switcher.tsx`
+
+Features:
+- Color picker with 5 theme options (circular buttons)
+- Dark/light mode toggle (sun/moon icons)
+- Smooth transitions
+- Persists selection in localStorage
+
+---
+
+## 9. Authentication & Authorization
 
 ### Solution: Logto
 
@@ -369,9 +436,99 @@ Both web and admin apps use [Logto](https://logto.io/) for authentication.
 - OIDC/OAuth 2.0 compliant
 - Good developer experience with SDKs
 
+### Implementation (Web App)
+
+#### Configuration
+```typescript
+// lib/logto.ts
+import { LogtoNextConfig, UserScope } from '@logto/next';
+
+export const logtoConfig: LogtoNextConfig = {
+  endpoint: process.env.LOGTO_ENDPOINT!,
+  appId: process.env.LOGTO_APP_ID!,
+  appSecret: process.env.LOGTO_APP_SECRET!,
+  baseUrl: process.env.LOGTO_BASE_URL!,
+  cookieSecret: process.env.LOGTO_COOKIE_SECRET!,
+  cookieSecure: process.env.NODE_ENV === 'production',
+  scopes: [UserScope.Email, UserScope.Profile],
+  fetchUserInfo: true,
+};
+```
+
+#### Auth Components
+- `components/auth/auth-status.tsx` - Server component for auth state
+- `components/auth/sign-in-button.tsx` - Client component for sign in
+- `components/auth/user-button.tsx` - User dropdown menu with profile link
+
+#### Routes
+- `/callback` - OAuth callback handler (outside locale routing)
+- `/[locale]/profile` - Protected user profile page
+
+#### Logto Console Configuration
+- **Redirect URI**: `http://localhost:3000/callback`
+- **Post sign-out redirect URI**: `http://localhost:3000/`
+
+### Profile Page
+
+#### Route: `/[locale]/profile`
+
+Protected route that redirects to home if not authenticated.
+
+#### Layout (Responsive)
+
+**Desktop (lg+)**:
+```
+┌──────────────┬─────────────────────────────────────────────┐
+│              │                                              │
+│  ┌────────┐  │  ┌────────────────────────────────────────┐ │
+│  │ Avatar │  │  │  Account Information (collapsible)     │ │
+│  └────────┘  │  └────────────────────────────────────────┘ │
+│  User Name   │                                              │
+│              │  ┌────────────────────────────────────────┐ │
+│  ──────────  │  │  Preferences (collapsible)             │ │
+│  [Account]   │  │  - Theme picker                         │ │
+│  [Prefs]     │  │  - Language switcher                    │ │
+│              │  └────────────────────────────────────────┘ │
+│              │                                              │
+│              │  ┌────────────────────────────────────────┐ │
+│              │  │  Account Actions                        │ │
+│              │  │  [Sign Out]                             │ │
+│              │  └────────────────────────────────────────┘ │
+├──────────────┴─────────────────────────────────────────────┤
+```
+
+**Mobile (Stacked Cards)**:
+```
+┌─────────────────────┐
+│  ┌─────┐            │
+│  │Avatar│ User Name │
+│  └─────┘            │
+├─────────────────────┤
+│  ┌─────────────────┐│
+│  │ Account Info    ││
+│  │ (collapsible)   ││
+│  └─────────────────┘│
+│  ┌─────────────────┐│
+│  │ Preferences     ││
+│  │ (collapsible)   ││
+│  └─────────────────┘│
+│  ┌─────────────────┐│
+│  │ [Sign Out]      ││
+│  └─────────────────┘│
+└─────────────────────┘
+```
+
+#### Profile Features
+- User avatar with initials fallback
+- Account information (name, email, user ID, member since)
+- Email verification badge
+- Theme preference (color picker + dark mode toggle)
+- Language preference
+- Sign out action
+
 ---
 
-## 9. File Storage Strategy
+## 10. File Storage Strategy
 
 > **Decision**: AWS S3
 
@@ -390,7 +547,7 @@ magiworld-assets/
 
 ---
 
-## 10. Task Processing & Queue
+## 11. Task Processing & Queue
 
 ### Decision: Inngest
 
@@ -402,7 +559,7 @@ Inngest is chosen for its:
 
 ---
 
-## 11. API Security
+## 12. API Security
 
 ### AI API Proxying
 
@@ -416,7 +573,7 @@ Client → /api/ai/stylize → External AI API
 
 ---
 
-## 12. Performance Optimization
+## 13. Performance Optimization
 
 ### Code Splitting
 Each tool interface is a separate chunk via `next/dynamic`.
@@ -434,7 +591,7 @@ Use Next.js `<Image>` component with remote patterns configured.
 
 ---
 
-## 13. Environment Configuration
+## 14. Environment Configuration
 
 ### Required Environment Variables
 
@@ -467,7 +624,7 @@ INNGEST_SIGNING_KEY=
 
 ---
 
-## 14. Development Workflow
+## 15. Development Workflow
 
 ### Development Scripts
 
@@ -497,7 +654,7 @@ INNGEST_SIGNING_KEY=
 
 ---
 
-## 15. Decisions Made & Open Questions
+## 16. Decisions Made & Open Questions
 
 ### Decisions Made
 
@@ -524,3 +681,4 @@ INNGEST_SIGNING_KEY=
 |---------|------|---------|
 | 1.0 | 2024-12-31 | Initial design specification |
 | 2.0 | 2024-12-31 | Replaced Payload CMS with custom Admin app |
+| 3.0 | 2025-01-02 | Added Theme System (next-themes), Logto authentication, Profile page |

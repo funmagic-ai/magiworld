@@ -10,6 +10,8 @@ Magiworld is an AI-powered creative platform with tools for image stylization, e
 - [Architecture Overview](#architecture-overview)
 - [Database Schema](#database-schema)
 - [Internationalization (i18n)](#internationalization-i18n)
+- [Theme System](#theme-system)
+- [Authentication](#authentication)
 - [Development Guide](#development-guide)
 - [Adding New Features](#adding-new-features)
 - [Scripts Reference](#scripts-reference)
@@ -22,8 +24,10 @@ Magiworld is an AI-powered creative platform with tools for image stylization, e
 | Framework | Next.js 16.1.1 (App Router) |
 | Database | PostgreSQL + Drizzle ORM |
 | Styling | Tailwind CSS v4 + shadcn/ui |
+| Theming | next-themes (5 colors + dark mode) |
 | Monorepo | Turborepo + pnpm workspaces |
 | i18n | next-intl (en, ja, pt, zh) |
+| Authentication | Logto (@logto/next) |
 | Type Safety | TypeScript 5.x |
 
 ## Project Structure
@@ -207,6 +211,74 @@ const tools = await db
 /zh/tools/anime-style    # Chinese
 ```
 
+## Theme System
+
+The web app supports multiple color themes with light/dark mode variants using `next-themes`.
+
+### Available Themes
+
+| Theme | Description |
+|-------|-------------|
+| Neutral (default) | Black/white grayscale theme |
+| Green | Vibrant green accent |
+| Blue | Classic blue accent |
+| Purple | Purple accent |
+| Orange | Orange accent |
+
+### Usage
+
+The theme switcher is available in:
+- Header (top navigation bar)
+- Profile page (Preferences section)
+
+### Components
+
+- `components/theme-provider.tsx` - ThemeProvider wrapper
+- `components/theme-switcher.tsx` - Color picker + dark mode toggle
+
+## Authentication
+
+Authentication is handled by [Logto](https://logto.io/) using the `@logto/next` SDK.
+
+### Setup
+
+1. Create a Logto application (Traditional Web App)
+2. Configure environment variables:
+
+```bash
+# .env.local
+LOGTO_ENDPOINT=https://your-tenant.logto.app/
+LOGTO_APP_ID=your-app-id
+LOGTO_APP_SECRET=your-app-secret
+LOGTO_COOKIE_SECRET=random-32-char-string
+LOGTO_BASE_URL=http://localhost:3000
+```
+
+3. Configure Logto Console:
+   - **Redirect URI**: `http://localhost:3000/callback`
+   - **Post sign-out redirect URI**: `http://localhost:3000/`
+
+### Auth Components
+
+| Component | Type | Purpose |
+|-----------|------|---------|
+| `auth-status.tsx` | Server | Fetches auth state, renders appropriate UI |
+| `sign-in-button.tsx` | Client | Triggers sign-in flow |
+| `user-button.tsx` | Client | User dropdown menu |
+
+### Protected Routes
+
+- `/[locale]/profile` - User profile page (redirects to home if not authenticated)
+
+### Profile Page Features
+
+- User avatar with initials fallback
+- Account information (name, email, user ID)
+- Email verification status
+- Theme preference settings
+- Language preference settings
+- Sign out functionality
+
 ## Development Guide
 
 ### Code Organization
@@ -354,11 +426,18 @@ pnpm build
 
 ## Environment Variables
 
-Create a `.env` file in the root directory:
+Create a `.env.local` file in `apps/web/`:
 
 ```bash
 # Database (required)
 DATABASE_URL=postgresql://postgres:yourpassword@localhost:9000/magi-db
+
+# Authentication (Logto)
+LOGTO_ENDPOINT=https://your-tenant.logto.app/
+LOGTO_APP_ID=your-app-id
+LOGTO_APP_SECRET=your-app-secret
+LOGTO_COOKIE_SECRET=random-32-character-string-here
+LOGTO_BASE_URL=http://localhost:3000
 
 # AWS S3 Storage (for media uploads)
 AWS_REGION=ap-northeast-1
