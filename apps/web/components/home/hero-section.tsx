@@ -63,7 +63,7 @@ function MainCarousel({ banners }: { banners: Banner[] }) {
   const banner = banners[0];
 
   return (
-    <div className="relative aspect-[2/1] lg:aspect-[2.5/1] overflow-hidden rounded-lg bg-muted">
+    <div className="relative aspect-[21/9] overflow-hidden rounded-lg bg-muted">
       {/* Banner Image */}
       {banner.image ? (
         <Image
@@ -122,7 +122,7 @@ function MainCarousel({ banners }: { banners: Banner[] }) {
 
 function SideBanner({ banner }: { banner: Banner }) {
   const content = (
-    <div className="relative aspect-[2/1] lg:aspect-auto lg:flex-1 overflow-hidden rounded-lg bg-muted group cursor-pointer">
+    <div className="relative aspect-[16/9] overflow-hidden rounded-lg bg-muted group cursor-pointer">
       {/* Banner Image */}
       {banner.image ? (
         <Image

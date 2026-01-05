@@ -96,16 +96,45 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
     api: '/api/upload/cdn',
   });
 
-  // Create/cleanup object URL for local preview
+  // Image dimension detection
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
+
+  // Create/cleanup object URL for local preview and detect dimensions
   useEffect(() => {
     if (pendingFile) {
       const url = URL.createObjectURL(pendingFile);
       setPreviewUrl(url);
+
+      // Detect image dimensions
+      const img = new window.Image();
+      img.onload = () => {
+        setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.src = url;
+
       return () => URL.revokeObjectURL(url);
     } else {
       setPreviewUrl('');
+      setImageDimensions(null);
     }
   }, [pendingFile]);
+
+  // Check if image ratio is 1:1 (square) - 5% tolerance
+  const getRatioStatus = () => {
+    if (!imageDimensions) return null;
+    const actualRatio = imageDimensions.width / imageDimensions.height;
+    const expectedRatio = 1; // 1:1 square
+    const diff = Math.abs(actualRatio - expectedRatio) / expectedRatio;
+    const isMatch = diff <= 0.05;
+    return {
+      isMatch,
+      actualRatio: actualRatio.toFixed(2),
+      width: imageDimensions.width,
+      height: imageDimensions.height,
+    };
+  };
+
+  const ratioStatus = getRatioStatus();
 
   // Get selected tool type name for display
   const selectedToolType = toolTypes.find(t => t.id === toolTypeId);
@@ -336,6 +365,9 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
 
             <Field data-invalid={!!errors.thumbnailUrl}>
               <FieldLabel>Thumbnail</FieldLabel>
+              <FieldDescription className="mb-2 text-xs">
+                <strong>Recommended size:</strong> 500×500px (1:1 square)
+              </FieldDescription>
               <div className="space-y-3">
                 {displayUrl && (
                   <div className="relative aspect-video w-full max-w-md overflow-hidden rounded-lg border bg-muted">
@@ -358,6 +390,35 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
                       <div className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 text-xs text-white">
                         Will upload on save
                       </div>
+                    )}
+                  </div>
+                )}
+                {ratioStatus && (
+                  <div className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm ${
+                    ratioStatus.isMatch
+                      ? 'bg-green-50 text-green-700 border border-green-200'
+                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                  }`}>
+                    <span className="font-medium">
+                      {ratioStatus.width}×{ratioStatus.height}px
+                    </span>
+                    <span>
+                      (ratio: {ratioStatus.actualRatio})
+                    </span>
+                    {ratioStatus.isMatch ? (
+                      <span className="ml-auto flex items-center gap-1">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Square (1:1)
+                      </span>
+                    ) : (
+                      <span className="ml-auto flex items-center gap-1">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        Expected 1:1 square
+                      </span>
                     )}
                   </div>
                 )}
@@ -387,7 +448,7 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
               <FieldDescription>
                 {pendingFile
                   ? `Selected: ${pendingFile.name} (${(pendingFile.size / 1024).toFixed(1)} KB)`
-                  : 'Tool card thumbnail image'
+                  : 'Square image for tool card display'
                 }
               </FieldDescription>
               {errors.thumbnailUrl && <FieldError>{errors.thumbnailUrl}</FieldError>}

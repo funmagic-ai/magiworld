@@ -55,11 +55,26 @@ const BANNER_TYPES = [
 
 type FieldErrors = Record<string, string>;
 
+// Expected aspect ratios for each banner type
+const EXPECTED_RATIOS = {
+  main: { ratio: 21 / 9, label: '21:9' },
+  side: { ratio: 16 / 9, label: '16:9' },
+} as const;
+
+// Tolerance for aspect ratio comparison (5%)
+const RATIO_TOLERANCE = 0.05;
+
 export function BannerForm({ initialData, mode }: BannerFormProps) {
   // Image state: either a URL (existing/pasted) or a pending file
   const [imageUrl, setImageUrl] = useState<string>(initialData?.imageUrl || '');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
+
+  // Image dimension detection
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [bannerType, setBannerType] = useState<'main' | 'side'>(
+    (initialData?.type as 'main' | 'side') || 'main'
+  );
 
   // Translations JSON state
   const [translationsJson, setTranslationsJson] = useState<string>(() => {
@@ -78,16 +93,43 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
     api: '/api/upload/cdn',
   });
 
-  // Create/cleanup object URL for local preview
+  // Create/cleanup object URL for local preview and detect dimensions
   useEffect(() => {
     if (pendingFile) {
       const url = URL.createObjectURL(pendingFile);
       setPreviewUrl(url);
+
+      // Detect image dimensions
+      const img = new window.Image();
+      img.onload = () => {
+        setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.src = url;
+
       return () => URL.revokeObjectURL(url);
     } else {
       setPreviewUrl('');
+      setImageDimensions(null);
     }
   }, [pendingFile]);
+
+  // Check if image ratio matches expected ratio for current banner type
+  const getRatioStatus = () => {
+    if (!imageDimensions) return null;
+    const actualRatio = imageDimensions.width / imageDimensions.height;
+    const expected = EXPECTED_RATIOS[bannerType];
+    const diff = Math.abs(actualRatio - expected.ratio) / expected.ratio;
+    const isMatch = diff <= RATIO_TOLERANCE;
+    return {
+      isMatch,
+      actualRatio: actualRatio.toFixed(2),
+      expectedLabel: expected.label,
+      width: imageDimensions.width,
+      height: imageDimensions.height,
+    };
+  };
+
+  const ratioStatus = getRatioStatus();
 
   // Handle file selection - just store the file, don't upload yet
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -208,7 +250,11 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
               <FieldLabel htmlFor="type">
                 Banner Type <span className="text-destructive">*</span>
               </FieldLabel>
-              <Select name="type" defaultValue={initialData?.type || 'main'}>
+              <Select
+                name="type"
+                defaultValue={initialData?.type || 'main'}
+                onValueChange={(value) => setBannerType(value as 'main' | 'side')}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select banner type" />
                 </SelectTrigger>
@@ -226,6 +272,9 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
 
             <Field data-invalid={!!errors.imageUrl}>
               <FieldLabel>Banner Image</FieldLabel>
+              <FieldDescription className="mb-2 text-xs">
+                <strong>Recommended size:</strong> Main banner: 1920×823px (21:9), Side banner: 1280×720px (16:9)
+              </FieldDescription>
               <div className="space-y-3">
                 {displayUrl && (
                   <div className="relative aspect-video w-full max-w-md overflow-hidden rounded-lg border bg-muted">
@@ -248,6 +297,35 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
                       <div className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 text-xs text-white">
                         Will upload on save
                       </div>
+                    )}
+                  </div>
+                )}
+                {ratioStatus && (
+                  <div className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm ${
+                    ratioStatus.isMatch
+                      ? 'bg-green-50 text-green-700 border border-green-200'
+                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                  }`}>
+                    <span className="font-medium">
+                      {ratioStatus.width}×{ratioStatus.height}px
+                    </span>
+                    <span>
+                      (ratio: {ratioStatus.actualRatio})
+                    </span>
+                    {ratioStatus.isMatch ? (
+                      <span className="ml-auto flex items-center gap-1">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Matches {ratioStatus.expectedLabel}
+                      </span>
+                    ) : (
+                      <span className="ml-auto flex items-center gap-1">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        Expected {ratioStatus.expectedLabel}
+                      </span>
                     )}
                   </div>
                 )}
