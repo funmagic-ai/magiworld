@@ -22,7 +22,7 @@ import {
   homeBanners,
   homeBannerTranslations,
 } from '@magiworld/db';
-import { eq, and, asc, desc } from 'drizzle-orm';
+import { eq, and, asc, desc, isNull } from 'drizzle-orm';
 import type { ToolListItem } from '@magiworld/types';
 
 // ============================================
@@ -116,7 +116,7 @@ export async function getTools(locale: Locale = 'en', limit?: number): Promise<T
       toolTranslations,
       and(eq(toolTranslations.toolId, tools.id), eq(toolTranslations.locale, locale))
     )
-    .where(eq(tools.isActive, true))
+    .where(and(eq(tools.isActive, true), isNull(tools.deletedAt)))
     .orderBy(asc(tools.order))
     .limit(limit ?? 100);
 
@@ -171,7 +171,7 @@ export async function getFeaturedTools(locale: Locale = 'en'): Promise<ToolListI
       toolTranslations,
       and(eq(toolTranslations.toolId, tools.id), eq(toolTranslations.locale, locale))
     )
-    .where(and(eq(tools.isActive, true), eq(tools.isFeatured, true)))
+    .where(and(eq(tools.isActive, true), eq(tools.isFeatured, true), isNull(tools.deletedAt)))
     .orderBy(asc(tools.order));
 
   return result.map((row) => ({
@@ -252,7 +252,7 @@ export async function getToolsByTypeSlug(toolTypeSlug: string, locale: Locale = 
       toolTranslations,
       and(eq(toolTranslations.toolId, tools.id), eq(toolTranslations.locale, locale))
     )
-    .where(and(eq(tools.isActive, true), eq(toolTypes.slug, toolTypeSlug)))
+    .where(and(eq(tools.isActive, true), eq(toolTypes.slug, toolTypeSlug), isNull(tools.deletedAt)))
     .orderBy(asc(tools.order));
 
   return result.map((row) => ({
@@ -314,7 +314,7 @@ export async function getToolBySlug(slug: string, locale: Locale = 'en') {
       toolTranslations,
       and(eq(toolTranslations.toolId, tools.id), eq(toolTranslations.locale, locale))
     )
-    .where(eq(tools.slug, slug))
+    .where(and(eq(tools.slug, slug), isNull(tools.deletedAt)))
     .limit(1);
 
   if (result.length === 0) return null;
@@ -374,7 +374,7 @@ export async function getHomeConfig(locale: Locale = 'en'): Promise<HomeBannerRe
       homeBannerTranslations,
       and(eq(homeBannerTranslations.bannerId, homeBanners.id), eq(homeBannerTranslations.locale, locale))
     )
-    .where(eq(homeBanners.isActive, true))
+    .where(and(eq(homeBanners.isActive, true), isNull(homeBanners.deletedAt)))
     .orderBy(asc(homeBanners.order), desc(homeBanners.updatedAt));
 
   const mainBanners = result

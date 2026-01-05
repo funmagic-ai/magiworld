@@ -134,6 +134,8 @@ export const tools = pgTable('tools', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
   /** Record last update timestamp */
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  /** Soft delete timestamp (null = not deleted) */
+  deletedAt: timestamp('deleted_at'),
 });
 
 /**
@@ -246,6 +248,8 @@ export const homeBanners = pgTable('home_banners', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
   /** Record last update timestamp */
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  /** Soft delete timestamp (null = not deleted) */
+  deletedAt: timestamp('deleted_at'),
 });
 
 /**

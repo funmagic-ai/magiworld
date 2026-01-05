@@ -7,7 +7,8 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { hostname: 'cdn.magiworld.ai' },
-      { hostname: 's3.ap-northeast-1.amazonaws.com' },
+      { hostname: 'd1jmkr23cr2ayz.cloudfront.net' },
+      { hostname: 'magiworld-cdn.s3.us-east-2.amazonaws.com' },
     ],
   },
 };

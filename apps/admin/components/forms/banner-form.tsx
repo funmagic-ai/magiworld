@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -86,6 +86,7 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
 
   const [errors, setErrors] = useState<FieldErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // Upload hook - used only during form submission
   const { upload } = useUploadFiles({
@@ -162,6 +163,9 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
   };
 
   async function handleSubmit(formData: FormData) {
+    // Prevent double-submit with ref check (synchronous)
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setErrors({});
 
@@ -171,6 +175,7 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
       translations = JSON.parse(translationsJson);
     } catch {
       setErrors({ translations: 'Invalid JSON format. Please check the syntax.' });
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
       return;
     }
@@ -192,6 +197,7 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
         }
       } catch (error) {
         setErrors({ imageUrl: 'Failed to upload image' });
+        isSubmittingRef.current = false;
         setIsSubmitting(false);
         return;
       }
@@ -215,6 +221,7 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
         fieldErrors[path] = issue.message;
       }
       setErrors(fieldErrors);
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
       return;
     }
@@ -228,6 +235,7 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
         await createBanner(data);
       }
     } catch (error) {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   }

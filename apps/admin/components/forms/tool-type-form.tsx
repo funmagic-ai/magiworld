@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -57,6 +57,7 @@ type FieldErrors = Record<string, string>;
 export function ToolTypeForm({ initialData, mode }: ToolTypeFormProps) {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // Translations JSON state
   const [translationsJson, setTranslationsJson] = useState<string>(() => {
@@ -78,6 +79,9 @@ export function ToolTypeForm({ initialData, mode }: ToolTypeFormProps) {
   };
 
   async function handleSubmit(formData: FormData) {
+    // Prevent double-submit with ref check (synchronous)
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setErrors({});
 
@@ -87,6 +91,7 @@ export function ToolTypeForm({ initialData, mode }: ToolTypeFormProps) {
       translations = JSON.parse(translationsJson);
     } catch {
       setErrors({ translations: 'Invalid JSON format. Please check the syntax.' });
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
       return;
     }
@@ -108,6 +113,7 @@ export function ToolTypeForm({ initialData, mode }: ToolTypeFormProps) {
         fieldErrors[path] = issue.message;
       }
       setErrors(fieldErrors);
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
       return;
     }
@@ -121,6 +127,7 @@ export function ToolTypeForm({ initialData, mode }: ToolTypeFormProps) {
         await createToolType(data);
       }
     } catch (error) {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   }

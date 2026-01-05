@@ -7,8 +7,9 @@
  *
  * Features:
  * - Tabular list of all tools with localized names
+ * - Search, filter, and sort toolbar
  * - Tool type badges for visual classification
- * - Active/inactive status indicators
+ * - Quick active toggle switches
  * - Edit links for each tool
  * - Add new tool button
  *
@@ -16,47 +17,76 @@
  */
 
 import { db, tools, toolTypes, toolTranslations, toolTypeTranslations } from '@magiworld/db';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, desc, isNull, ilike, or } from 'drizzle-orm';
 import Link from 'next/link';
+import { RestoreToolButton } from '@/components/restore-tool-button';
+import { ListToolbar } from '@/components/list-toolbar';
+import { ToolActiveToggle } from '@/components/tool-active-toggle';
 
 /**
  * Tool list item for admin display.
  */
 interface ToolListItem {
-  /** Unique tool identifier */
   id: string;
-  /** URL-friendly slug */
   slug: string;
-  /** Whether the tool is currently active */
   isActive: boolean;
-  /** Display order within the category */
   order: number;
-  /** Localized tool type name */
   toolTypeName: string;
-  /** Localized tool name */
+  toolTypeSlug: string;
   name: string;
-  /** Localized tool description */
   description: string | null;
+  deletedAt: Date | null;
+  updatedAt: Date;
+}
+
+interface QueryParams {
+  search?: string;
+  toolType?: string;
+  sort?: string;
+  showDeleted?: string;
+}
+
+/**
+ * Fetch all tool types for filter options.
+ */
+async function getToolTypeOptions() {
+  const result = await db
+    .select({
+      slug: toolTypes.slug,
+      name: toolTypeTranslations.name,
+    })
+    .from(toolTypes)
+    .innerJoin(
+      toolTypeTranslations,
+      and(
+        eq(toolTypeTranslations.toolTypeId, toolTypes.id),
+        eq(toolTypeTranslations.locale, 'en')
+      )
+    )
+    .where(eq(toolTypes.isActive, true))
+    .orderBy(asc(toolTypes.order));
+
+  return result.map((t) => ({ value: t.slug, label: t.name }));
 }
 
 /**
  * Fetch all tools with their translations and type information.
- *
- * Joins tools with tool types and translation tables to get
- * localized content in English for the admin interface.
- *
- * @returns Promise resolving to an array of tool list items
  */
-async function getToolsList(): Promise<ToolListItem[]> {
-  const result = await db
+async function getToolsList(params: QueryParams): Promise<ToolListItem[]> {
+  const { search, toolType, sort, showDeleted } = params;
+
+  let query = db
     .select({
       id: tools.id,
       slug: tools.slug,
       isActive: tools.isActive,
       order: tools.order,
       toolTypeName: toolTypeTranslations.name,
+      toolTypeSlug: toolTypes.slug,
       name: toolTranslations.title,
       description: toolTranslations.description,
+      deletedAt: tools.deletedAt,
+      updatedAt: tools.updatedAt,
     })
     .from(tools)
     .innerJoin(toolTypes, eq(tools.toolTypeId, toolTypes.id))
@@ -74,31 +104,80 @@ async function getToolsList(): Promise<ToolListItem[]> {
         eq(toolTranslations.locale, 'en')
       )
     )
-    .orderBy(asc(tools.order));
+    .$dynamic();
 
-  return result;
+  // Build where conditions
+  const conditions = [];
+
+  if (showDeleted !== 'true') {
+    conditions.push(isNull(tools.deletedAt));
+  }
+
+  if (toolType && toolType !== 'all') {
+    conditions.push(eq(toolTypes.slug, toolType));
+  }
+
+  if (search) {
+    conditions.push(
+      or(
+        ilike(toolTranslations.title, `%${search}%`),
+        ilike(toolTranslations.description, `%${search}%`),
+        ilike(tools.slug, `%${search}%`)
+      )
+    );
+  }
+
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions));
+  }
+
+  // Apply sorting
+  switch (sort) {
+    case 'name-asc':
+      query = query.orderBy(asc(toolTranslations.title));
+      break;
+    case 'name-desc':
+      query = query.orderBy(desc(toolTranslations.title));
+      break;
+    case 'date-asc':
+      query = query.orderBy(asc(tools.updatedAt));
+      break;
+    case 'date-desc':
+      query = query.orderBy(desc(tools.updatedAt));
+      break;
+    case 'order-desc':
+      query = query.orderBy(desc(tools.order));
+      break;
+    default:
+      query = query.orderBy(asc(tools.order));
+  }
+
+  return query;
 }
 
-/**
- * Tools management page component.
- *
- * Renders a table view of all tools with:
- * - Tool name and description
- * - URL slug
- * - Tool type badge
- * - Active/inactive status
- * - Display order
- * - Edit action link
- *
- * @returns The rendered tools management page
- */
-export default async function ToolsPage() {
-  const toolsList = await getToolsList();
+const SORT_OPTIONS = [
+  { value: 'name-asc', label: 'Name A-Z' },
+  { value: 'name-desc', label: 'Name Z-A' },
+  { value: 'date-desc', label: 'Newest First' },
+  { value: 'date-asc', label: 'Oldest First' },
+  { value: 'order-desc', label: 'Order (High-Low)' },
+];
+
+interface PageProps {
+  searchParams: Promise<QueryParams>;
+}
+
+export default async function ToolsPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const [toolsList, toolTypeOptions] = await Promise.all([
+    getToolsList(params),
+    getToolTypeOptions(),
+  ]);
 
   return (
     <div className="p-8">
       {/* Page Header */}
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Tools</h1>
           <p className="text-muted-foreground">Manage AI tools available on the platform.</p>
@@ -115,6 +194,19 @@ export default async function ToolsPage() {
         </Link>
       </div>
 
+      {/* Toolbar */}
+      <ListToolbar
+        searchPlaceholder="Search tools..."
+        filterOptions={toolTypeOptions}
+        filterLabel="Type"
+        filterParamName="toolType"
+        sortOptions={SORT_OPTIONS}
+        currentSearch={params.search || ''}
+        currentFilter={params.toolType || ''}
+        currentSort={params.sort || ''}
+        showDeleted={params.showDeleted === 'true'}
+      />
+
       {/* Tools Table */}
       <div className="rounded-lg border bg-card">
         <table className="w-full">
@@ -123,63 +215,70 @@ export default async function ToolsPage() {
               <th className="p-4 text-left text-sm font-medium text-muted-foreground">Name</th>
               <th className="p-4 text-left text-sm font-medium text-muted-foreground">Slug</th>
               <th className="p-4 text-left text-sm font-medium text-muted-foreground">Type</th>
-              <th className="p-4 text-left text-sm font-medium text-muted-foreground">Status</th>
               <th className="p-4 text-left text-sm font-medium text-muted-foreground">Order</th>
+              <th className="p-4 text-center text-sm font-medium text-muted-foreground">Active</th>
               <th className="p-4 text-right text-sm font-medium text-muted-foreground">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {toolsList.map((tool) => (
-              <tr key={tool.id} className="border-b last:border-0">
-                {/* Name and Description */}
-                <td className="p-4">
-                  <div className="font-medium">{tool.name}</div>
-                  <div className="text-sm text-muted-foreground line-clamp-1">{tool.description}</div>
-                </td>
+            {toolsList.map((tool) => {
+              const isDeleted = tool.deletedAt !== null;
+              return (
+                <tr key={tool.id} className={`border-b last:border-0 ${isDeleted ? 'opacity-60 bg-muted/30' : ''}`}>
+                  {/* Name and Description */}
+                  <td className="p-4">
+                    <div className={`font-medium ${isDeleted ? 'line-through text-muted-foreground' : ''}`}>
+                      {tool.name}
+                    </div>
+                    <div className="text-sm text-muted-foreground line-clamp-1">{tool.description}</div>
+                  </td>
 
-                {/* Slug */}
-                <td className="p-4 text-sm text-muted-foreground">{tool.slug}</td>
+                  {/* Slug */}
+                  <td className="p-4 text-sm text-muted-foreground">{tool.slug}</td>
 
-                {/* Tool Type Badge */}
-                <td className="p-4">
-                  <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium">
-                    {tool.toolTypeName}
-                  </span>
-                </td>
+                  {/* Tool Type Badge */}
+                  <td className="p-4">
+                    <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium">
+                      {tool.toolTypeName}
+                    </span>
+                  </td>
 
-                {/* Status Badge */}
-                <td className="p-4">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      tool.isActive
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                        : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
-                    }`}
-                  >
-                    {tool.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                </td>
+                  {/* Order */}
+                  <td className="p-4 text-sm text-muted-foreground">{tool.order}</td>
 
-                {/* Order */}
-                <td className="p-4 text-sm text-muted-foreground">{tool.order}</td>
+                  {/* Active Toggle */}
+                  <td className="p-4 text-center">
+                    {isDeleted ? (
+                      <span className="inline-flex items-center rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 px-2.5 py-0.5 text-xs font-medium">
+                        Deleted
+                      </span>
+                    ) : (
+                      <ToolActiveToggle id={tool.id} isActive={tool.isActive} />
+                    )}
+                  </td>
 
-                {/* Edit Action */}
-                <td className="p-4 text-right">
-                  <Link
-                    href={`/tools/${tool.id}`}
-                    className="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-primary hover:bg-accent"
-                  >
-                    Edit
-                  </Link>
-                </td>
-              </tr>
-            ))}
+                  {/* Actions */}
+                  <td className="p-4 text-right">
+                    {isDeleted ? (
+                      <RestoreToolButton id={tool.id} />
+                    ) : (
+                      <Link
+                        href={`/tools/${tool.id}`}
+                        className="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-primary hover:bg-accent"
+                      >
+                        Edit
+                      </Link>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
 
             {/* Empty State */}
             {toolsList.length === 0 && (
               <tr>
                 <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                  No tools found. Create your first tool to get started.
+                  No tools found. {params.search || params.toolType ? 'Try adjusting your filters.' : 'Create your first tool to get started.'}
                 </td>
               </tr>
             )}

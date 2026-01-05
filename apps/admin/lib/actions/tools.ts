@@ -116,16 +116,38 @@ export async function updateTool(id: string, data: ToolFormData) {
 }
 
 /**
- * Soft delete a tool by setting isActive to false
+ * Soft delete a tool by setting deletedAt timestamp.
  * The tool record and associated CDN images are preserved.
  */
 export async function deleteTool(id: string) {
   await db
     .update(tools)
-    .set({ isActive: false, updatedAt: new Date() })
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
     .where(eq(tools.id, id));
   revalidatePath('/tools');
   redirect('/tools');
+}
+
+/**
+ * Restore a soft-deleted tool by clearing deletedAt.
+ */
+export async function restoreTool(id: string) {
+  await db
+    .update(tools)
+    .set({ deletedAt: null, updatedAt: new Date() })
+    .where(eq(tools.id, id));
+  revalidatePath('/tools');
+}
+
+/**
+ * Toggle tool active status.
+ */
+export async function toggleToolActive(id: string, isActive: boolean) {
+  await db
+    .update(tools)
+    .set({ isActive, updatedAt: new Date() })
+    .where(eq(tools.id, id));
+  revalidatePath('/tools');
 }
 
 export async function getToolById(id: string) {

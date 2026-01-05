@@ -101,16 +101,38 @@ export async function updateBanner(id: string, data: BannerFormData) {
 }
 
 /**
- * Soft delete a banner by setting isActive to false
+ * Soft delete a banner by setting deletedAt timestamp.
  * The banner record and associated media in S3 are preserved.
  */
 export async function deleteBanner(id: string) {
   await db
     .update(homeBanners)
-    .set({ isActive: false, updatedAt: new Date() })
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
     .where(eq(homeBanners.id, id));
   revalidatePath('/banners');
   redirect('/banners');
+}
+
+/**
+ * Restore a soft-deleted banner by clearing deletedAt.
+ */
+export async function restoreBanner(id: string) {
+  await db
+    .update(homeBanners)
+    .set({ deletedAt: null, updatedAt: new Date() })
+    .where(eq(homeBanners.id, id));
+  revalidatePath('/banners');
+}
+
+/**
+ * Toggle banner active status.
+ */
+export async function toggleBannerActive(id: string, isActive: boolean) {
+  await db
+    .update(homeBanners)
+    .set({ isActive, updatedAt: new Date() })
+    .where(eq(homeBanners.id, id));
+  revalidatePath('/banners');
 }
 
 export async function getBannerById(id: string) {
