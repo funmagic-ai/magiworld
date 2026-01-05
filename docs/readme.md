@@ -12,6 +12,7 @@ Magiworld is an AI-powered creative platform with tools for image stylization, e
 - [Internationalization (i18n)](#internationalization-i18n)
 - [Theme System](#theme-system)
 - [Authentication](#authentication)
+- [AWS S3 Storage](#aws-s3-storage)
 - [Development Guide](#development-guide)
 - [Adding New Features](#adding-new-features)
 - [Scripts Reference](#scripts-reference)
@@ -279,6 +280,268 @@ LOGTO_BASE_URL=http://localhost:3000
 - Language preference settings
 - Sign out functionality
 
+## AWS S3 Storage
+
+Magiworld uses a **multi-bucket architecture** with **content-based routing** for media storage, providing isolation between admin assets, user uploads, and public CDN content.
+
+### Bucket Architecture
+
+```
+                              Admin App (3002)
+                    ┌────────────────┴────────────────┐
+                    │                                 │
+                    ▼                                 ▼
+  ┌──────────────────────────┐       ┌──────────────────────────────────┐
+  │ magiworld-admin-assets   │       │       magiworld-cdn              │
+  │ (Private)                │       │       (Public)                   │
+  ├──────────────────────────┤       ├──────────────────────────────────┤
+  │ • Admin library files    │       │ • Banners (homepage)             │
+  │ • Internal documents     │       │ • Tool thumbnails & samples      │
+  │ • Draft assets           │       │ • Marketing images               │
+  └──────────────────────────┘       └───────────────┬──────────────────┘
+                                                      │
+                                                      ▼
+                                               CloudFront CDN
+                                                      │
+  ┌──────────────────────────┐                       ▼
+  │ magiworld-user-uploads   │            Web App (3000) ◄─── Users
+  │ (Private)                │
+  ├──────────────────────────┤
+  │ • User AI inputs         │
+  │ • Task results           │
+  └──────────────────────────┘
+```
+
+### Content-Based Routing
+
+The admin app routes uploads to different buckets based on content type:
+
+| Content Type | Upload Route | Destination Bucket |
+|--------------|--------------|-------------------|
+| Library files | `/api/upload` | `magiworld-admin-assets` (private) |
+| Banners, Tool images | `/api/upload/cdn` | `magiworld-cdn` (public) |
+| User uploads (web) | `/api/upload` | `magiworld-user-uploads` (private) |
+
+**Why this matters:**
+- Banners uploaded in Admin appear directly on Web homepage via CloudFront
+- No additional copying or publishing step required
+- Cache busting via unique filenames (e.g., `banner-hero-1704412800000.jpg`)
+
+### Bucket Details
+
+| Bucket | Purpose | Access | Used By |
+|--------|---------|--------|---------|
+| `magiworld-admin-assets` | Admin library (internal files) | Private (pre-signed URLs) | Admin app |
+| `magiworld-user-uploads` | User-uploaded images for AI processing | Private (pre-signed URLs) | Web app |
+| `magiworld-cdn` | Banners, tool images, static assets | Public (CloudFront) | All apps |
+
+### AWS Console Setup
+
+#### Step 1: Create S3 Buckets
+
+Create three buckets in your AWS Console (e.g., `ap-northeast-1` region):
+
+```bash
+# Bucket names (replace 'magiworld' with your project name if needed)
+magiworld-admin-assets
+magiworld-user-uploads
+magiworld-cdn
+```
+
+**Bucket Settings:**
+- `magiworld-admin-assets`: Block all public access ✓
+- `magiworld-user-uploads`: Block all public access ✓
+- `magiworld-cdn`: Allow public access (for CloudFront)
+
+#### Step 2: CORS Configuration
+
+Apply this CORS policy to `magiworld-admin-assets` and `magiworld-user-uploads`:
+
+```json
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
+    "AllowedOrigins": [
+      "http://localhost:3000",
+      "http://localhost:3002",
+      "https://magiworld.ai",
+      "https://admin.magiworld.ai"
+    ],
+    "ExposeHeaders": ["ETag", "Content-Length", "Content-Type"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+#### Step 3: IAM Policies
+
+Create two IAM users with specific permissions:
+
+**Admin App IAM Policy (`magiworld-admin-s3-policy`):**
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AdminAssetsFullAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::magiworld-admin-assets",
+        "arn:aws:s3:::magiworld-admin-assets/*"
+      ]
+    },
+    {
+      "Sid": "CDNUploadAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::magiworld-cdn/banners/*",
+        "arn:aws:s3:::magiworld-cdn/tools/*"
+      ]
+    }
+  ]
+}
+```
+
+**Web App IAM Policy (`magiworld-web-s3-policy`):**
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::magiworld-user-uploads/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::magiworld-cdn/*"]
+    }
+  ]
+}
+```
+
+#### Step 4: Lifecycle Policies (Optional)
+
+For `magiworld-user-uploads`, consider adding lifecycle rules to auto-delete old files:
+
+```json
+{
+  "Rules": [
+    {
+      "ID": "DeleteTempUploads",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "temp/" },
+      "Expiration": { "Days": 1 }
+    },
+    {
+      "ID": "DeleteOldUserUploads",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "uploads/" },
+      "Expiration": { "Days": 30 }
+    }
+  ]
+}
+```
+
+### Environment Variables
+
+**Admin App (`apps/admin/.env.local`):**
+
+```bash
+# AWS S3 - Admin Assets
+AWS_REGION=ap-northeast-1
+AWS_ACCESS_KEY_ID=AKIA...admin-user-key
+AWS_SECRET_ACCESS_KEY=...admin-user-secret
+S3_BUCKET_NAME=magiworld-admin-assets
+S3_CDN_BUCKET=magiworld-cdn
+CLOUDFRONT_URL=https://cdn.magiworld.ai
+```
+
+**Web App (`apps/web/.env.local`):**
+
+```bash
+# AWS S3 - User Uploads
+AWS_REGION=ap-northeast-1
+AWS_ACCESS_KEY_ID=AKIA...web-user-key
+AWS_SECRET_ACCESS_KEY=...web-user-secret
+S3_BUCKET_NAME=magiworld-user-uploads
+CLOUDFRONT_URL=https://cdn.magiworld.ai
+```
+
+### Cache Busting Strategy
+
+For CDN-served assets (banners, etc.), we use **unique filenames** to handle cache invalidation:
+
+```
+banner-hero-a1b2c3d4.jpg    # Original
+banner-hero-e5f6g7h8.jpg    # After update (new file, new cache)
+```
+
+This approach:
+- Ensures new content is served immediately
+- Avoids CloudFront invalidation costs
+- Works seamlessly with browser caching
+
+### Folder Structure
+
+```
+magiworld-admin-assets/
+└── media/                 # Admin library (internal files)
+    └── {folderId}/
+        └── {filename}
+
+magiworld-cdn/
+├── banners/               # Homepage banners (cache-busted filenames)
+│   └── {name}-{timestamp}.jpg
+├── tools/                 # Tool thumbnails and samples
+│   └── {toolId}/
+│       ├── thumbnails/
+│       └── samples/
+├── ui/                    # UI assets (icons, placeholders)
+├── marketing/             # Landing page graphics
+└── fonts/                 # Custom web fonts
+
+magiworld-user-uploads/
+├── temp/                  # Pre-processing uploads (auto-deleted)
+├── uploads/               # User uploads for AI processing
+│   └── {user_id}/
+└── results/               # AI processing results
+    └── {user_id}/
+```
+
+### Setup Guide
+
+For detailed step-by-step AWS Console configuration, see **[aws-s3-setup-guide.md](./aws-s3-setup-guide.md)**.
+
+The guide covers:
+- Creating S3 buckets with proper permissions
+- Configuring CORS policies
+- Setting up IAM users and policies
+- CloudFront CDN configuration (optional)
+- Lifecycle policies for auto-cleanup
+- Testing and troubleshooting
+
 ## Development Guide
 
 ### Code Organization
@@ -331,11 +594,38 @@ export function ToolCard({ tool }: { tool: Tool }) {
 
 ### Adding a New Tool
 
-1. **Create in Admin**: Go to Admin > Tools > Add Tool
-2. **Configure**:
-   - Set slug and tool type
-   - Add translations for all locales
-   - Configure AI endpoint and parameters
+Adding a new tool requires both code changes and admin configuration:
+
+1. **Register the slug** in `packages/types/src/index.ts`:
+   ```typescript
+   export const TOOL_REGISTRY = [
+     'background-remove',
+     'your-new-tool',  // Add your slug here
+   ] as const;
+   ```
+
+2. **Create the component** in `apps/web/components/tools/{slug}/index.tsx`:
+   ```typescript
+   'use client';
+
+   export function YourNewToolInterface({ tool }: { tool: ToolData }) {
+     // Your tool implementation
+   }
+   ```
+
+3. **Register the component** in `apps/web/components/tools/tool-router.tsx`:
+   ```typescript
+   import { YourNewToolInterface } from './your-new-tool';
+
+   const TOOL_COMPONENTS: Record<string, React.ComponentType<{ tool: ToolData }>> = {
+     'background-remove': BackgroundRemoveInterface,
+     'your-new-tool': YourNewToolInterface,  // Add here
+   };
+   ```
+
+4. **Create tool in Admin**: Go to Admin > Tools > Add Tool
+   - The slug field validates against `TOOL_REGISTRY` - only registered slugs are accepted
+   - Set tool type, translations, AI endpoint, and other configuration
 
 ### Adding a New Tool Type
 
@@ -426,7 +716,7 @@ pnpm build
 
 ## Environment Variables
 
-Create a `.env.local` file in `apps/web/`:
+### Web App (`apps/web/.env.local`)
 
 ```bash
 # Database (required)
@@ -439,11 +729,11 @@ LOGTO_APP_SECRET=your-app-secret
 LOGTO_COOKIE_SECRET=random-32-character-string-here
 LOGTO_BASE_URL=http://localhost:3000
 
-# AWS S3 Storage (for media uploads)
+# AWS S3 Storage (user uploads - see AWS S3 Storage section)
 AWS_REGION=ap-northeast-1
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-S3_BUCKET_NAME=magiworld-assets
+AWS_ACCESS_KEY_ID=AKIA...web-user-key
+AWS_SECRET_ACCESS_KEY=...web-user-secret
+S3_BUCKET_NAME=magiworld-user-uploads
 CLOUDFRONT_URL=https://cdn.magiworld.ai
 
 # AI Services
@@ -453,6 +743,21 @@ AI_API_URL=
 # Job Queue (Inngest)
 INNGEST_EVENT_KEY=
 INNGEST_SIGNING_KEY=
+```
+
+### Admin App (`apps/admin/.env.local`)
+
+```bash
+# Database (required)
+DATABASE_URL=postgresql://postgres:yourpassword@localhost:9000/magi-db
+
+# AWS S3 Storage (admin assets - see AWS S3 Storage section)
+AWS_REGION=ap-northeast-1
+AWS_ACCESS_KEY_ID=AKIA...admin-user-key
+AWS_SECRET_ACCESS_KEY=...admin-user-secret
+S3_BUCKET_NAME=magiworld-admin-assets
+S3_CDN_BUCKET=magiworld-cdn
+CLOUDFRONT_URL=https://cdn.magiworld.ai
 ```
 
 ## License

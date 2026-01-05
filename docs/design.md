@@ -131,18 +131,49 @@ magiworld/
 
 The frontend **must not hard-code business logic**. All tool behavior is determined by data from the database.
 
+#### Tool Registry Pattern
+
+A shared `TOOL_REGISTRY` in `@magiworld/types` ensures consistency between the web app (component routing) and admin app (slug validation):
+
 ```typescript
-// lib/tool-registry.ts
-import dynamic from 'next/dynamic';
+// packages/types/src/index.ts
+export const TOOL_REGISTRY = [
+  'background-remove',
+  // Add new tool slugs here
+] as const;
 
-export const TOOL_COMPONENTS = {
-  stylize: dynamic(() => import('@/components/tools/StylizeInterface')),
-  edit: dynamic(() => import('@/components/tools/EditInterface')),
-  '3d_gen': dynamic(() => import('@/components/tools/ThreeDGenInterface')),
-  crystal_engrave: dynamic(() => import('@/components/tools/CrystalEngraveInterface')),
-} as const;
+export type RegisteredToolSlug = typeof TOOL_REGISTRY[number];
+```
 
-export type ToolType = keyof typeof TOOL_COMPONENTS;
+```typescript
+// apps/web/components/tools/tool-router.tsx
+import { TOOL_REGISTRY } from '@magiworld/types';
+
+const TOOL_COMPONENTS: Record<string, React.ComponentType<{ tool: ToolData }>> = {
+  'background-remove': BackgroundRemoveInterface,
+};
+
+// Development-time validation
+if (process.env.NODE_ENV === 'development') {
+  TOOL_REGISTRY.forEach((slug) => {
+    if (!TOOL_COMPONENTS[slug]) {
+      console.warn(`Warning: Tool slug "${slug}" is registered but has no component`);
+    }
+  });
+}
+```
+
+```typescript
+// apps/admin/lib/validations/tool.ts
+import { TOOL_REGISTRY } from '@magiworld/types';
+
+export const toolSchema = z.object({
+  slug: z.string()
+    .refine((slug) => TOOL_REGISTRY.includes(slug as RegisteredToolSlug), {
+      message: `Slug must match a registered tool. Valid: ${TOOL_REGISTRY.join(', ')}`,
+    }),
+  // ...
+});
 ```
 
 ### 4.2 Component Registry Pattern
@@ -530,19 +561,230 @@ Protected route that redirects to home if not authenticated.
 
 ## 10. File Storage Strategy
 
-> **Decision**: AWS S3
+> **Decision**: AWS S3 with Multi-Bucket Architecture + Content-Based Routing
+
+### Architecture Overview
+
+We use **three separate S3 buckets** for better isolation, security, and cost management. **Content-based routing** determines which bucket receives uploads:
+
+- **Public content** (banners, tool images) → `magiworld-cdn` (served via CloudFront)
+- **Private library** (admin internal assets) → `magiworld-admin-assets`
+- **User uploads** (AI inputs) → `magiworld-user-uploads`
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        AWS S3 Multi-Bucket Architecture                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│                              Admin App (3002)                                 │
+│                    ┌────────────────┴────────────────┐                       │
+│                    │                                 │                       │
+│                    ▼                                 ▼                       │
+│  ┌──────────────────────────┐       ┌──────────────────────────────────┐    │
+│  │ magiworld-admin-assets   │       │       magiworld-cdn              │    │
+│  │ (Private)                │       │       (Public)                   │    │
+│  ├──────────────────────────┤       ├──────────────────────────────────┤    │
+│  │ • Admin library files    │       │ • Banners (homepage)             │    │
+│  │ • Internal documents     │       │ • Tool thumbnails & samples      │    │
+│  │ • Draft assets           │       │ • Marketing images               │    │
+│  │                          │       │ • Static UI assets               │    │
+│  └──────────────────────────┘       └───────────────┬──────────────────┘    │
+│                                                      │                       │
+│                                                      ▼                       │
+│                                               CloudFront CDN                 │
+│                                                      │                       │
+│  ┌──────────────────────────┐                       │                       │
+│  │ magiworld-user-uploads   │                       ▼                       │
+│  │ (Private)                │            Web App (3000) ◄─── Users           │
+│  ├──────────────────────────┤                                                │
+│  │ • User AI inputs         │                                                │
+│  │ • Task results           │                                                │
+│  │ • Temporary processing   │                                                │
+│  └──────────────────────────┘                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Content-Based Routing (Admin App)
+
+The admin app uses two upload endpoints based on content type:
+
+| Upload Route | Destination Bucket | Used For |
+|--------------|-------------------|----------|
+| `/api/upload` | `magiworld-admin-assets` | Library (Assets > Library page) |
+| `/api/upload/cdn` | `magiworld-cdn` | Banners, Tool images (public content) |
+
+```typescript
+// Library uploads → Private bucket (admin-assets)
+const libraryUpload = useUpload({ route: 'images' });  // /api/upload
+
+// Banner/Tool uploads → Public bucket (cdn)
+const bannerUpload = useUpload({ route: 'banners', endpoint: '/api/upload/cdn' });
+```
+
+### Bucket Details
+
+| Bucket | Purpose | Access | Lifecycle |
+|--------|---------|--------|-----------|
+| `magiworld-admin-assets` | Admin library (internal files) | Private (signed URLs) | Permanent |
+| `magiworld-user-uploads` | User-generated content | Private (signed URLs) | 30-90 days |
+| `magiworld-cdn` | Public assets (banners, tool images) | Public (CloudFront) | Permanent |
 
 ### Bucket Structure
 
+#### magiworld-admin-assets (Private)
 ```
-magiworld-assets/
-├── uploads/              # User uploads (input images)
-│   └── {userId}/{taskId}/
-├── outputs/              # AI-generated outputs
-│   ├── images/
-│   ├── models/          # 3D GLB files
-│   └── fabrication/
-└── media/               # Admin media (banners, thumbnails)
+magiworld-admin-assets/
+└── media/                # Admin media library
+    └── {folderId}/
+        └── {filename}
+```
+
+#### magiworld-cdn (Public via CloudFront)
+```
+magiworld-cdn/
+├── banners/              # Homepage banners (cache-busted filenames)
+│   └── {name}-{timestamp}.jpg
+├── tools/                # Tool thumbnails and samples
+│   └── {toolId}/
+│       ├── thumbnails/
+│       └── samples/
+├── ui/                   # UI assets (icons, placeholders)
+├── marketing/            # Landing page graphics
+└── fonts/                # Custom web fonts
+```
+
+#### magiworld-user-uploads (Private)
+```
+magiworld-user-uploads/
+└── {userId}/
+    ├── inputs/           # User-uploaded source images
+    │   └── {timestamp}-{filename}
+    └── outputs/          # AI-generated results
+        └── {taskId}/
+            ├── preview.jpg
+            ├── result.png
+            └── model.glb
+```
+
+### Security Configuration
+
+#### IAM Policies
+
+**Admin App (Access to admin-assets + CDN buckets)**:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AdminAssetsFullAccess",
+      "Effect": "Allow",
+      "Action": ["s3:*"],
+      "Resource": [
+        "arn:aws:s3:::magiworld-admin-assets",
+        "arn:aws:s3:::magiworld-admin-assets/*"
+      ]
+    },
+    {
+      "Sid": "CDNUploadAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::magiworld-cdn/banners/*",
+        "arn:aws:s3:::magiworld-cdn/tools/*"
+      ]
+    }
+  ]
+}
+```
+
+**Web App (Restricted to user uploads)**:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject"],
+      "Resource": "arn:aws:s3:::magiworld-user-uploads/users/*",
+      "Condition": {
+        "StringLessThanEquals": {
+          "s3:content-length": "10485760"
+        }
+      }
+    }
+  ]
+}
+```
+
+### CORS Configuration
+
+Apply to both `magiworld-admin-assets` and `magiworld-user-uploads`:
+
+```json
+{
+  "CORSRules": [
+    {
+      "AllowedHeaders": ["*"],
+      "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
+      "AllowedOrigins": [
+        "http://localhost:3000",
+        "http://localhost:3002",
+        "https://magiworld.ai",
+        "https://admin.magiworld.ai"
+      ],
+      "ExposeHeaders": ["ETag", "x-amz-meta-*"],
+      "MaxAgeSeconds": 3000
+    }
+  ]
+}
+```
+
+### Lifecycle Policies
+
+**magiworld-user-uploads** - Auto-cleanup:
+```json
+{
+  "Rules": [
+    {
+      "ID": "DeleteOldUserInputs",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "users/" },
+      "Expiration": { "Days": 30 }
+    },
+    {
+      "ID": "DeleteIncompleteMultipart",
+      "Status": "Enabled",
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 1 }
+    }
+  ]
+}
+```
+
+### Cache Strategy
+
+| Content Type | Cache-Control | CDN TTL |
+|--------------|---------------|---------|
+| Admin banners | `max-age=3600` | 1 hour |
+| User outputs | `max-age=86400` | 1 day |
+| CDN static assets | `max-age=31536000, immutable` | 1 year |
+
+### Filename Strategy (Cache Busting)
+
+To handle CDN cache invalidation when updating content, use **unique filenames**:
+
+```typescript
+// Generate unique filename with timestamp
+const generateKey = (filename: string) => {
+  const timestamp = Date.now();
+  const ext = filename.split('.').pop();
+  const name = filename.replace(`.${ext}`, '').replace(/[^a-zA-Z0-9-_]/g, '-');
+  return `banners/${name}-${timestamp}.${ext}`;
+};
+// Result: banners/hero-banner-1704412800000.jpg
 ```
 
 ---
@@ -682,3 +924,4 @@ INNGEST_SIGNING_KEY=
 | 1.0 | 2024-12-31 | Initial design specification |
 | 2.0 | 2024-12-31 | Replaced Payload CMS with custom Admin app |
 | 3.0 | 2025-01-02 | Added Theme System (next-themes), Logto authentication, Profile page |
+| 3.1 | 2025-01-04 | Added Tool Registry Pattern for slug validation between web and admin apps |

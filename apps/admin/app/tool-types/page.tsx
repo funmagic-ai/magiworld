@@ -29,8 +29,6 @@ interface ToolTypeListItem {
   slug: string;
   /** Badge color key for UI display */
   badgeColor: string;
-  /** React component key for dynamic loading */
-  componentKey: string;
   /** Localized tool type name */
   name: string;
   /** Localized tool type description */
@@ -48,7 +46,6 @@ async function getToolTypesList(): Promise<ToolTypeListItem[]> {
       id: toolTypes.id,
       slug: toolTypes.slug,
       badgeColor: toolTypes.badgeColor,
-      componentKey: toolTypes.componentKey,
       name: toolTypeTranslations.name,
       description: toolTypeTranslations.description,
     })
@@ -84,7 +81,7 @@ const badgeColorStyles: Record<string, string> = {
  * Renders a grid of tool type cards with:
  * - Name displayed as a colored badge
  * - Description text
- * - Slug and component key metadata
+ * - Slug metadata
  * - Click-through to edit page
  *
  * @returns The rendered tool types management page
@@ -139,9 +136,8 @@ export default async function ToolTypesPage() {
             </div>
 
             {/* Metadata */}
-            <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
+            <div className="mt-4 text-xs text-muted-foreground">
               <span>Slug: {toolType.slug}</span>
-              <span>Component: {toolType.componentKey}</span>
             </div>
           </Link>
         ))}

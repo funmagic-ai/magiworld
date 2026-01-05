@@ -15,7 +15,7 @@
  * @module apps/admin/app/banners/page
  */
 
-import { db, homeBanners, homeBannerTranslations, media, tools, toolTranslations } from '@magiworld/db';
+import { db, homeBanners, homeBannerTranslations } from '@magiworld/db';
 import { eq, asc, and } from 'drizzle-orm';
 import Link from 'next/link';
 
@@ -27,10 +27,10 @@ interface BannerListItem {
   id: string;
   /** Banner type: 'main' for carousel, 'side' for sidebar */
   type: string;
-  /** Associated media ID (if any) */
-  mediaId: string | null;
-  /** Associated tool ID for click-through (if any) */
-  toolId: string | null;
+  /** Direct URL to banner image (CDN) */
+  imageUrl: string | null;
+  /** Click-through link URL (if any) */
+  link: string | null;
   /** Whether the banner is currently displayed */
   isActive: boolean;
   /** Display order (lower numbers appear first) */
@@ -39,15 +39,13 @@ interface BannerListItem {
   title: string;
   /** Localized banner subtitle */
   subtitle: string | null;
-  /** Banner image URL (resolved from media) */
-  imageUrl: string | null;
 }
 
 /**
- * Fetch all banners with their translations and media.
+ * Fetch all banners with their translations.
  *
- * Joins banners with translation table for localized content
- * and optionally fetches associated media for image preview.
+ * Joins banners with translation table for localized content.
+ * Image URL is stored directly on the banner record.
  *
  * @returns Promise resolving to an array of banner list items
  */
@@ -56,8 +54,8 @@ async function getBannersList(): Promise<BannerListItem[]> {
     .select({
       id: homeBanners.id,
       type: homeBanners.type,
-      mediaId: homeBanners.mediaId,
-      toolId: homeBanners.toolId,
+      imageUrl: homeBanners.imageUrl,
+      link: homeBanners.link,
       isActive: homeBanners.isActive,
       order: homeBanners.order,
       title: homeBannerTranslations.title,
@@ -73,18 +71,7 @@ async function getBannersList(): Promise<BannerListItem[]> {
     )
     .orderBy(asc(homeBanners.order));
 
-  // Fetch media for banners that have mediaId
-  const mediaIds = result.filter(b => b.mediaId).map(b => b.mediaId!);
-  const mediaItems = mediaIds.length > 0
-    ? await db.select().from(media).where(eq(media.id, mediaIds[0])) // Simple for now
-    : [];
-
-  const mediaMap = new Map(mediaItems.map(m => [m.id, m]));
-
-  return result.map(banner => ({
-    ...banner,
-    imageUrl: banner.mediaId ? mediaMap.get(banner.mediaId)?.url ?? null : null,
-  }));
+  return result;
 }
 
 /**

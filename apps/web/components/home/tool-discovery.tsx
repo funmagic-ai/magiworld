@@ -12,68 +12,11 @@ interface ToolDiscoveryProps {
 
 export function ToolDiscovery({ tools }: ToolDiscoveryProps) {
   const t = useTranslations('home.categories');
-  const tCommon = useTranslations('common');
 
-  // Use placeholder data if no tools provided
-  // In production, this data comes from the database with localized toolType.name
-  const defaultTools: ToolListItem[] = tools.length > 0 ? tools : [
-    {
-      id: 't1',
-      title: 'Anime Style',
-      slug: 'anime-style',
-      toolType: { slug: 'stylize', name: 'Stylize', badgeColor: 'default' },
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 't2',
-      title: 'Oil Painting',
-      slug: 'oil-painting',
-      toolType: { slug: 'stylize', name: 'Stylize', badgeColor: 'default' },
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 't3',
-      title: 'Watercolor',
-      slug: 'watercolor',
-      toolType: { slug: 'stylize', name: 'Stylize', badgeColor: 'default' },
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 't4',
-      title: 'Image to 3D',
-      slug: 'image-to-3d',
-      toolType: { slug: '3d_gen', name: '3D Generation', badgeColor: 'secondary' },
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 't5',
-      title: 'Text to 3D',
-      slug: 'text-to-3d',
-      toolType: { slug: '3d_gen', name: '3D Generation', badgeColor: 'secondary' },
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 't6',
-      title: 'Photo Crystal',
-      slug: 'photo-crystal',
-      toolType: { slug: 'crystal_engrave', name: 'Crystal Engrave', badgeColor: 'secondary' },
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 't7',
-      title: 'Portrait Edit',
-      slug: 'portrait-edit',
-      toolType: { slug: 'edit', name: 'Edit', badgeColor: 'outline' },
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 't8',
-      title: 'Background Remove',
-      slug: 'background-remove',
-      toolType: { slug: 'edit', name: 'Edit', badgeColor: 'outline' },
-      updatedAt: new Date().toISOString()
-    },
-  ];
+  // Don't render if no tools from database
+  if (tools.length === 0) {
+    return null;
+  }
 
   return (
     <section className="container py-8">
@@ -85,7 +28,7 @@ export function ToolDiscovery({ tools }: ToolDiscoveryProps) {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-        {defaultTools.map((tool) => (
+        {tools.map((tool) => (
           <ToolCard key={tool.id} tool={tool} />
         ))}
       </div>

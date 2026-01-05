@@ -24,7 +24,6 @@
  *   name: 'Stylize',  // Localized
  *   description: 'Transform images into artistic styles',
  *   badgeColor: 'default',
- *   componentKey: 'StylizeInterface',
  *   order: 1,
  *   isActive: true
  * };
@@ -43,8 +42,6 @@ export interface ToolTypeInfo {
   icon?: string;
   /** Badge color for UI display */
   badgeColor: 'default' | 'secondary' | 'outline';
-  /** React component key for dynamic loading */
-  componentKey: string;
   /** Display order (lower = first) */
   order: number;
   /** Whether the tool type is active */
@@ -322,4 +319,47 @@ export interface HomeConfig {
   mainBanners: Banner[];
   /** Sidebar banners (exactly 2) */
   sideBanners: Banner[];
+}
+
+// ============================================
+// Tool Component Registry
+// ============================================
+
+/**
+ * Registry of valid tool slugs that have corresponding UI components.
+ *
+ * When adding a new tool component:
+ * 1. Create the component in apps/web/components/tools/{slug}/
+ * 2. Add the slug to this array
+ * 3. Register the component in apps/web/components/tools/tool-router.tsx
+ *
+ * The admin app validates tool slugs against this registry to ensure
+ * operators only create tools that have implemented UI components.
+ *
+ * @example
+ * ```typescript
+ * import { TOOL_REGISTRY } from '@magiworld/types';
+ *
+ * if (!TOOL_REGISTRY.includes(slug)) {
+ *   throw new Error(`No component exists for tool slug: ${slug}`);
+ * }
+ * ```
+ */
+export const TOOL_REGISTRY = [
+  'background-remove',
+] as const;
+
+/**
+ * Type representing valid tool slugs from the registry.
+ * Use this for type-safe tool slug validation.
+ */
+export type RegisteredToolSlug = typeof TOOL_REGISTRY[number];
+
+/**
+ * Check if a slug is a registered tool slug.
+ * @param slug - The slug to validate
+ * @returns true if the slug has a corresponding UI component
+ */
+export function isRegisteredToolSlug(slug: string): slug is RegisteredToolSlug {
+  return TOOL_REGISTRY.includes(slug as RegisteredToolSlug);
 }

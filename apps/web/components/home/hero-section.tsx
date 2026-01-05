@@ -1,12 +1,11 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
 import Image from 'next/image';
 import { Link } from '@/i18n/navigation';
 
 interface Banner {
   id: string;
-  image: string;
+  image?: string;
   title: string;
   subtitle?: string;
   link?: string;
@@ -18,22 +17,10 @@ interface HeroSectionProps {
 }
 
 export function HeroSection({ mainBanners, sideBanners }: HeroSectionProps) {
-  const t = useTranslations('home.hero');
-
-  // For now, use placeholder data if no banners provided
-  const defaultMainBanners: Banner[] = mainBanners.length > 0 ? mainBanners : [
-    {
-      id: '1',
-      image: '/placeholder-banner.jpg',
-      title: t('title'),
-      subtitle: t('subtitle'),
-    },
-  ];
-
-  const defaultSideBanners: Banner[] = sideBanners.length > 0 ? sideBanners : [
-    { id: 's1', image: '/placeholder-side1.jpg', title: 'AI Stylize' },
-    { id: 's2', image: '/placeholder-side2.jpg', title: '3D Generation' },
-  ];
+  // Don't render if no banners from database
+  if (mainBanners.length === 0 && sideBanners.length === 0) {
+    return null;
+  }
 
   return (
     <section className="container py-4 lg:py-6">
@@ -41,12 +28,12 @@ export function HeroSection({ mainBanners, sideBanners }: HeroSectionProps) {
       <div className="hidden lg:grid lg:grid-cols-12 lg:gap-3 lg:items-stretch">
         {/* Main Carousel - 8 columns */}
         <div className="lg:col-span-8">
-          <MainCarousel banners={defaultMainBanners} />
+          {mainBanners.length > 0 && <MainCarousel banners={mainBanners} />}
         </div>
 
         {/* Side Banners - 4 columns, stacked to match main carousel height */}
         <div className="lg:col-span-4 flex flex-col gap-3 h-full">
-          {defaultSideBanners.map((banner) => (
+          {sideBanners.map((banner) => (
             <SideBanner key={banner.id} banner={banner} />
           ))}
         </div>
@@ -55,14 +42,16 @@ export function HeroSection({ mainBanners, sideBanners }: HeroSectionProps) {
       {/* Mobile Layout: Stacked */}
       <div className="lg:hidden space-y-3">
         {/* Main Carousel - Full width */}
-        <MainCarousel banners={defaultMainBanners} />
+        {mainBanners.length > 0 && <MainCarousel banners={mainBanners} />}
 
         {/* Side Banners - 2 column grid */}
-        <div className="grid grid-cols-2 gap-3">
-          {defaultSideBanners.map((banner) => (
-            <SideBanner key={banner.id} banner={banner} />
-          ))}
-        </div>
+        {sideBanners.length > 0 && (
+          <div className="grid grid-cols-2 gap-3">
+            {sideBanners.map((banner) => (
+              <SideBanner key={banner.id} banner={banner} />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

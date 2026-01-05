@@ -20,17 +20,17 @@ export default async function HomePage({ params }: HomePageProps) {
   // Transform banners for HeroSection
   const mainBanners = homeConfig.mainBanners?.map((banner) => ({
     id: banner.id,
-    image: banner.image?.url || '',
+    image: banner.image,
     title: banner.title,
     subtitle: banner.subtitle,
-    link: banner.link ? `/studio/${banner.link.toolTypeSlug}/${banner.link.slug}` : undefined,
+    link: banner.link,
   })) || [];
 
   const sideBanners = homeConfig.sideBanners?.map((banner) => ({
     id: banner.id,
-    image: banner.image?.url || '',
+    image: banner.image,
     title: banner.title,
-    link: banner.link ? `/studio/${banner.link.toolTypeSlug}/${banner.link.slug}` : undefined,
+    link: banner.link,
   })) || [];
 
   return (

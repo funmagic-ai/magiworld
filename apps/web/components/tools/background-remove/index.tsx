@@ -16,7 +16,6 @@ type ToolData = {
     slug: string;
     name: string;
     badgeColor: string;
-    componentKey: string;
   };
 };
 

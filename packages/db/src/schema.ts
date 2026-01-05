@@ -54,10 +54,10 @@ export const localeEnum = pgEnum('locale', ['en', 'ja', 'pt', 'zh']);
  * Tool Types Table
  *
  * Defines the classification of AI tools (e.g., stylize, edit, 3d_gen).
- * Each tool type maps to a specific React component via the componentKey field.
+ * Used for grouping tools in the UI and URL routing.
  *
  * @example
- * { slug: 'stylize', componentKey: 'StylizeInterface', badgeColor: 'default' }
+ * { slug: 'edit', badgeColor: 'default' }
  */
 export const toolTypes = pgTable('tool_types', {
   /** Unique identifier (UUID v4) */
@@ -66,10 +66,6 @@ export const toolTypes = pgTable('tool_types', {
   slug: text('slug').notNull().unique(),
   /** Visual badge color for UI display */
   badgeColor: badgeColorEnum('badge_color').notNull().default('default'),
-  /** React component key for dynamic loading (e.g., 'StylizeInterface') */
-  componentKey: text('component_key').notNull(),
-  /** Optional icon identifier */
-  icon: text('icon'),
   /** Display order (lower numbers appear first) */
   order: integer('order').notNull().default(0),
   /** Whether this tool type is visible to users */
@@ -162,6 +158,29 @@ export const toolTranslations = pgTable('tool_translations', {
 });
 
 /**
+ * Folders Table
+ *
+ * Hierarchical folder structure for organizing media assets.
+ * Supports nested folders through self-referencing parentId.
+ *
+ * @example
+ * { name: 'Banners', parentId: null }
+ * { name: '2024 Campaigns', parentId: '<banners-folder-uuid>' }
+ */
+export const folders = pgTable('folders', {
+  /** Unique identifier (UUID v4) */
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** Folder display name */
+  name: text('name').notNull(),
+  /** Parent folder ID for nesting (null = root level) */
+  parentId: uuid('parent_id'),
+  /** Folder creation timestamp */
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  /** Folder last update timestamp */
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+/**
  * Media Table
  *
  * Stores metadata for uploaded media files (images, videos, etc.).
@@ -179,22 +198,26 @@ export const toolTranslations = pgTable('tool_translations', {
 export const media = pgTable('media', {
   /** Unique identifier (UUID v4) */
   id: uuid('id').primaryKey().defaultRandom(),
+  /** Reference to parent folder (null = root level) */
+  folderId: uuid('folder_id').references(() => folders.id, { onDelete: 'set null' }),
   /** Original filename */
   filename: text('filename').notNull(),
   /** Full URL to the media file */
   url: text('url').notNull(),
   /** Alternative text for accessibility */
   alt: text('alt'),
-  /** MIME type (e.g., 'image/jpeg', 'image/png') */
+  /** MIME type (e.g., 'image/jpeg', 'image/png', 'video/mp4') */
   mimeType: text('mime_type'),
-  /** Image width in pixels */
+  /** Image/video width in pixels */
   width: integer('width'),
-  /** Image height in pixels */
+  /** Image/video height in pixels */
   height: integer('height'),
   /** File size in bytes */
   size: integer('size'),
   /** Upload timestamp */
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  /** Soft delete timestamp (null = not deleted) */
+  deletedAt: timestamp('deleted_at'),
 });
 
 /**
@@ -204,17 +227,17 @@ export const media = pgTable('media', {
  * Banners can be of type 'main' (large carousel) or 'side' (smaller sidebars).
  *
  * @example
- * { type: 'main', mediaId: '<uuid>', toolId: '<uuid>', order: 1 }
+ * { type: 'main', imageUrl: 'https://cdn.../banner.jpg', link: '/studio/edit', order: 1 }
  */
 export const homeBanners = pgTable('home_banners', {
   /** Unique identifier (UUID v4) */
   id: uuid('id').primaryKey().defaultRandom(),
   /** Banner type: 'main' for carousel, 'side' for sidebar banners */
   type: text('type').notNull(),
-  /** Reference to banner image */
-  mediaId: uuid('media_id').references(() => media.id),
-  /** Optional reference to linked tool (for click-through) */
-  toolId: uuid('tool_id').references(() => tools.id),
+  /** Direct URL to banner image (CDN) */
+  imageUrl: text('image_url'),
+  /** Optional click-through link URL */
+  link: text('link'),
   /** Display order (lower numbers appear first) */
   order: integer('order').notNull().default(0),
   /** Whether this banner is currently displayed */

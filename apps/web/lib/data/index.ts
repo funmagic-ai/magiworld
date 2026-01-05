@@ -21,9 +21,8 @@ import {
   toolTranslations,
   homeBanners,
   homeBannerTranslations,
-  media,
 } from '@magiworld/db';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, desc } from 'drizzle-orm';
 import type { ToolListItem } from '@magiworld/types';
 
 // ============================================
@@ -36,12 +35,17 @@ import type { ToolListItem } from '@magiworld/types';
  */
 export type Locale = 'en' | 'ja' | 'pt' | 'zh';
 
+/** Maximum number of main carousel banners to display */
+const MAX_MAIN_BANNERS = 3;
+/** Maximum number of side banners to display */
+const MAX_SIDE_BANNERS = 2;
+
 /**
  * Homepage banner configuration result.
  * Contains both main carousel banners and sidebar banners.
  */
 interface HomeBannerResult {
-  /** Main carousel banners (typically up to 3) */
+  /** Main carousel banners (max 3) */
   mainBanners: Array<{
     /** Unique banner identifier */
     id: string;
@@ -49,21 +53,21 @@ interface HomeBannerResult {
     title: string;
     /** Localized banner subtitle (optional) */
     subtitle?: string;
-    /** Banner image with ID and URL */
-    image?: { id: string; url: string };
-    /** Linked tool for click-through navigation */
-    link?: { slug: string; toolTypeSlug: string };
+    /** Banner image URL */
+    image?: string;
+    /** Click-through URL (can be absolute or relative path) */
+    link?: string;
   }>;
-  /** Sidebar banners (typically exactly 2) */
+  /** Sidebar banners (max 2) */
   sideBanners: Array<{
     /** Unique banner identifier */
     id: string;
     /** Localized banner title */
     title: string;
-    /** Banner image with ID and URL */
-    image?: { id: string; url: string };
-    /** Linked tool for click-through navigation */
-    link?: { slug: string; toolTypeSlug: string };
+    /** Banner image URL */
+    image?: string;
+    /** Click-through URL (can be absolute or relative path) */
+    link?: string;
   }>;
 }
 
@@ -185,6 +189,87 @@ export async function getFeaturedTools(locale: Locale = 'en'): Promise<ToolListI
 }
 
 /**
+ * Fetch a single tool type by its URL slug.
+ *
+ * Returns tool type information with localized content.
+ * Used for tool type listing pages.
+ *
+ * @param slug - The URL-friendly tool type identifier
+ * @param locale - The locale code for content translation (default: 'en')
+ * @returns Promise resolving to the tool type object, or null if not found
+ */
+export async function getToolTypeBySlug(slug: string, locale: Locale = 'en') {
+  const result = await db
+    .select({
+      id: toolTypes.id,
+      slug: toolTypes.slug,
+      badgeColor: toolTypes.badgeColor,
+      name: toolTypeTranslations.name,
+      description: toolTypeTranslations.description,
+    })
+    .from(toolTypes)
+    .innerJoin(
+      toolTypeTranslations,
+      and(eq(toolTypeTranslations.toolTypeId, toolTypes.id), eq(toolTypeTranslations.locale, locale))
+    )
+    .where(and(eq(toolTypes.slug, slug), eq(toolTypes.isActive, true)))
+    .limit(1);
+
+  if (result.length === 0) return null;
+
+  return result[0];
+}
+
+/**
+ * Fetch tools by tool type slug.
+ *
+ * Returns all active tools belonging to a specific tool type.
+ * Used for tool type listing pages.
+ *
+ * @param toolTypeSlug - The URL-friendly tool type identifier
+ * @param locale - The locale code for content translation (default: 'en')
+ * @returns Promise resolving to an array of ToolListItem objects
+ */
+export async function getToolsByTypeSlug(toolTypeSlug: string, locale: Locale = 'en'): Promise<ToolListItem[]> {
+  const result = await db
+    .select({
+      id: tools.id,
+      slug: tools.slug,
+      thumbnailUrl: tools.thumbnailUrl,
+      updatedAt: tools.updatedAt,
+      toolTypeSlug: toolTypes.slug,
+      toolTypeBadgeColor: toolTypes.badgeColor,
+      toolTypeName: toolTypeTranslations.name,
+      title: toolTranslations.title,
+    })
+    .from(tools)
+    .innerJoin(toolTypes, eq(tools.toolTypeId, toolTypes.id))
+    .innerJoin(
+      toolTypeTranslations,
+      and(eq(toolTypeTranslations.toolTypeId, toolTypes.id), eq(toolTypeTranslations.locale, locale))
+    )
+    .innerJoin(
+      toolTranslations,
+      and(eq(toolTranslations.toolId, tools.id), eq(toolTranslations.locale, locale))
+    )
+    .where(and(eq(tools.isActive, true), eq(toolTypes.slug, toolTypeSlug)))
+    .orderBy(asc(tools.order));
+
+  return result.map((row) => ({
+    id: row.id,
+    title: row.title,
+    slug: row.slug,
+    thumbnail: row.thumbnailUrl ? { id: '', url: row.thumbnailUrl } : undefined,
+    toolType: {
+      slug: row.toolTypeSlug,
+      name: row.toolTypeName,
+      badgeColor: row.toolTypeBadgeColor,
+    },
+    updatedAt: row.updatedAt.toISOString(),
+  }));
+}
+
+/**
  * Fetch a single tool by its URL slug.
  *
  * Returns detailed tool information including configuration and prompt template.
@@ -214,7 +299,6 @@ export async function getToolBySlug(slug: string, locale: Locale = 'en') {
       updatedAt: tools.updatedAt,
       toolTypeSlug: toolTypes.slug,
       toolTypeBadgeColor: toolTypes.badgeColor,
-      toolTypeComponentKey: toolTypes.componentKey,
       toolTypeName: toolTypeTranslations.name,
       title: toolTranslations.title,
       description: toolTranslations.description,
@@ -249,7 +333,6 @@ export async function getToolBySlug(slug: string, locale: Locale = 'en') {
       slug: row.toolTypeSlug,
       name: row.toolTypeName,
       badgeColor: row.toolTypeBadgeColor,
-      componentKey: row.toolTypeComponentKey,
     },
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -264,6 +347,7 @@ export async function getToolBySlug(slug: string, locale: Locale = 'en') {
  *
  * Returns both main carousel banners and sidebar banners with localized content.
  * Banners are filtered by active status and ordered by display order.
+ * Limited to MAX_MAIN_BANNERS (3) main banners and MAX_SIDE_BANNERS (2) side banners.
  *
  * @param locale - The locale code for content translation (default: 'en')
  * @returns Promise resolving to HomeBannerResult with main and side banners
@@ -272,7 +356,7 @@ export async function getToolBySlug(slug: string, locale: Locale = 'en') {
  * ```typescript
  * const { mainBanners, sideBanners } = await getHomeConfig('ja');
  * // mainBanners: Array of up to 3 carousel banners
- * // sideBanners: Array of exactly 2 sidebar banners
+ * // sideBanners: Array of up to 2 sidebar banners
  * ```
  */
 export async function getHomeConfig(locale: Locale = 'en'): Promise<HomeBannerResult> {
@@ -280,41 +364,38 @@ export async function getHomeConfig(locale: Locale = 'en'): Promise<HomeBannerRe
     .select({
       id: homeBanners.id,
       type: homeBanners.type,
-      mediaUrl: media.url,
-      mediaId: media.id,
-      toolSlug: tools.slug,
-      toolTypeSlug: toolTypes.slug,
+      link: homeBanners.link,
+      imageUrl: homeBanners.imageUrl,
       title: homeBannerTranslations.title,
       subtitle: homeBannerTranslations.subtitle,
     })
     .from(homeBanners)
-    .leftJoin(media, eq(homeBanners.mediaId, media.id))
-    .leftJoin(tools, eq(homeBanners.toolId, tools.id))
-    .leftJoin(toolTypes, eq(tools.toolTypeId, toolTypes.id))
     .innerJoin(
       homeBannerTranslations,
       and(eq(homeBannerTranslations.bannerId, homeBanners.id), eq(homeBannerTranslations.locale, locale))
     )
     .where(eq(homeBanners.isActive, true))
-    .orderBy(asc(homeBanners.order));
+    .orderBy(asc(homeBanners.order), desc(homeBanners.updatedAt));
 
   const mainBanners = result
     .filter((row) => row.type === 'main')
+    .slice(0, MAX_MAIN_BANNERS)
     .map((row) => ({
       id: row.id,
       title: row.title,
       subtitle: row.subtitle ?? undefined,
-      image: row.mediaUrl ? { id: row.mediaId!, url: row.mediaUrl } : undefined,
-      link: row.toolSlug && row.toolTypeSlug ? { slug: row.toolSlug, toolTypeSlug: row.toolTypeSlug } : undefined,
+      image: row.imageUrl ?? undefined,
+      link: row.link ?? undefined,
     }));
 
   const sideBanners = result
     .filter((row) => row.type === 'side')
+    .slice(0, MAX_SIDE_BANNERS)
     .map((row) => ({
       id: row.id,
       title: row.title,
-      image: row.mediaUrl ? { id: row.mediaId!, url: row.mediaUrl } : undefined,
-      link: row.toolSlug && row.toolTypeSlug ? { slug: row.toolSlug, toolTypeSlug: row.toolTypeSlug } : undefined,
+      image: row.imageUrl ?? undefined,
+      link: row.link ?? undefined,
     }));
 
   return { mainBanners, sideBanners };
@@ -336,7 +417,7 @@ export async function getHomeConfig(locale: Locale = 'en'): Promise<HomeBannerRe
  * @example
  * ```typescript
  * const toolTypes = await getToolTypes('ja');
- * // [{ id: '...', slug: 'stylize', name: 'スタイライズ', componentKey: 'StylizeInterface' }, ...]
+ * // [{ id: '...', slug: 'stylize', name: 'スタイライズ' }, ...]
  * ```
  */
 export async function getToolTypes(locale: Locale = 'en') {
@@ -345,8 +426,6 @@ export async function getToolTypes(locale: Locale = 'en') {
       id: toolTypes.id,
       slug: toolTypes.slug,
       badgeColor: toolTypes.badgeColor,
-      componentKey: toolTypes.componentKey,
-      icon: toolTypes.icon,
       name: toolTypeTranslations.name,
       description: toolTypeTranslations.description,
     })
