@@ -15,6 +15,7 @@ import {
   AiGenerativeIcon,
   ImageUploadIcon,
   PaintBrushIcon,
+  ChatBotIcon,
 } from '@hugeicons/core-free-icons';
 import {
   MagiLayout,
@@ -25,6 +26,7 @@ import {
   ImageUpscaler,
   ImageRerenderer,
 } from '@/components/ai';
+import { Chat } from '@/components/chat';
 
 // Tool definitions
 const TOOLS: MagiTool[] = [
@@ -56,6 +58,13 @@ const TOOLS: MagiTool[] = [
     icon: PaintBrushIcon,
     category: 'image',
   },
+  {
+    id: 'chat',
+    name: 'Chat',
+    description: 'AI chat assistant',
+    icon: ChatBotIcon,
+    category: 'image',
+  },
 ];
 
 export default function MagiPage() {
@@ -73,18 +82,24 @@ export default function MagiPage() {
         return <ImageUpscaler />;
       case 'image-rerender':
         return <ImageRerenderer />;
+      case 'chat':
+        return <Chat />;
       default:
         return null;
     }
   };
+
+  // Chat tool uses full height without ToolHeader (has its own header)
+  const isChat = selectedToolId === 'chat';
 
   return (
     <MagiLayout
       tools={TOOLS}
       selectedToolId={selectedToolId}
       onSelectTool={setSelectedToolId}
+      fullHeight={isChat}
     >
-      <ToolHeader tool={selectedTool} />
+      {!isChat && <ToolHeader tool={selectedTool} />}
       {renderTool()}
     </MagiLayout>
   );

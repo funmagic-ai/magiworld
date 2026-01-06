@@ -37,6 +37,8 @@ interface MagiLayoutProps {
   selectedToolId: string;
   onSelectTool: (toolId: string) => void;
   children: ReactNode;
+  /** When true, content fills available height (for chat UI) */
+  fullHeight?: boolean;
 }
 
 /**
@@ -147,13 +149,19 @@ export function MagiLayout({
   selectedToolId,
   onSelectTool,
   children,
+  fullHeight = false,
 }: MagiLayoutProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const selectedTool = tools.find((t) => t.id === selectedToolId);
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] flex flex-col lg:flex-row">
+    <div className={cn(
+      'flex flex-col lg:flex-row',
+      fullHeight
+        ? 'h-[calc(100vh-3.5rem)] overflow-hidden'
+        : 'min-h-[calc(100vh-3.5rem)]'
+    )}>
       {/* Mobile Header */}
       <div className="lg:hidden border-b bg-background sticky top-0 z-40">
         <div className="flex items-center gap-3 p-3">
@@ -218,9 +226,22 @@ export function MagiLayout({
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="p-4 sm:p-6">
-          <div className="max-w-3xl mx-auto">{children}</div>
+      <main className={cn(
+        'flex-1',
+        fullHeight ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'
+      )}>
+        <div className={cn(
+          fullHeight
+            ? 'flex-1 flex flex-col p-4 sm:p-6 overflow-hidden'
+            : 'p-4 sm:p-6'
+        )}>
+          <div className={cn(
+            fullHeight
+              ? 'flex-1 flex flex-col max-w-4xl w-full mx-auto overflow-hidden'
+              : 'max-w-3xl mx-auto'
+          )}>
+            {children}
+          </div>
         </div>
       </main>
     </div>
