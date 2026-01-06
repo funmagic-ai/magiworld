@@ -13,8 +13,7 @@
  * @module apps/admin/app/page
  */
 
-import { db, tools, toolTypes, media, homeBanners } from '@magiworld/db';
-import { count } from 'drizzle-orm';
+import { db, tools, toolTypes, media, homeBanners, count } from '@magiworld/db';
 
 /**
  * Dashboard statistics object.

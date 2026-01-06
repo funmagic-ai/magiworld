@@ -26,6 +26,39 @@ import * as schema from './schema';
 // Re-export all schema definitions for convenient imports
 export * from './schema';
 
+// Re-export drizzle-orm utilities for consistent types across the monorepo
+export {
+  eq,
+  ne,
+  gt,
+  gte,
+  lt,
+  lte,
+  and,
+  or,
+  not,
+  isNull,
+  isNotNull,
+  inArray,
+  notInArray,
+  exists,
+  notExists,
+  between,
+  notBetween,
+  like,
+  ilike,
+  notLike,
+  notIlike,
+  asc,
+  desc,
+  sql,
+  count,
+  sum,
+  avg,
+  min,
+  max,
+} from 'drizzle-orm';
+
 /**
  * Database connection string from environment variables.
  * Expected format: postgresql://user:password@host:port/database

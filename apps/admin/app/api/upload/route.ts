@@ -14,7 +14,7 @@ import { toRouteHandler } from '@better-upload/server/adapters/next';
 import { aws } from '@better-upload/server/clients';
 import { db, media } from '@magiworld/db';
 import { revalidatePath } from 'next/cache';
-import { generateUniqueFilename } from '@/lib/actions/library';
+import { generateUniqueFilename, findOrCreateMagiFolder } from '@/lib/actions/library';
 
 // File size constants (in bytes)
 const MB = 1024 * 1024;
@@ -89,7 +89,7 @@ const router: Router = {
             folderId,
           });
         }
-        revalidatePath('/assets');
+        revalidatePath('/library');
       },
     }),
 
@@ -114,7 +114,7 @@ const router: Router = {
             folderId,
           });
         }
-        revalidatePath('/assets');
+        revalidatePath('/library');
       },
     }),
 
@@ -137,7 +137,26 @@ const router: Router = {
             folderId,
           });
         }
-        revalidatePath('/assets');
+        revalidatePath('/library');
+      },
+    }),
+
+    // Magi AI results → saved to library under magi/{yyyymmdd}/ folder
+    magi: route({
+      fileTypes: ['image/png', 'image/jpeg', 'image/webp'],
+      maxFileSize: 20 * MB,
+      onAfterSignedUrl: async ({ file }) => {
+        // Get or create magi/{yyyymmdd}/ folder structure
+        const folderId = await findOrCreateMagiFolder();
+        const uniqueFilename = await generateUniqueFilename(file.name, folderId);
+        await db.insert(media).values({
+          filename: uniqueFilename,
+          url: buildAdminS3Url(file.objectInfo.key),
+          mimeType: file.type,
+          size: file.size,
+          folderId,
+        });
+        revalidatePath('/library');
       },
     }),
   },

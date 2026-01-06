@@ -1,7 +1,6 @@
 'use server';
 
-import { db, media } from '@magiworld/db';
-import { eq } from 'drizzle-orm';
+import { db, media, eq } from '@magiworld/db';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 

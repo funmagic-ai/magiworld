@@ -2,16 +2,15 @@
  * @fileoverview Asset Library Management Page
  *
  * Admin page for managing uploaded media files on the Magiworld platform.
- * Supports folder organization, file uploads, and selection for Magi processing.
+ * Supports folder organization, file uploads, and batch operations.
  *
  * Features:
  * - Hierarchical folder navigation with breadcrumbs
  * - Drag-and-drop file uploads to S3
  * - Multi-select files for batch operations
- * - Send selected files to Magi AI assistant
  * - Move files between folders
  *
- * @module apps/admin/app/assets/page
+ * @module apps/admin/app/library/page
  */
 
 import { getFolderContents, getAllFolders } from '@/lib/actions/library';

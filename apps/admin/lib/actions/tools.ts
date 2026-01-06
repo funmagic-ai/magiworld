@@ -1,7 +1,6 @@
 'use server';
 
-import { db, tools, toolTranslations, toolTypes } from '@magiworld/db';
-import { eq, asc, and } from 'drizzle-orm';
+import { db, tools, toolTranslations, toolTypes, toolTypeTranslations, media, eq, asc, and, isNull } from '@magiworld/db';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -180,9 +179,6 @@ export async function getToolById(id: string) {
 }
 
 export async function getToolTypesForSelect() {
-  const { toolTypeTranslations } = await import('@magiworld/db');
-  const { and } = await import('drizzle-orm');
-
   const result = await db
     .select({
       id: toolTypes.id,
@@ -203,8 +199,6 @@ export async function getToolTypesForSelect() {
 }
 
 export async function getMediaForSelect() {
-  const { media } = await import('@magiworld/db');
-  const { isNull } = await import('drizzle-orm');
   const result = await db
     .select({
       id: media.id,

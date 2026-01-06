@@ -10,7 +10,7 @@
  * - Seasonal themes and trends
  * - Database-driven event management
  *
- * @module apps/admin/app/assets/ideas/page
+ * @module apps/admin/app/ideas/page
  */
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

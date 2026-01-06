@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * @fileoverview Media Upload Page
+ *
+ * @module apps/admin/app/library/upload/page
+ */
+
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';

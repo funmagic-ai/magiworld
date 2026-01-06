@@ -1,7 +1,6 @@
 'use server';
 
-import { db, homeBanners, homeBannerTranslations } from '@magiworld/db';
-import { eq, and } from 'drizzle-orm';
+import { db, homeBanners, homeBannerTranslations, eq, and } from '@magiworld/db';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 

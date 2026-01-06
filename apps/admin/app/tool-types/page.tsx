@@ -15,8 +15,7 @@
  * @module apps/admin/app/tool-types/page
  */
 
-import { db, toolTypes, toolTypeTranslations } from '@magiworld/db';
-import { eq, asc } from 'drizzle-orm';
+import { db, toolTypes, toolTypeTranslations, eq, asc } from '@magiworld/db';
 import Link from 'next/link';
 
 /**

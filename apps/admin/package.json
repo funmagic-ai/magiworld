@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/fal": "^2.0.2",
     "@aws-sdk/cloudfront-signer": "^3.957.0",
     "@base-ui/react": "^1.0.0",
     "@better-upload/client": "^3.0.12",
@@ -19,10 +20,10 @@
     "@magiworld/db": "workspace:*",
     "@magiworld/types": "workspace:*",
     "@magiworld/utils": "workspace:*",
+    "ai": "^6.0.7",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "drizzle-orm": "^0.44.2",
     "next": "16.1.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",

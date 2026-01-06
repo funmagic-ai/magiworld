@@ -35,11 +35,9 @@ import {
   CloudUploadIcon,
   Delete02Icon,
   Move01Icon,
-  AiChat02Icon,
   CheckmarkSquare02Icon,
   Cancel01Icon,
   Download04Icon,
-  MoreHorizontalIcon,
 } from '@hugeicons/core-free-icons';
 import {
   createFolder,
@@ -74,6 +72,38 @@ function formatBytes(bytes: number | null): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
 }
 
+/**
+ * Calculate and format aspect ratio from dimensions
+ */
+function formatAspectRatio(width: number, height: number): string {
+  // Find GCD to simplify ratio
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+  const divisor = gcd(width, height);
+  const ratioW = width / divisor;
+  const ratioH = height / divisor;
+
+  // Common ratios mapping
+  const commonRatios: Record<string, string> = {
+    '16:9': '16:9',
+    '9:16': '9:16',
+    '4:3': '4:3',
+    '3:4': '3:4',
+    '1:1': '1:1',
+    '3:2': '3:2',
+    '2:3': '2:3',
+    '21:9': '21:9',
+  };
+
+  const simplified = `${ratioW}:${ratioH}`;
+  if (commonRatios[simplified]) {
+    return simplified;
+  }
+
+  // For non-standard ratios, show decimal
+  const decimal = width / height;
+  return decimal.toFixed(2);
+}
+
 export function LibraryClient({
   folders,
   media,
@@ -106,6 +136,18 @@ export function LibraryClient({
 
   // Single item move state
   const [mediaToMove, setMediaToMove] = useState<MediaItem | null>(null);
+
+  // Client-side calculated image dimensions
+  const [imageDimensions, setImageDimensions] = useState<
+    Record<string, { width: number; height: number }>
+  >({});
+
+  const handleImageLoad = useCallback((id: string, img: HTMLImageElement) => {
+    setImageDimensions((prev) => ({
+      ...prev,
+      [id]: { width: img.naturalWidth, height: img.naturalHeight },
+    }));
+  }, []);
 
   const toggleSelection = useCallback((id: string) => {
     setSelectedMedia((prev) => {
@@ -279,7 +321,7 @@ export function LibraryClient({
       {/* Breadcrumbs */}
       <div className="mb-4 flex items-center gap-1 text-sm">
         <Link
-          href="/assets"
+          href="/library"
           className={cn(
             'flex items-center gap-1 hover:text-foreground',
             !currentFolder ? 'text-foreground font-medium' : 'text-muted-foreground'
@@ -296,7 +338,7 @@ export function LibraryClient({
               strokeWidth={2}
             />
             <Link
-              href={`/assets?folder=${folder.id}`}
+              href={`/library?folder=${folder.id}`}
               className={cn(
                 'hover:text-foreground',
                 folder.id === currentFolder?.id
@@ -325,20 +367,6 @@ export function LibraryClient({
             </Button>
           </div>
           <div className="flex items-center gap-2">
-            {/* Send to Magi */}
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={selectedMedia.size === 0}
-              onClick={() => {
-                const ids = Array.from(selectedMedia).join(',');
-                router.push(`/assets/magi?files=${ids}`);
-              }}
-            >
-              <HugeiconsIcon icon={AiChat02Icon} className="h-4 w-4 mr-2" strokeWidth={2} />
-              Send to Magi
-            </Button>
-
             {/* Move */}
             <Dialog open={showMoveDialog} onOpenChange={(open) => {
               setShowMoveDialog(open);
@@ -414,10 +442,8 @@ export function LibraryClient({
       {!isSelecting && media.length > 0 && (
         <div className="mb-4 flex items-center gap-2">
           <Button
-            variant="secondary"
             size="sm"
             onClick={() => setIsSelecting(true)}
-            className="border border-input"
           >
             <HugeiconsIcon icon={CheckmarkSquare02Icon} className="h-4 w-4 mr-2" strokeWidth={2} />
             Multi-Select
@@ -439,7 +465,7 @@ export function LibraryClient({
                 className="group relative p-4 hover:bg-muted/50 cursor-pointer"
               >
                 <Link
-                  href={`/assets?folder=${folder.id}`}
+                  href={`/library?folder=${folder.id}`}
                   className="flex flex-col items-center gap-2"
                 >
                   <HugeiconsIcon
@@ -512,6 +538,7 @@ export function LibraryClient({
                     src={item.url}
                     alt={item.alt || item.filename}
                     className="w-full h-full object-cover"
+                    onLoad={(e) => handleImageLoad(item.id, e.currentTarget)}
                   />
                 ) : item.mimeType?.startsWith('video/') ? (
                   <video
@@ -560,17 +587,6 @@ export function LibraryClient({
                     >
                       <HugeiconsIcon icon={Move01Icon} className="h-4 w-4" strokeWidth={2} />
                     </button>
-                    {/* Send to Magi */}
-                    <button
-                      className="rounded-full bg-white p-2.5 text-gray-700 hover:bg-primary hover:text-white transition-colors"
-                      title="Send to Magi"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        router.push(`/assets/magi?files=${item.id}`);
-                      }}
-                    >
-                      <HugeiconsIcon icon={AiChat02Icon} className="h-4 w-4" strokeWidth={2} />
-                    </button>
                     {/* Delete */}
                     <button
                       className="rounded-full bg-white p-2.5 text-gray-700 hover:bg-destructive hover:text-white transition-colors"
@@ -595,6 +611,17 @@ export function LibraryClient({
                   <span>{item.mimeType?.split('/')[1]?.toUpperCase() || 'Unknown'}</span>
                   <span>{formatBytes(item.size)}</span>
                 </div>
+                {/* Show dimensions and ratio - prefer client-calculated, fallback to DB values */}
+                {item.mimeType?.startsWith('image/') && (() => {
+                  const dims = imageDimensions[item.id] || (item.width && item.height ? { width: item.width, height: item.height } : null);
+                  if (!dims) return null;
+                  return (
+                    <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{dims.width} × {dims.height}</span>
+                      <span>{formatAspectRatio(dims.width, dims.height)}</span>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           ))}

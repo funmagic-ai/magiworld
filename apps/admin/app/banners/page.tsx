@@ -16,8 +16,18 @@
  * @module apps/admin/app/banners/page
  */
 
-import { db, homeBanners, homeBannerTranslations } from '@magiworld/db';
-import { eq, asc, desc, and, isNull, ilike, or } from 'drizzle-orm';
+import {
+  db,
+  homeBanners,
+  homeBannerTranslations,
+  eq,
+  asc,
+  desc,
+  and,
+  isNull,
+  ilike,
+  or,
+} from '@magiworld/db';
 import Link from 'next/link';
 import { RestoreBannerButton } from '@/components/restore-banner-button';
 import { ListToolbar } from '@/components/list-toolbar';

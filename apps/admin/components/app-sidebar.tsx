@@ -63,9 +63,9 @@ const menuItems: MenuItem[] = [
     title: 'Assets',
     icon: FolderLibraryIcon,
     children: [
-      { title: 'Library', url: '/assets' },
-      { title: 'Ideas', url: '/assets/ideas' },
-      { title: 'Magi', url: '/assets/magi' },
+      { title: 'Library', url: '/library' },
+      { title: 'Ideas', url: '/ideas' },
+      { title: 'Magi', url: '/magi' },
     ],
   },
 ];

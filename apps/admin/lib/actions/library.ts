@@ -10,8 +10,7 @@
  * @module apps/admin/lib/actions/library
  */
 
-import { db, folders, media } from '@magiworld/db';
-import { eq, isNull, asc, desc, and, count, sum, sql } from 'drizzle-orm';
+import { db, folders, media, eq, isNull, asc, desc, and, count, sum, sql } from '@magiworld/db';
 import { revalidatePath } from 'next/cache';
 import { maybeSignUrl } from '@/lib/cloudfront';
 
@@ -89,6 +88,46 @@ export async function generateUniqueFilename(
   }
 
   return newFilename;
+}
+
+/**
+ * Find or create the Magi folder structure: magi/{yyyymmdd}/
+ * Returns the folder ID for the date folder
+ */
+export async function findOrCreateMagiFolder(): Promise<string> {
+  // Get current date in yyyymmdd format
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0].replace(/-/g, '');
+
+  // Find or create "magi" parent folder
+  let [magiFolder] = await db
+    .select()
+    .from(folders)
+    .where(and(eq(folders.name, 'magi'), isNull(folders.parentId)))
+    .limit(1);
+
+  if (!magiFolder) {
+    [magiFolder] = await db
+      .insert(folders)
+      .values({ name: 'magi', parentId: null })
+      .returning();
+  }
+
+  // Find or create date subfolder
+  let [dateFolder] = await db
+    .select()
+    .from(folders)
+    .where(and(eq(folders.name, dateStr), eq(folders.parentId, magiFolder.id)))
+    .limit(1);
+
+  if (!dateFolder) {
+    [dateFolder] = await db
+      .insert(folders)
+      .values({ name: dateStr, parentId: magiFolder.id })
+      .returning();
+  }
+
+  return dateFolder.id;
 }
 
 /**
@@ -275,7 +314,7 @@ export async function createFolder(name: string, parentId?: string | null): Prom
     })
     .returning();
 
-  revalidatePath('/assets');
+  revalidatePath('/library');
   return newFolder;
 }
 
@@ -311,7 +350,7 @@ export async function renameFolder(folderId: string, name: string): Promise<Fold
     .where(eq(folders.id, folderId))
     .returning();
 
-  revalidatePath('/assets');
+  revalidatePath('/library');
   return updatedFolder;
 }
 
@@ -366,7 +405,7 @@ export async function deleteFolder(folderId: string): Promise<{ deletedFolders: 
     await deleteFolderRecursive(folderId);
   }
 
-  revalidatePath('/assets');
+  revalidatePath('/library');
   return { deletedFolders, deletedFiles };
 }
 
@@ -416,7 +455,7 @@ export async function moveFolder(folderId: string, newParentId: string | null): 
     .where(eq(folders.id, folderId))
     .returning();
 
-  revalidatePath('/assets');
+  revalidatePath('/library');
   return updatedFolder;
 }
 
@@ -459,7 +498,7 @@ export async function updateMedia(
     .where(eq(media.id, mediaId))
     .returning();
 
-  revalidatePath('/assets');
+  revalidatePath('/library');
   return updatedMedia;
 }
 
@@ -490,7 +529,7 @@ export async function moveMedia(mediaId: string, folderId: string | null): Promi
     .where(eq(media.id, mediaId))
     .returning();
 
-  revalidatePath('/assets');
+  revalidatePath('/library');
   return updatedMedia;
 }
 
@@ -529,7 +568,7 @@ export async function moveMediaBatch(
       .where(eq(media.id, id));
   }
 
-  revalidatePath('/assets');
+  revalidatePath('/library');
   return { moved: mediaIds.length, renamed };
 }
 
@@ -544,7 +583,7 @@ export async function deleteMedia(mediaId: string): Promise<void> {
     .update(media)
     .set({ deletedAt: new Date() })
     .where(eq(media.id, mediaId));
-  revalidatePath('/assets');
+  revalidatePath('/library');
 }
 
 /**
@@ -555,7 +594,7 @@ export async function deleteMediaBatch(mediaIds: string[]): Promise<void> {
   for (const id of mediaIds) {
     await db.update(media).set({ deletedAt: now }).where(eq(media.id, id));
   }
-  revalidatePath('/assets');
+  revalidatePath('/library');
 }
 
 /**
