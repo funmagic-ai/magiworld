@@ -20,5 +20,9 @@
   "packageManager": "pnpm@9.15.2",
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "pino": "^10.1.0",
+    "pino-pretty": "^13.1.3"
   }
 }

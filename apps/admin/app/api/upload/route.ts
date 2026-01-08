@@ -159,6 +159,33 @@ const router: Router = {
         revalidatePath('/library');
       },
     }),
+
+    // Chat image uploads → stored under chat/{conversationId}/ folder
+    // Used for image input to AI models (editing, vision)
+    chatImages: route<true>({
+      fileTypes: ['image/*'],
+      maxFileSize: 10 * MB,
+      multipleFiles: true,
+      maxFiles: 16,
+      onBeforeUpload: ({ clientMetadata }) => {
+        const metadata = clientMetadata as { conversationId?: string } | undefined;
+        const conversationId = metadata?.conversationId || 'temp';
+        return {
+          generateObjectInfo: ({ file }) => {
+            const timestamp = Date.now();
+            const ext = file.name.split('.').pop() || 'jpg';
+            const name = file.name.replace(`.${ext}`, '').replace(/[^a-zA-Z0-9-_]/g, '-');
+            return {
+              key: `chat/${conversationId}/${name}-${timestamp}.${ext}`,
+            };
+          },
+        };
+      },
+      onAfterSignedUrl: async ({ files }) => {
+        // No DB insert here - chat component handles message storage
+        console.log(`[Chat Upload] ${files.length} image(s) uploaded for chat`);
+      },
+    }),
   },
 };
 

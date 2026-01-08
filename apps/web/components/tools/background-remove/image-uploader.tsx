@@ -2,6 +2,7 @@
 
 import { useCallback, useRef } from 'react';
 import { useTranslations } from 'next-intl';
+import { validateFileSize, MAX_FILE_SIZE_MB } from '@magiworld/utils';
 
 interface ImageUploaderProps {
   onImageSelect: (imageDataUrl: string) => void;
@@ -16,6 +17,13 @@ export function ImageUploader({ onImageSelect, previewUrl, disabled }: ImageUplo
   const handleFileChange = useCallback(
     (file: File) => {
       if (!file.type.startsWith('image/')) return;
+
+      // Validate file size before processing
+      const sizeValidation = validateFileSize(file);
+      if (!sizeValidation.isValid) {
+        alert(sizeValidation.error);
+        return;
+      }
 
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -90,6 +98,9 @@ export function ImageUploader({ onImageSelect, previewUrl, disabled }: ImageUplo
           </p>
           <p className="text-xs text-muted-foreground">
             {t('or')} <span className="text-primary underline">{t('browse')}</span>
+          </p>
+          <p className="text-xs text-muted-foreground/70">
+            (max {MAX_FILE_SIZE_MB}MB)
           </p>
         </div>
       )}

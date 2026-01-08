@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Image01Icon, Upload04Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
+import { validateFileSize, MAX_FILE_SIZE_MB } from '@/lib/utils/file';
 
 type MediaItem = {
   id: string;
@@ -50,6 +51,13 @@ export function MediaPicker({
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Validate file size before processing
+    const sizeValidation = validateFileSize(file);
+    if (!sizeValidation.isValid) {
+      alert(sizeValidation.error);
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -239,6 +247,7 @@ function MediaPickerDialog({
               <div className="w-full h-48 rounded-lg border-2 border-dashed border-muted-foreground/25 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer">
                 <HugeiconsIcon icon={Upload04Icon} strokeWidth={2} className="size-12" />
                 <span className="text-sm">Click or drag to upload</span>
+                <span className="text-xs text-muted-foreground/70">(max {MAX_FILE_SIZE_MB}MB)</span>
               </div>
               <input
                 type="file"

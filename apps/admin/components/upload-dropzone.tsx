@@ -17,6 +17,7 @@ import { Progress } from '@/components/ui/progress';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { CloudUploadIcon, Delete02Icon, CheckmarkCircle02Icon, AlertCircleIcon } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
+import { validateFileSizes, MAX_FILE_SIZE_MB } from '@/lib/utils/file';
 
 type UploadedFile = {
   name: string;
@@ -86,7 +87,14 @@ export function UploadDropzone({
 
       const droppedFiles = Array.from(e.dataTransfer.files).slice(0, maxFiles);
       if (droppedFiles.length > 0) {
-        upload(droppedFiles, { metadata: folderId ? { folderId } : undefined });
+        // Validate file sizes before upload
+        const { validFiles, errors } = validateFileSizes(droppedFiles);
+        if (errors.length > 0) {
+          alert(errors.join('\n'));
+        }
+        if (validFiles.length > 0) {
+          upload(validFiles, { metadata: folderId ? { folderId } : undefined });
+        }
       }
     },
     [upload, maxFiles, folderId]
@@ -96,7 +104,14 @@ export function UploadDropzone({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const selectedFiles = Array.from(e.target.files || []).slice(0, maxFiles);
       if (selectedFiles.length > 0) {
-        upload(selectedFiles, { metadata: folderId ? { folderId } : undefined });
+        // Validate file sizes before upload
+        const { validFiles, errors } = validateFileSizes(selectedFiles);
+        if (errors.length > 0) {
+          alert(errors.join('\n'));
+        }
+        if (validFiles.length > 0) {
+          upload(validFiles, { metadata: folderId ? { folderId } : undefined });
+        }
       }
       e.target.value = '';
     },
@@ -133,7 +148,7 @@ export function UploadDropzone({
           {isDragging ? 'Drop files here' : 'Drag & drop files here'}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          or click to browse (max {maxFiles} files)
+          or click to browse (max {maxFiles} files, {MAX_FILE_SIZE_MB}MB each)
         </p>
       </Card>
 

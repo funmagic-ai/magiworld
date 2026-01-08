@@ -20,7 +20,7 @@ export async function removeBackground(imageUrl: string): Promise<BackgroundRemo
     prompt: '',
     providerOptions: {
       fal: {
-        image_url: imageUrl,
+        imageUrl: imageUrl,
       },
     },
   });

@@ -18,6 +18,7 @@ import {
   FieldGroup,
 } from '@/components/ui/field';
 import { createMedia } from '@/lib/actions/media';
+import { validateFileSize, MAX_FILE_SIZE_MB } from '@/lib/utils/file';
 
 export default function MediaUploadPage() {
   const router = useRouter();
@@ -35,6 +36,13 @@ export default function MediaUploadPage() {
   const handleFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) {
       alert('Please upload an image file');
+      return;
+    }
+
+    // Validate file size before processing
+    const sizeValidation = validateFileSize(file);
+    if (!sizeValidation.isValid) {
+      alert(sizeValidation.error);
       return;
     }
 
@@ -159,6 +167,7 @@ export default function MediaUploadPage() {
                       <line x1="19" y1="2" x2="19" y2="8" />
                     </svg>
                     <p>Drag and drop an image here, or click to select</p>
+                    <p className="text-sm text-muted-foreground/70 mt-1">(max {MAX_FILE_SIZE_MB}MB)</p>
                   </div>
                   <input
                     type="file"

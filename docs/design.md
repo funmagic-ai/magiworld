@@ -917,6 +917,323 @@ INNGEST_SIGNING_KEY=
 
 ---
 
+## 17. AI SDK Integration
+
+### Overview
+
+The admin app uses **Vercel AI SDK** for all AI-powered features. Multiple providers are supported with a unified interface for text generation, image generation, and image processing.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          AI SDK Provider Layer                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐            │
+│  │    OpenAI       │   │     Google      │   │     Fal.ai      │            │
+│  │  @ai-sdk/openai │   │  @ai-sdk/google │   │   @ai-sdk/fal   │            │
+│  ├─────────────────┤   ├─────────────────┤   ├─────────────────┤            │
+│  │ • GPT-4o        │   │ • Gemini 2.0    │   │ • BRIA RMBG 2.0 │            │
+│  │ • GPT-4o Mini   │   │ • Gemini 1.5    │   │ • Image Gen     │            │
+│  │ • GPT-4 Turbo   │   │ • Gemini 2.5    │   │ • Image Upscale │            │
+│  │ • GPT-Image-1   │   │   Flash Image   │   │ • Image Rerender│            │
+│  │ • GPT-Image-1.5 │   │ • Gemini 3 Pro  │   │                 │            │
+│  │                 │   │   Image Preview │   │                 │            │
+│  └────────┬────────┘   └────────┬────────┘   └────────┬────────┘            │
+│           │                      │                      │                    │
+│           └──────────────────────┼──────────────────────┘                    │
+│                                  ▼                                           │
+│                        ┌─────────────────────┐                               │
+│                        │   AI SDK Core       │                               │
+│                        │   - streamText      │                               │
+│                        │   - generateText    │                               │
+│                        │   - generateImage   │                               │
+│                        └──────────┬──────────┘                               │
+│                                   │                                          │
+│                                   ▼                                          │
+│                        ┌─────────────────────┐                               │
+│                        │   Chat API Route    │                               │
+│                        │   /api/chat         │                               │
+│                        └─────────────────────┘                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Supported Models
+
+#### Text Generation Models
+
+| Provider | Model ID | Display Name | Description |
+|----------|----------|--------------|-------------|
+| OpenAI | `gpt-4o-mini` | GPT-4o Mini | Fast & affordable |
+| OpenAI | `gpt-4o` | GPT-4o | Most capable |
+| OpenAI | `gpt-4-turbo` | GPT-4 Turbo | Fast GPT-4 |
+| Google | `gemini-2.0-flash` | Gemini 2.0 Flash | Fast & smart |
+| Google | `gemini-1.5-pro` | Gemini 1.5 Pro | Advanced reasoning |
+
+#### Image Generation Models
+
+| Provider | Model ID | Display Name | Supports Input Images |
+|----------|----------|--------------|----------------------|
+| OpenAI | `gpt-image-1` | GPT Image 1 | ✅ (up to 16) |
+| OpenAI | `gpt-image-1.5` | GPT Image 1.5 | ✅ (up to 16) |
+| Google | `gemini-2.5-flash-preview-image-generation` | Gemini 2.5 Flash Image | ✅ (up to 16) |
+| Google | `gemini-3-pro-image-preview` | Gemini 3 Pro Image | ✅ (up to 16) |
+
+#### Image Processing Models (Fal.ai)
+
+| Tool | Model | Capability |
+|------|-------|------------|
+| Background Remove | `fal-ai/bria/background/remove` | Remove image backgrounds |
+| Image Generate | Various Fal models | Generate images from prompts |
+| Image Upscale | Fal upscaling models | Enhance image resolution |
+| Image Rerender | Fal rendering models | Restyle images |
+
+### Implementation
+
+#### Provider Configuration
+
+```typescript
+// lib/ai/chat-providers.ts
+import { createOpenAI } from '@ai-sdk/openai';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+
+const providers = {
+  openai: () => createOpenAI({ apiKey: process.env.OPENAI_API_KEY }),
+  google: () => createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY }),
+};
+```
+
+#### Chat API Route
+
+The `/api/chat` route handles all chat requests with automatic routing based on model capability:
+
+```typescript
+// Text models → streamText (streaming response)
+if (modelConfig.capability === 'text') {
+  return streamText({ model, messages }).toUIMessageStreamResponse();
+}
+
+// Image models → generateImage/generateText (JSON response)
+if (modelConfig.capability === 'image-generation') {
+  if (modelConfig.provider === 'openai') {
+    return handleOpenAIImageGeneration(messages, modelConfig);
+  } else {
+    return handleGoogleImageGeneration(messages, modelConfig);
+  }
+}
+```
+
+#### Client-Side Integration
+
+The chat component uses `@ai-sdk/react`'s `useChat` hook for real-time streaming:
+
+```typescript
+import { useChat } from '@ai-sdk/react';
+
+const { messages, input, handleSubmit, isLoading } = useChat({
+  api: '/api/chat',
+  body: { modelId, conversationId },
+});
+```
+
+### Environment Variables
+
+```bash
+# AI API Keys
+OPENAI_API_KEY=sk-...                          # OpenAI API key
+GOOGLE_GENERATIVE_AI_API_KEY=...               # Google AI API key
+FAL_API_KEY=...                                # Fal.ai API key
+```
+
+---
+
+## 18. CloudFront Signed URLs
+
+### Overview
+
+Private S3 buckets (`magiworld-admin-assets`) are accessed via CloudFront with signed URLs for secure, time-limited access.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        CloudFront Signed URL Flow                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│   Admin App (3002)                                                           │
+│         │                                                                     │
+│         ▼                                                                     │
+│   ┌─────────────────┐                                                        │
+│   │  Upload Route   │ ──► S3 Presigned URL ──► magiworld-admin-assets       │
+│   │  /api/upload    │                              (Private Bucket)          │
+│   └────────┬────────┘                                    │                   │
+│            │                                             │                   │
+│            ▼                                             ▼                   │
+│   ┌─────────────────┐                         ┌─────────────────────┐       │
+│   │   Database      │                         │    CloudFront       │       │
+│   │   (media table) │                         │    Distribution     │       │
+│   │   Stores URL:   │                         │    (OAC enabled)    │       │
+│   │   cf-url/key    │                         └──────────┬──────────┘       │
+│   └────────┬────────┘                                    │                   │
+│            │                                             │                   │
+│            ▼                                             ▼                   │
+│   ┌─────────────────┐         Sign URL        ┌─────────────────────┐       │
+│   │   maybeSignUrl  │ ◄──────────────────────►│   Private Key       │       │
+│   │   Utility       │                         │   (RSA)             │       │
+│   └────────┬────────┘                         └─────────────────────┘       │
+│            │                                                                  │
+│            ▼                                                                  │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │   Signed URL with expiry:                                            │   │
+│   │   https://admin.cloudfront.net/media/image.jpg                       │   │
+│   │   ?Expires=1234567890&Signature=...&Key-Pair-Id=...                  │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Implementation
+
+#### Signing Utility
+
+```typescript
+// lib/cloudfront.ts
+import { getSignedUrl } from '@aws-sdk/cloudfront-signer';
+
+export function signCloudFrontUrl(url: string, expirySeconds = 3600): string {
+  return getSignedUrl({
+    url,
+    keyPairId: process.env.CLOUDFRONT_KEY_PAIR_ID,
+    dateLessThan: new Date(Date.now() + expirySeconds * 1000),
+    privateKey: process.env.CLOUDFRONT_PRIVATE_KEY,
+  });
+}
+
+// Sign only if URL is from admin CloudFront distribution
+export function maybeSignUrl(url: string, expirySeconds?: number): string {
+  const adminUrl = process.env.CLOUDFRONT_ADMIN_URL;
+  if (!adminUrl || !url.startsWith(adminUrl)) return url;
+  if (!isSignedUrlsEnabled()) return url;
+  return signCloudFrontUrl(url, expirySeconds);
+}
+```
+
+#### Usage Patterns
+
+```typescript
+// When loading library items for display
+const signedUrls = mediaItems.map(item => maybeSignUrl(item.url));
+
+// When sending images to AI API (longer expiry for processing)
+const signedUrl = maybeSignUrl(imageUrl, 3600); // 1 hour for AI processing
+
+// When returning chat messages with images
+const signedMessages = messages.map(msg => ({
+  ...msg,
+  content: signMessageContent(msg.content), // Signs embedded URLs
+}));
+```
+
+### Environment Variables
+
+```bash
+# CloudFront Configuration
+CLOUDFRONT_ADMIN_URL=https://admin-assets.cloudfront.net  # Admin assets distribution
+CLOUDFRONT_URL=https://cdn.magiworld.ai                   # Public CDN distribution
+CLOUDFRONT_KEY_PAIR_ID=K...                               # CloudFront key pair ID
+CLOUDFRONT_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n..."  # RSA private key
+CLOUDFRONT_SIGNED_URL_EXPIRY=3600                         # Default expiry (seconds)
+```
+
+### Bucket Configuration
+
+| Bucket | CloudFront | Signed URLs | Use Case |
+|--------|------------|-------------|----------|
+| `magiworld-admin-assets` | ✅ OAC | ✅ Required | Admin library, AI chat images |
+| `magiworld-cdn` | ✅ Public | ❌ Not needed | Banners, tool images (public) |
+| `magiworld-user-uploads` | ❌ Direct S3 | ✅ Presigned | User uploads (via presigned) |
+
+---
+
+## 19. Magi AI Assistant
+
+### Overview
+
+Magi is the admin's AI assistant providing a unified chat interface with support for:
+- **Text conversations** with GPT-4o and Gemini models
+- **Image generation** with OpenAI and Google image models
+- **Image editing** by uploading images and providing prompts
+- **AI image tools** (background removal, upscaling, rerendering)
+
+### Database Schema
+
+```sql
+-- Conversations
+CREATE TABLE chat_conversations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT,
+  provider TEXT NOT NULL DEFAULT 'openai',
+  model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMP  -- Soft delete
+);
+
+-- Messages (AI SDK compatible)
+CREATE TABLE chat_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id UUID NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,  -- 'user' | 'assistant' | 'system'
+  content TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMP  -- Soft delete
+);
+```
+
+### Message Content Format
+
+Messages support multiple content types stored as JSON:
+
+```typescript
+// Plain text
+{ type: 'text', text: 'Hello!' }
+
+// User message with images
+{
+  type: 'user-with-images',
+  text: 'What is in this image?',
+  images: [{ url: 'https://cf.../image.jpg' }]
+}
+
+// AI-generated image response
+{
+  type: 'image-generation',
+  text: 'Generated image for: "a sunset over mountains"',
+  images: [{ url: 'https://cf.../generated.png' }]
+}
+```
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Model Switching** | Switch between OpenAI and Google models mid-conversation |
+| **Image Upload** | Upload up to 16 images for vision/editing models |
+| **Image Generation** | Generate images from text prompts |
+| **Image Editing** | Edit uploaded images with text instructions |
+| **Save to Library** | Save generated images to admin media library |
+| **Conversation History** | Persist conversations with soft delete |
+| **Streaming Responses** | Real-time streaming for text models |
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/chat` | POST | Chat with AI (streaming or JSON response) |
+| `/api/upload` | POST | Upload images for chat (route: `chatImages`) |
+
+---
+
 ## Document History
 
 | Version | Date | Changes |
@@ -925,3 +1242,4 @@ INNGEST_SIGNING_KEY=
 | 2.0 | 2024-12-31 | Replaced Payload CMS with custom Admin app |
 | 3.0 | 2025-01-02 | Added Theme System (next-themes), Logto authentication, Profile page |
 | 3.1 | 2025-01-04 | Added Tool Registry Pattern for slug validation between web and admin apps |
+| 4.0 | 2025-01-06 | Added AI SDK Integration, CloudFront Signed URLs, Magi AI Assistant |

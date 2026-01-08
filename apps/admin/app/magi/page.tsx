@@ -1,106 +1,22 @@
-'use client';
-
 /**
  * @fileoverview Magi - AI Tools Dashboard
  *
- * Multi-tool interface for AI-powered asset processing.
- * Operators can quickly select and use different AI tools.
+ * Two-view interface for AI-powered tools:
+ * - Grid view: Browse all available tools
+ * - Tool view: Use a selected tool (full-screen)
+ *
+ * Deep linking: /magi?tool=chat opens directly to the chat tool.
  *
  * @module apps/admin/app/magi/page
  */
 
-import { useState } from 'react';
-import {
-  Image01Icon,
-  AiGenerativeIcon,
-  ImageUploadIcon,
-  PaintBrushIcon,
-  ChatBotIcon,
-} from '@hugeicons/core-free-icons';
-import {
-  MagiLayout,
-  ToolHeader,
-  type MagiTool,
-  BackgroundRemover,
-  ImageGenerator,
-  ImageUpscaler,
-  ImageRerenderer,
-} from '@/components/ai';
-import { Chat } from '@/components/chat';
-
-// Tool definitions
-const TOOLS: MagiTool[] = [
-  {
-    id: 'background-remove',
-    name: 'Remove Background',
-    description: 'Remove backgrounds from images',
-    icon: Image01Icon,
-    category: 'image',
-  },
-  {
-    id: 'image-generate',
-    name: 'Generate Image',
-    description: 'Create images from text prompts',
-    icon: AiGenerativeIcon,
-    category: 'image',
-  },
-  {
-    id: 'image-upscale',
-    name: 'Upscale Image',
-    description: 'Enhance image resolution',
-    icon: ImageUploadIcon,
-    category: 'image',
-  },
-  {
-    id: 'image-rerender',
-    name: 'Rerender Image',
-    description: 'Transform image with AI',
-    icon: PaintBrushIcon,
-    category: 'image',
-  },
-  {
-    id: 'chat',
-    name: 'Chat',
-    description: 'AI chat assistant',
-    icon: ChatBotIcon,
-    category: 'image',
-  },
-];
+import { Suspense } from 'react';
+import { MagiClient, MagiClientSkeleton } from '@/components/ai/magi-client';
 
 export default function MagiPage() {
-  const [selectedToolId, setSelectedToolId] = useState('background-remove');
-
-  const selectedTool = TOOLS.find((t) => t.id === selectedToolId) || TOOLS[0];
-
-  const renderTool = () => {
-    switch (selectedToolId) {
-      case 'background-remove':
-        return <BackgroundRemover />;
-      case 'image-generate':
-        return <ImageGenerator />;
-      case 'image-upscale':
-        return <ImageUpscaler />;
-      case 'image-rerender':
-        return <ImageRerenderer />;
-      case 'chat':
-        return <Chat />;
-      default:
-        return null;
-    }
-  };
-
-  // Chat tool uses full height without ToolHeader (has its own header)
-  const isChat = selectedToolId === 'chat';
-
   return (
-    <MagiLayout
-      tools={TOOLS}
-      selectedToolId={selectedToolId}
-      onSelectTool={setSelectedToolId}
-      fullHeight={isChat}
-    >
-      {!isChat && <ToolHeader tool={selectedTool} />}
-      {renderTool()}
-    </MagiLayout>
+    <Suspense fallback={<MagiClientSkeleton />}>
+      <MagiClient />
+    </Suspense>
   );
 }

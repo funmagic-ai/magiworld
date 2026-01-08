@@ -9,7 +9,7 @@
  * @module apps/admin/components/ai/image-source-picker
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -29,6 +29,7 @@ import {
   Folder01Icon,
 } from '@hugeicons/core-free-icons';
 import { getFolderContents, type Folder, type MediaItem } from '@/lib/actions/library';
+import { validateFileSize, MAX_FILE_SIZE_MB } from '@/lib/utils/file';
 
 export interface SelectedImage {
   url: string;
@@ -50,6 +51,13 @@ export function ImageSourcePicker({ value, onChange, disabled }: ImageSourcePick
   const handleFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) {
       alert('Please upload an image file');
+      return;
+    }
+
+    // Validate file size before processing
+    const sizeValidation = validateFileSize(file);
+    if (!sizeValidation.isValid) {
+      alert(sizeValidation.error);
       return;
     }
 
@@ -166,7 +174,7 @@ export function ImageSourcePicker({ value, onChange, disabled }: ImageSourcePick
             />
             <p className="text-sm font-medium">Upload Image</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Drag & drop or click to browse
+              Drag & drop or click (max {MAX_FILE_SIZE_MB}MB)
             </p>
           </div>
 
@@ -260,9 +268,9 @@ function LibraryBrowser({ onSelect }: LibraryBrowserProps) {
   }, []);
 
   // Initial load
-  useState(() => {
+  useEffect(() => {
     loadFolder(null);
-  });
+  }, [loadFolder]);
 
   return (
     <div className="flex-1 overflow-hidden flex flex-col">

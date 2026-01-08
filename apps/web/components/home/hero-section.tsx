@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { Link } from '@/i18n/navigation';
 
@@ -58,29 +59,59 @@ export function HeroSection({ mainBanners, sideBanners }: HeroSectionProps) {
 }
 
 function MainCarousel({ banners }: { banners: Banner[] }) {
-  // Simple carousel - just show first banner for now
-  // TODO: Add proper carousel with navigation
-  const banner = banners[0];
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+
+  const goToSlide = useCallback((index: number) => {
+    setCurrentIndex(index);
+  }, []);
+
+  const goToNext = useCallback(() => {
+    setCurrentIndex((prev) => (prev + 1) % banners.length);
+  }, [banners.length]);
+
+  // Auto-play effect
+  useEffect(() => {
+    if (banners.length <= 1 || isPaused) return;
+
+    const interval = setInterval(goToNext, 5000);
+    return () => clearInterval(interval);
+  }, [banners.length, isPaused, goToNext]);
+
+  const banner = banners[currentIndex];
 
   return (
-    <div className="relative aspect-[21/9] overflow-hidden rounded-lg bg-muted">
-      {/* Banner Image */}
-      {banner.image ? (
-        <Image
-          src={banner.image}
-          alt={banner.title}
-          fill
-          className="object-cover"
-          sizes="(max-width: 1024px) 100vw, 66vw"
-          priority
-        />
-      ) : (
-        /* Fallback gradient background */
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-background" />
-      )}
+    <div
+      className="relative aspect-[21/9] overflow-hidden rounded-lg bg-muted"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+    >
+      {/* Slides Container */}
+      <div
+        className="absolute inset-0 flex transition-transform duration-500 ease-out"
+        style={{ transform: `translateX(-${currentIndex * 100}%)` }}
+      >
+        {banners.map((b, index) => (
+          <div key={b.id} className="relative w-full h-full flex-shrink-0">
+            {/* Banner Image */}
+            {b.image ? (
+              <Image
+                src={b.image}
+                alt={b.title}
+                fill
+                className="object-cover"
+                sizes="(max-width: 1024px) 100vw, 66vw"
+                priority={index === 0}
+              />
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-background" />
+            )}
+          </div>
+        ))}
+      </div>
 
       {/* Gradient overlay for text readability */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent pointer-events-none" />
 
       {/* Content overlay - bottom left aligned */}
       <div className="absolute inset-0 flex flex-col items-start justify-end p-4 md:p-6 lg:p-8">
@@ -108,8 +139,9 @@ function MainCarousel({ banners }: { banners: Banner[] }) {
           {banners.map((_, index) => (
             <button
               key={index}
+              onClick={() => goToSlide(index)}
               className={`h-2 w-2 rounded-full transition-colors ${
-                index === 0 ? 'bg-white' : 'bg-white/40'
+                index === currentIndex ? 'bg-white' : 'bg-white/40 hover:bg-white/60'
               }`}
               aria-label={`Go to slide ${index + 1}`}
             />
@@ -122,7 +154,7 @@ function MainCarousel({ banners }: { banners: Banner[] }) {
 
 function SideBanner({ banner }: { banner: Banner }) {
   const content = (
-    <div className="relative aspect-[16/9] overflow-hidden rounded-lg bg-muted group cursor-pointer">
+    <div className="relative aspect-[16/9] lg:aspect-auto lg:flex-1 overflow-hidden rounded-lg bg-muted group cursor-pointer">
       {/* Banner Image */}
       {banner.image ? (
         <Image
@@ -151,7 +183,11 @@ function SideBanner({ banner }: { banner: Banner }) {
   );
 
   if (banner.link) {
-    return <Link href={banner.link}>{content}</Link>;
+    return (
+      <Link href={banner.link} className="lg:flex-1 lg:flex lg:flex-col">
+        {content}
+      </Link>
+    );
   }
 
   return content;

@@ -10,3 +10,4 @@ export * from './background-remove';
 export * from './image-generate';
 export * from './image-upscale';
 export * from './image-rerender';
+export * from './nanobanana-pro';

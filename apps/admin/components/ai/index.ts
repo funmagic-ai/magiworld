@@ -6,8 +6,13 @@
  * @module apps/admin/components/ai
  */
 
-// Layout
-export { MagiLayout, ToolHeader, type MagiTool } from './magi-layout';
+// Types
+export type { MagiTool } from './types';
+
+// Magi Page Components
+export { MagiClient, MagiClientSkeleton } from './magi-client';
+export { ToolsGrid } from './tools-grid';
+export { ToolView } from './tool-view';
 
 // Shared Components
 export { ImageSourcePicker, type SelectedImage } from './image-source-picker';

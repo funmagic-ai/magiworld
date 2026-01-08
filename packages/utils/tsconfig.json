@@ -1,6 +1,7 @@
 {
   "extends": "../config/typescript/library.json",
   "compilerOptions": {
+    "lib": ["ES2022", "ES2020.Intl", "DOM"],
     "rootDir": "./src",
     "outDir": "./dist"
   },

@@ -32,6 +32,7 @@ import {
   DEFAULT_TOOL_TRANSLATIONS,
   TOOL_TRANSLATIONS_EXAMPLE,
 } from '@/lib/locales';
+import { validateFileSize, MAX_FILE_SIZE_MB } from '@/lib/utils/file';
 
 type TranslationData = {
   title: string;
@@ -144,6 +145,13 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Validate file size before processing
+      const sizeValidation = validateFileSize(file);
+      if (!sizeValidation.isValid) {
+        alert(sizeValidation.error);
+        e.target.value = '';
+        return;
+      }
       setPendingFile(file);
       setThumbnailUrl(''); // Clear any existing URL
     }
