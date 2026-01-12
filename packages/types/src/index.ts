@@ -347,6 +347,7 @@ export interface HomeConfig {
  */
 export const TOOL_REGISTRY = [
   'background-remove',
+  '3d-crystal',
 ] as const;
 
 /**

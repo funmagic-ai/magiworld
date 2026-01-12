@@ -2,6 +2,7 @@
 
 import { TOOL_REGISTRY, type RegisteredToolSlug } from '@magiworld/types';
 import { BackgroundRemoveInterface } from './background-remove';
+import { Crystal3DInterface } from './3d-crystal';
 
 type ToolData = {
   id: string;
@@ -35,6 +36,7 @@ interface ToolRouterProps {
  */
 const TOOL_COMPONENTS: Record<string, React.ComponentType<{ tool: ToolData }>> = {
   'background-remove': BackgroundRemoveInterface,
+  '3d-crystal': Crystal3DInterface,
 };
 
 // Validate at build time that all registered slugs have components

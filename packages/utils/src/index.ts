@@ -282,7 +282,8 @@ export function formatFileSize(bytes: number): string {
 }
 
 // ============================================
-// Logger
+// Logger (Server-only)
 // ============================================
-
-export { logger, createLogger } from './logger';
+// Logger uses Node.js 'fs' module and cannot be used in browser/client code.
+// Import directly from '@magiworld/utils/logger' for server-side code only.
+// DO NOT export here to prevent client-side bundling errors.

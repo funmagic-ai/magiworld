@@ -52,18 +52,27 @@ function ToolCard({ tool }: { tool: ToolListItem }) {
       <Card className="group overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5">
         {/* Thumbnail */}
         <div className="aspect-square bg-muted relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-secondary/20" />
+          {tool.thumbnail?.url ? (
+            <img
+              src={tool.thumbnail.url}
+              alt={tool.title}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          ) : (
+            <>
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-secondary/20" />
+              {/* Placeholder icon */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <ToolIcon type={tool.toolType.slug} className="h-10 w-10 text-muted-foreground/50" />
+              </div>
+            </>
+          )}
 
           {/* Tool Type Badge - name is already localized from database */}
           <div className="absolute top-2 left-2">
             <Badge variant={tool.toolType.badgeColor} className="text-xs">
               {tool.toolType.name}
             </Badge>
-          </div>
-
-          {/* Placeholder icon */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <ToolIcon type={tool.toolType.slug} className="h-10 w-10 text-muted-foreground/50" />
           </div>
 
           {/* Hover overlay */}

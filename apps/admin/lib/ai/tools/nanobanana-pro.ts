@@ -9,7 +9,7 @@
 
 import { generateText } from 'ai';
 import { google } from '@ai-sdk/google';
-import { createLogger } from '@magiworld/utils';
+import { createLogger } from '@magiworld/utils/logger';
 
 const logger = createLogger('nanobanana-pro');
 
