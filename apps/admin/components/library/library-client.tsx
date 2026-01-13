@@ -261,7 +261,7 @@ export function LibraryClient({
       {/* Page Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Library</h1>
+          <h1 className="text-3xl font-bold">Library</h1>
           <p className="text-muted-foreground">
             {stats.totalFolders} folder{stats.totalFolders !== 1 ? 's' : ''} · {stats.totalFiles} file{stats.totalFiles !== 1 ? 's' : ''} · {formatBytes(stats.totalSize)}
           </p>

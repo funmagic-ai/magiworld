@@ -54,6 +54,9 @@ importers:
       '@hugeicons/react':
         specifier: ^1.1.4
         version: 1.1.4(react@19.2.3)
+      '@logto/next':
+        specifier: ^4.2.8
+        version: 4.2.8(next@16.1.1(@opentelemetry/api@1.9.0)(babel-plugin-macros@3.1.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))
       '@magiworld/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -124,6 +127,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@aws-sdk/cloudfront-signer':
+        specifier: ^3.957.0
+        version: 3.957.0
       '@base-ui/react':
         specifier: ^1.0.0
         version: 1.0.0(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)

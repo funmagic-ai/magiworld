@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useActionState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -21,6 +21,17 @@ import {
   FieldError,
 } from '@/components/ui/field';
 import { createBanner, updateBanner, deleteBanner, type BannerFormData } from '@/lib/actions/banners';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { bannerSchema } from '@/lib/validations/banner';
 import { useUploadFiles } from '@better-upload/client';
 import {
@@ -56,6 +67,11 @@ const BANNER_TYPES = [
 
 type FieldErrors = Record<string, string>;
 
+type FormState = {
+  errors: FieldErrors;
+  success?: boolean;
+};
+
 // Expected aspect ratios for each banner type
 const EXPECTED_RATIOS = {
   main: { ratio: 21 / 9, label: '21:9' },
@@ -85,15 +101,83 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
     return JSON.stringify(DEFAULT_BANNER_TRANSLATIONS, null, 2);
   });
 
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const isSubmittingRef = useRef(false);
-
   // Upload hook - used only during form submission
   const { upload } = useUploadFiles({
     route: 'banners',
     api: '/api/upload/cdn',
   });
+
+  // Form action with useActionState for proper pending state
+  const handleFormAction = async (_prevState: FormState, formData: FormData): Promise<FormState> => {
+    // Parse translations JSON
+    let translations: BannerFormData['translations'];
+    try {
+      translations = JSON.parse(translationsJson);
+    } catch {
+      return { errors: { translations: 'Invalid JSON format. Please check the syntax.' } };
+    }
+
+    // Determine the final image URL
+    let finalImageUrl = imageUrl;
+
+    // If there's a pending file, upload it now
+    if (pendingFile) {
+      try {
+        const result = await upload([pendingFile]);
+
+        if (result.files && result.files.length > 0) {
+          const uploadedFile = result.files[0];
+          finalImageUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL
+            ? `${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/${uploadedFile.objectInfo.key}`
+            : `https://funmagic-web-public-assets.s3.us-east-2.amazonaws.com/${uploadedFile.objectInfo.key}`;
+        } else {
+          return { errors: { imageUrl: 'Upload failed - no files returned' } };
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to upload image';
+        return { errors: { imageUrl: `Upload failed: ${message}` } };
+      }
+    }
+
+    const rawData = {
+      type: formData.get('type') as string,
+      imageUrl: finalImageUrl || undefined,
+      link: formData.get('link') as string || undefined,
+      order: parseInt(formData.get('order') as string) || 0,
+      isActive: formData.get('isActive') === 'on',
+      translations,
+    };
+
+    const result = bannerSchema.safeParse(rawData);
+
+    if (!result.success) {
+      const fieldErrors: FieldErrors = {};
+      for (const issue of result.error.issues) {
+        const path = issue.path.join('.');
+        fieldErrors[path] = issue.message;
+      }
+      return { errors: fieldErrors };
+    }
+
+    const data: BannerFormData = result.data;
+
+    try {
+      if (mode === 'edit' && initialData?.id) {
+        await updateBanner(initialData.id, data);
+      } else {
+        await createBanner(data);
+      }
+      return { errors: {}, success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('NEXT_REDIRECT')) {
+        throw error;
+      }
+      return { errors: { _form: `Failed to save: ${errorMessage}` } };
+    }
+  };
+
+  const [formState, formAction, isPending] = useActionState(handleFormAction, { errors: {} });
 
   // Create/cleanup object URL for local preview and detect dimensions
   useEffect(() => {
@@ -160,102 +244,28 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
   const displayUrl = previewUrl || imageUrl;
 
   // Format JSON with proper indentation
+  const [jsonError, setJsonError] = useState<string>('');
   const handleFormatJson = () => {
     try {
       const parsed = JSON.parse(translationsJson);
       setTranslationsJson(JSON.stringify(parsed, null, 2));
-      setErrors((prev) => ({ ...prev, translations: '' }));
+      setJsonError('');
     } catch {
-      setErrors((prev) => ({ ...prev, translations: 'Invalid JSON format' }));
+      setJsonError('Invalid JSON format');
     }
   };
 
-  async function handleSubmit(formData: FormData) {
-    // Prevent double-submit with ref check (synchronous)
-    if (isSubmittingRef.current) return;
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
-    setErrors({});
-
-    // Parse translations JSON
-    let translations: BannerFormData['translations'];
-    try {
-      translations = JSON.parse(translationsJson);
-    } catch {
-      setErrors({ translations: 'Invalid JSON format. Please check the syntax.' });
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-      return;
-    }
-
-    // Determine the final image URL
-    let finalImageUrl = imageUrl;
-
-    // If there's a pending file, upload it now
-    if (pendingFile) {
-      try {
-        const result = await upload([pendingFile]);
-
-        if (result.files && result.files.length > 0) {
-          const uploadedFile = result.files[0];
-          // Build CDN URL from the uploaded file
-          finalImageUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL
-            ? `${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/${uploadedFile.objectInfo.key}`
-            : `https://magiworld-cdn.s3.us-east-2.amazonaws.com/${uploadedFile.objectInfo.key}`;
-        }
-      } catch (error) {
-        setErrors({ imageUrl: 'Failed to upload image' });
-        isSubmittingRef.current = false;
-        setIsSubmitting(false);
-        return;
-      }
-    }
-
-    const rawData = {
-      type: formData.get('type') as string,
-      imageUrl: finalImageUrl || undefined,
-      link: formData.get('link') as string || undefined,
-      order: parseInt(formData.get('order') as string) || 0,
-      isActive: formData.get('isActive') === 'on',
-      translations,
-    };
-
-    const result = bannerSchema.safeParse(rawData);
-
-    if (!result.success) {
-      const fieldErrors: FieldErrors = {};
-      for (const issue of result.error.issues) {
-        const path = issue.path.join('.');
-        fieldErrors[path] = issue.message;
-      }
-      setErrors(fieldErrors);
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-      return;
-    }
-
-    const data: BannerFormData = result.data;
-
-    try {
-      if (mode === 'edit' && initialData?.id) {
-        await updateBanner(initialData.id, data);
-      } else {
-        await createBanner(data);
-      }
-    } catch (error) {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-    }
-  }
+  // Alias errors from formState for easier access
+  const errors = formState.errors;
 
   async function handleDelete() {
-    if (initialData?.id && confirm('Are you sure you want to delete this banner?')) {
+    if (initialData?.id) {
       await deleteBanner(initialData.id);
     }
   }
 
   return (
-    <form action={handleSubmit} className="space-y-6" noValidate>
+    <form action={formAction} className="space-y-6" noValidate>
       <Card>
         <CardHeader>
           <CardTitle>Basic Information</CardTitle>
@@ -302,9 +312,10 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
                     <button
                       type="button"
                       onClick={handleClearImage}
+                      aria-label="Remove image"
                       className="absolute right-2 top-2 rounded-full bg-destructive p-1 text-destructive-foreground hover:bg-destructive/90"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                         <line x1="18" y1="6" x2="6" y2="18" />
                         <line x1="6" y1="6" x2="18" y2="18" />
                       </svg>
@@ -352,7 +363,7 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
                       accept="image/*"
                       onChange={handleFileSelect}
                       className="hidden"
-                      disabled={isSubmitting}
+                      disabled={isPending}
                     />
                     {displayUrl ? 'Change Image' : 'Select Image'}
                   </label>
@@ -427,18 +438,22 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <Field data-invalid={!!errors.translations || !!errors['translations.en.title']}>
+          <Field data-invalid={!!errors.translations || !!errors['translations.en.title'] || !!jsonError}>
             <Textarea
               value={translationsJson}
-              onChange={(e) => setTranslationsJson(e.target.value)}
+              onChange={(e) => {
+                setTranslationsJson(e.target.value);
+                setJsonError(''); // Clear format error on edit
+              }}
               placeholder={BANNER_TRANSLATIONS_EXAMPLE}
               rows={12}
               className="font-mono text-sm"
-              aria-invalid={!!errors.translations || !!errors['translations.en.title']}
+              aria-invalid={!!errors.translations || !!errors['translations.en.title'] || !!jsonError}
             />
             <FieldDescription className="mt-2">
               Required: <code className="rounded bg-muted px-1.5 py-0.5 text-xs">title</code> must be provided for all locales (en, zh, ja, pt).
             </FieldDescription>
+            {jsonError && <FieldError>{jsonError}</FieldError>}
             {errors.translations && <FieldError>{errors.translations}</FieldError>}
             {(errors['translations.en.title'] || errors['translations.zh.title'] || errors['translations.ja.title'] || errors['translations.pt.title']) && (
               <FieldError>Title is required for all locales</FieldError>
@@ -447,24 +462,44 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
         </CardContent>
       </Card>
 
+      {errors._form && (
+        <div className="rounded-md border border-destructive bg-destructive/10 p-4 text-sm text-destructive">
+          {errors._form}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           {mode === 'edit' && (
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={handleDelete}
-            >
-              Delete
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger
+                render={<Button type="button" variant="destructive" disabled={isPending} />}
+              >
+                Delete
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Banner</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete this banner? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction variant="destructive" onClick={handleDelete}>
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
         </div>
         <div className="flex gap-3">
-          <Button type="button" variant="outline" onClick={() => window.history.back()}>
+          <Button type="button" variant="outline" onClick={() => window.history.back()} disabled={isPending}>
             Cancel
           </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting
+          <Button type="submit" disabled={isPending}>
+            {isPending
               ? (pendingFile ? 'Uploading & Saving...' : 'Saving...')
               : mode === 'create' ? 'Create Banner' : 'Save Changes'
             }

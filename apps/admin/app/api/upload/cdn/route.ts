@@ -1,7 +1,7 @@
 /**
  * @fileoverview CDN Upload API Route Handler
  *
- * Handles file uploads to the public CDN bucket (magiworld-cdn).
+ * Handles file uploads to the public CDN bucket (funmagic-web-public-assets).
  * Used for banners, tool images, and other public content.
  *
  * Upload Routes:

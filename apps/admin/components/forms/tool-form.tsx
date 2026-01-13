@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useActionState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -23,6 +23,17 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { createTool, updateTool, deleteTool, type ToolFormData } from '@/lib/actions/tools';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { toolSchema, validToolSlugs } from '@/lib/validations/tool';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ArrowDown01Icon } from '@hugeicons/core-free-icons';
@@ -68,6 +79,11 @@ interface ToolFormProps {
 
 type FieldErrors = Record<string, string>;
 
+type FormState = {
+  errors: FieldErrors;
+  success?: boolean;
+};
+
 export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
   // Thumbnail state: either a URL (existing/pasted) or a pending file
   const [thumbnailUrl, setThumbnailUrl] = useState<string>(initialData?.thumbnailUrl || '');
@@ -82,10 +98,6 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
     return JSON.stringify(DEFAULT_TOOL_TRANSLATIONS, null, 2);
   });
 
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const isSubmittingRef = useRef(false);
-
   // Controlled state for comboboxes
   const [slug, setSlug] = useState(initialData?.slug || '');
   const [slugOpen, setSlugOpen] = useState(false);
@@ -97,6 +109,99 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
     route: 'tools',
     api: '/api/upload/cdn',
   });
+
+  // Form action with useActionState for proper pending state
+  const handleFormAction = async (_prevState: FormState, formData: FormData): Promise<FormState> => {
+    // Parse config JSON
+    let configJson: Record<string, unknown> | undefined;
+    const configJsonStr = formData.get('configJson') as string;
+    if (configJsonStr) {
+      try {
+        configJson = JSON.parse(configJsonStr);
+      } catch {
+        return { errors: { configJson: 'Invalid JSON format' } };
+      }
+    }
+
+    // Parse translations JSON
+    let translations: ToolFormData['translations'];
+    try {
+      translations = JSON.parse(translationsJson);
+    } catch {
+      return { errors: { translations: 'Invalid JSON format. Please check the syntax.' } };
+    }
+
+    // Determine the final thumbnail URL
+    let finalThumbnailUrl = thumbnailUrl;
+
+    // If there's a pending file, upload it now
+    if (pendingFile) {
+      try {
+        const slugValue = formData.get('slug') as string;
+        const result = await upload([pendingFile], {
+          metadata: { toolId: slugValue || 'misc', type: 'thumbnails' }
+        });
+
+        if (result.files && result.files.length > 0) {
+          const uploadedFile = result.files[0];
+          finalThumbnailUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL
+            ? `${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/${uploadedFile.objectInfo.key}`
+            : `https://funmagic-web-public-assets.s3.us-east-2.amazonaws.com/${uploadedFile.objectInfo.key}`;
+        } else {
+          return { errors: { thumbnailUrl: 'Upload failed - no files returned' } };
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to upload thumbnail';
+        return { errors: { thumbnailUrl: `Upload failed: ${message}` } };
+      }
+    }
+
+    const rawData = {
+      slug: formData.get('slug') as string,
+      toolTypeId: formData.get('toolTypeId') as string,
+      thumbnailUrl: finalThumbnailUrl || undefined,
+      promptTemplate: formData.get('promptTemplate') as string || undefined,
+      configJson,
+      aiEndpoint: formData.get('aiEndpoint') as string || undefined,
+      isActive: formData.get('isActive') === 'on',
+      isFeatured: formData.get('isFeatured') === 'on',
+      order: parseInt(formData.get('order') as string) || 0,
+      translations,
+    };
+
+    const result = toolSchema.safeParse(rawData);
+
+    if (!result.success) {
+      const fieldErrors: FieldErrors = {};
+      for (const issue of result.error.issues) {
+        const path = issue.path.join('.');
+        fieldErrors[path] = issue.message;
+      }
+      return { errors: fieldErrors };
+    }
+
+    const data: ToolFormData = result.data;
+
+    try {
+      if (mode === 'edit' && initialData?.id) {
+        await updateTool(initialData.id, data);
+      } else {
+        await createTool(data);
+      }
+      return { errors: {}, success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('NEXT_REDIRECT')) {
+        throw error;
+      }
+      return { errors: { _form: `Failed to save: ${errorMessage}` } };
+    }
+  };
+
+  const [formState, formAction, isPending] = useActionState(handleFormAction, { errors: {} });
+
+  // Alias errors from formState for easier access
+  const errors = formState.errors;
 
   // Image dimension detection
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
@@ -168,123 +273,25 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
   const displayUrl = previewUrl || thumbnailUrl;
 
   // Format JSON with proper indentation
+  const [jsonError, setJsonError] = useState<string>('');
   const handleFormatJson = () => {
     try {
       const parsed = JSON.parse(translationsJson);
       setTranslationsJson(JSON.stringify(parsed, null, 2));
-      setErrors((prev) => ({ ...prev, translations: '' }));
+      setJsonError('');
     } catch {
-      setErrors((prev) => ({ ...prev, translations: 'Invalid JSON format' }));
+      setJsonError('Invalid JSON format');
     }
   };
 
-  async function handleSubmit(formData: FormData) {
-    // Prevent double-submit with ref check (synchronous)
-    if (isSubmittingRef.current) return;
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
-    setErrors({});
-
-    // Parse config JSON
-    let configJson: Record<string, unknown> | undefined;
-    const configJsonStr = formData.get('configJson') as string;
-    if (configJsonStr) {
-      try {
-        configJson = JSON.parse(configJsonStr);
-      } catch {
-        setErrors({ configJson: 'Invalid JSON format' });
-        isSubmittingRef.current = false;
-        setIsSubmitting(false);
-        return;
-      }
-    }
-
-    // Parse translations JSON
-    let translations: ToolFormData['translations'];
-    try {
-      translations = JSON.parse(translationsJson);
-    } catch {
-      setErrors({ translations: 'Invalid JSON format. Please check the syntax.' });
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-      return;
-    }
-
-    // Determine the final thumbnail URL
-    let finalThumbnailUrl = thumbnailUrl;
-
-    // If there's a pending file, upload it now
-    if (pendingFile) {
-      try {
-        const slugValue = formData.get('slug') as string;
-        const result = await upload([pendingFile], {
-          metadata: { toolId: slugValue || 'misc', type: 'thumbnails' }
-        });
-
-        if (result.files && result.files.length > 0) {
-          const uploadedFile = result.files[0];
-          // Build CDN URL from the uploaded file
-          finalThumbnailUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL
-            ? `${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/${uploadedFile.objectInfo.key}`
-            : `https://magiworld-cdn.s3.us-east-2.amazonaws.com/${uploadedFile.objectInfo.key}`;
-        }
-      } catch (error) {
-        setErrors({ thumbnailUrl: 'Failed to upload thumbnail' });
-        isSubmittingRef.current = false;
-        setIsSubmitting(false);
-        return;
-      }
-    }
-
-    const rawData = {
-      slug: formData.get('slug') as string,
-      toolTypeId: formData.get('toolTypeId') as string,
-      thumbnailUrl: finalThumbnailUrl || undefined,
-      promptTemplate: formData.get('promptTemplate') as string || undefined,
-      configJson,
-      aiEndpoint: formData.get('aiEndpoint') as string || undefined,
-      isActive: formData.get('isActive') === 'on',
-      isFeatured: formData.get('isFeatured') === 'on',
-      order: parseInt(formData.get('order') as string) || 0,
-      translations,
-    };
-
-    const result = toolSchema.safeParse(rawData);
-
-    if (!result.success) {
-      const fieldErrors: FieldErrors = {};
-      for (const issue of result.error.issues) {
-        const path = issue.path.join('.');
-        fieldErrors[path] = issue.message;
-      }
-      setErrors(fieldErrors);
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-      return;
-    }
-
-    const data: ToolFormData = result.data;
-
-    try {
-      if (mode === 'edit' && initialData?.id) {
-        await updateTool(initialData.id, data);
-      } else {
-        await createTool(data);
-      }
-    } catch (error) {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-    }
-  }
-
   async function handleDelete() {
-    if (initialData?.id && confirm('Are you sure you want to delete this tool?')) {
+    if (initialData?.id) {
       await deleteTool(initialData.id);
     }
   }
 
   return (
-    <form action={handleSubmit} className="space-y-6" noValidate>
+    <form action={formAction} className="space-y-6" noValidate>
       <Card>
         <CardHeader>
           <CardTitle>Basic Information</CardTitle>
@@ -396,9 +403,10 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
                     <button
                       type="button"
                       onClick={handleClearThumbnail}
+                      aria-label="Remove thumbnail"
                       className="absolute right-2 top-2 rounded-full bg-destructive p-1 text-destructive-foreground hover:bg-destructive/90"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                         <line x1="18" y1="6" x2="6" y2="18" />
                         <line x1="6" y1="6" x2="18" y2="18" />
                       </svg>
@@ -446,7 +454,7 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
                       accept="image/*"
                       onChange={handleFileSelect}
                       className="hidden"
-                      disabled={isSubmitting}
+                      disabled={isPending}
                     />
                     {displayUrl ? 'Change Image' : 'Select Image'}
                   </label>
@@ -554,19 +562,23 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <Field data-invalid={!!errors.translations || !!errors['translations.en.title']}>
+          <Field data-invalid={!!errors.translations || !!errors['translations.en.title'] || !!jsonError}>
             <Textarea
               value={translationsJson}
-              onChange={(e) => setTranslationsJson(e.target.value)}
+              onChange={(e) => {
+                setTranslationsJson(e.target.value);
+                setJsonError('');
+              }}
               placeholder={TOOL_TRANSLATIONS_EXAMPLE}
               rows={14}
               className="font-mono text-sm"
-              aria-invalid={!!errors.translations || !!errors['translations.en.title']}
+              aria-invalid={!!errors.translations || !!errors['translations.en.title'] || !!jsonError}
             />
             <FieldDescription className="mt-2">
               Required: <code className="rounded bg-muted px-1.5 py-0.5 text-xs">title</code> must be provided for all locales (en, zh, ja, pt).
               Other fields (description, promptTemplate) are optional.
             </FieldDescription>
+            {jsonError && <FieldError>{jsonError}</FieldError>}
             {errors.translations && <FieldError>{errors.translations}</FieldError>}
             {(errors['translations.en.title'] || errors['translations.zh.title'] || errors['translations.ja.title'] || errors['translations.pt.title']) && (
               <FieldError>Title is required for all locales</FieldError>
@@ -575,24 +587,44 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
         </CardContent>
       </Card>
 
+      {errors._form && (
+        <div className="rounded-md border border-destructive bg-destructive/10 p-4 text-sm text-destructive">
+          {errors._form}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           {mode === 'edit' && (
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={handleDelete}
-            >
-              Delete
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger
+                render={<Button type="button" variant="destructive" disabled={isPending} />}
+              >
+                Delete
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Tool</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete this tool? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction variant="destructive" onClick={handleDelete}>
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
         </div>
         <div className="flex gap-3">
-          <Button type="button" variant="outline" onClick={() => window.history.back()}>
+          <Button type="button" variant="outline" onClick={() => window.history.back()} disabled={isPending}>
             Cancel
           </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting
+          <Button type="submit" disabled={isPending}>
+            {isPending
               ? (pendingFile ? 'Uploading & Saving...' : 'Saving...')
               : mode === 'create' ? 'Create Tool' : 'Save Changes'
             }

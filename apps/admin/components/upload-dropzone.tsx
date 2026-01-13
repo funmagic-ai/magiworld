@@ -59,7 +59,7 @@ export function UploadDropzone({
     onUploadComplete: ({ files }) => {
       const uploaded = files.map((f: FileUploadInfo<'complete'>) => ({
         name: f.name,
-        url: `https://${process.env.NEXT_PUBLIC_S3_BUCKET || 'magiworld-assets'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'ap-northeast-1'}.amazonaws.com/${f.objectInfo.key}`,
+        url: `https://${process.env.NEXT_PUBLIC_S3_BUCKET || 'funmagic-admin-users-assets'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'ap-northeast-1'}.amazonaws.com/${f.objectInfo.key}`,
         size: f.size,
         type: f.type,
       }));

@@ -1,14 +1,19 @@
 import { getLogtoContext, signIn, signOut } from '@logto/next/server-actions';
 import { getTranslations } from 'next-intl/server';
 import { logtoConfig } from '@/lib/logto';
+import { syncUserFromLogto } from '@/lib/user';
 import { SignInButton } from './sign-in-button';
 import { UserButton } from './user-button';
 
 export async function AuthStatus() {
-  const { isAuthenticated, claims } = await getLogtoContext(logtoConfig);
+  const context = await getLogtoContext(logtoConfig);
+  const { isAuthenticated, claims } = context;
   const t = await getTranslations('nav');
 
   if (isAuthenticated && claims) {
+    // Sync user data from Logto to local database (lazy sync on each page load)
+    await syncUserFromLogto(context);
+
     return (
       <UserButton
         user={{

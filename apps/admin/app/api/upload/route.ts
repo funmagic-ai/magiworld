@@ -3,8 +3,8 @@
  *
  * Handles file uploads to AWS S3 using pre-signed URLs.
  * Supports two destinations:
- * - Library uploads → magiworld-admin-assets (private)
- * - Public uploads (banners, tools) → magiworld-cdn (public)
+ * - Library uploads → funmagic-admin-users-assets (private)
+ * - Public uploads (banners, tools) → funmagic-web-public-assets (public)
  *
  * @module apps/admin/app/api/upload/route
  */
@@ -19,31 +19,31 @@ import { generateUniqueFilename, findOrCreateMagiFolder } from '@/lib/actions/li
 // File size constants (in bytes)
 const MB = 1024 * 1024;
 
-// Bucket names
-const ADMIN_ASSETS_BUCKET = process.env.S3_BUCKET_NAME || 'magiworld-admin-assets';
-const CDN_BUCKET = process.env.S3_CDN_BUCKET || 'magiworld-cdn';
+// Bucket names (4-bucket architecture)
+const ADMIN_ASSETS_BUCKET = process.env.S3_ADMIN_ASSETS_BUCKET || 'funmagic-admin-users-assets';
+const PUBLIC_ASSETS_BUCKET = process.env.S3_PUBLIC_ASSETS_BUCKET || 'funmagic-web-public-assets';
 
 // Helper to build URL for admin assets bucket
 // Uses CloudFront if configured, otherwise falls back to direct S3
 const buildAdminS3Url = (key: string) => {
   // Prefer CloudFront URL for admin assets (serves from private bucket via OAC)
-  if (process.env.CLOUDFRONT_ADMIN_URL) {
-    return `${process.env.CLOUDFRONT_ADMIN_URL}/${key}`;
+  if (process.env.CLOUDFRONT_ADMIN_PRIVATE_URL) {
+    return `${process.env.CLOUDFRONT_ADMIN_PRIVATE_URL}/${key}`;
   }
   // Fallback to direct S3 URL (only works if bucket is public)
-  const region = process.env.AWS_REGION || 'us-east-2';
+  const region = process.env.AWS_REGION || 'ap-northeast-1';
   return `https://${ADMIN_ASSETS_BUCKET}.s3.${region}.amazonaws.com/${key}`;
 };
 
-// Helper to build CDN URL (CloudFront or direct S3)
-const buildCdnUrl = (key: string) => {
+// Helper to build public CDN URL (CloudFront or direct S3)
+const buildPublicUrl = (key: string) => {
   // Prefer CloudFront URL if configured
-  if (process.env.CLOUDFRONT_URL) {
-    return `${process.env.CLOUDFRONT_URL}/${key}`;
+  if (process.env.CLOUDFRONT_PUBLIC_URL) {
+    return `${process.env.CLOUDFRONT_PUBLIC_URL}/${key}`;
   }
   // Fallback to direct S3 URL
-  const region = process.env.AWS_REGION || 'us-east-2';
-  return `https://${CDN_BUCKET}.s3.${region}.amazonaws.com/${key}`;
+  const region = process.env.AWS_REGION || 'ap-northeast-1';
+  return `https://${PUBLIC_ASSETS_BUCKET}.s3.${region}.amazonaws.com/${key}`;
 };
 
 // Lazy initialization of S3 client to avoid build-time errors
@@ -54,7 +54,7 @@ const getS3Client = () => {
   return aws({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    region: process.env.AWS_REGION || 'us-east-2',
+    region: process.env.AWS_REGION || 'ap-northeast-1',
   });
 };
 
@@ -66,7 +66,7 @@ const router: Router = {
   bucketName: ADMIN_ASSETS_BUCKET,
   routes: {
     // ============================================
-    // Library Uploads → magiworld-admin-assets (Private)
+    // Library Uploads → funmagic-admin-users-assets (Private)
     // Used by: Assets > Library page
     // ============================================
 
@@ -190,7 +190,7 @@ const router: Router = {
 };
 
 // ============================================
-// CDN Uploads Router → magiworld-cdn (Public)
+// Public Assets Router → funmagic-web-public-assets (Public)
 // Used by: Banners, Tool images (public content)
 // ============================================
 
@@ -198,7 +198,7 @@ const cdnRouter: Router = {
   get client() {
     return getS3Client();
   },
-  bucketName: CDN_BUCKET,
+  bucketName: PUBLIC_ASSETS_BUCKET,
   routes: {
     // Banner images → CDN
     banners: route<true>({
@@ -256,10 +256,13 @@ const cdnRouter: Router = {
   },
 };
 
-// Helper to get CDN URL for uploaded files
-export function getCdnUrl(key: string): string {
-  return buildCdnUrl(key);
+// Helper to get public CDN URL for uploaded files
+export function getPublicUrl(key: string): string {
+  return buildPublicUrl(key);
 }
+
+// Alias for backwards compatibility
+export const getCdnUrl = getPublicUrl;
 
 // Export Next.js route handlers
 // Main router handles library uploads to admin-assets bucket

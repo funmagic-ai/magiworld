@@ -115,7 +115,7 @@ function MainCarousel({ banners }: { banners: Banner[] }) {
 
       {/* Content overlay - bottom left aligned */}
       <div className="absolute inset-0 flex flex-col items-start justify-end p-4 md:p-6 lg:p-8">
-        <h1 className="text-xl md:text-2xl lg:text-3xl font-bold tracking-tight mb-1 text-white drop-shadow-md">
+        <h1 className="text-xl md:text-2xl lg:text-3xl font-bold mb-1 text-white drop-shadow-md">
           {banner.title}
         </h1>
         {banner.subtitle && (

@@ -6,9 +6,15 @@ const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
-      { hostname: 'cdn.magiworld.ai' },
-      { hostname: 'd1jmkr23cr2ayz.cloudfront.net' },
-      { hostname: 'magiworld-cdn.s3.us-east-2.amazonaws.com' },
+      // Public CDN (banners, tool images)
+      { hostname: 'cdn.funmagic.ai' },
+      // Shared files CDN
+      { hostname: 'shared.funmagic.ai' },
+      // CloudFront distributions (fallback domains)
+      { hostname: '*.cloudfront.net' },
+      // S3 direct access (development fallback)
+      { hostname: 'funmagic-web-public-assets.s3.us-east-2.amazonaws.com' },
+      { hostname: 'funmagic-web-users-assets-shared.s3.us-east-2.amazonaws.com' },
     ],
   },
 };

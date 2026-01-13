@@ -19,7 +19,7 @@ export function isSignedUrlsEnabled(): boolean {
   return !!(
     process.env.CLOUDFRONT_KEY_PAIR_ID &&
     process.env.CLOUDFRONT_PRIVATE_KEY &&
-    process.env.CLOUDFRONT_ADMIN_URL
+    process.env.CLOUDFRONT_ADMIN_PRIVATE_URL
   );
 }
 
@@ -76,7 +76,7 @@ export function signCloudFrontUrl(
  */
 export function maybeSignUrl(url: string, expirySeconds?: number): string {
   // Only sign URLs from the admin CloudFront distribution
-  const adminUrl = process.env.CLOUDFRONT_ADMIN_URL;
+  const adminUrl = process.env.CLOUDFRONT_ADMIN_PRIVATE_URL;
   if (!adminUrl || !url.startsWith(adminUrl)) {
     return url;
   }

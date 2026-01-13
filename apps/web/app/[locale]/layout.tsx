@@ -36,7 +36,7 @@ export default async function LocaleLayout({
 
   return (
     <html lang={locale} className={inter.variable} suppressHydrationWarning>
-      <body className="min-h-screen bg-background font-sans antialiased">
+      <body className="min-h-dvh bg-background font-sans antialiased">
         <ThemeProvider
           attribute="class"
           defaultTheme="neutral"
@@ -44,7 +44,7 @@ export default async function LocaleLayout({
           themes={['neutral', 'green', 'blue', 'purple', 'orange', 'neutral-dark', 'green-dark', 'blue-dark', 'purple-dark', 'orange-dark']}
         >
           <NextIntlClientProvider messages={messages}>
-            <div className="relative flex min-h-screen flex-col">
+            <div className="relative flex min-h-dvh flex-col">
               <Header authSlot={<AuthStatus />} />
               <main className="flex-1">{children}</main>
               <Footer />

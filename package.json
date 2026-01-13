@@ -10,7 +10,6 @@
     "typecheck": "turbo typecheck",
     "clean": "turbo clean && rm -rf node_modules",
     "db:push": "pnpm --filter @magiworld/db db:push",
-    "db:seed": "pnpm --filter @magiworld/db db:seed",
     "db:studio": "pnpm --filter @magiworld/db db:studio"
   },
   "devDependencies": {

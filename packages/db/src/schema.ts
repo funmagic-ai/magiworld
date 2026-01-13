@@ -191,7 +191,7 @@ export const folders = pgTable('folders', {
  * @example
  * {
  *   filename: 'banner-hero.jpg',
- *   url: 'https://cdn.magiworld.ai/media/banner-hero.jpg',
+ *   url: 'https://cdn.funmagic.ai/media/banner-hero.jpg',
  *   mimeType: 'image/jpeg',
  *   width: 1920,
  *   height: 1080
@@ -271,6 +271,86 @@ export const homeBannerTranslations = pgTable('home_banner_translations', {
 });
 
 // ============================================
+// User Tables
+// ============================================
+
+/**
+ * Users Table (Web App)
+ *
+ * Stores user profile information synced from Logto authentication.
+ * Used for displaying user profiles and storing app-specific preferences.
+ * Profile data is lazily synced on each login.
+ *
+ * @example
+ * {
+ *   logtoId: 'user_abc123',
+ *   email: 'user@example.com',
+ *   name: 'John Doe',
+ *   theme: 'neutral'
+ * }
+ */
+export const users = pgTable('users', {
+  /** Unique identifier (UUID v4) */
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** Logto user ID (sub claim) - used for authentication lookup */
+  logtoId: text('logto_id').notNull().unique(),
+  /** User's email address from Logto */
+  email: text('email'),
+  /** Whether email has been verified in Logto */
+  emailVerified: boolean('email_verified').default(false),
+  /** User's display name from Logto */
+  name: text('name'),
+  /** URL to user's avatar image from Logto */
+  avatarUrl: text('avatar_url'),
+  /** User's preferred locale */
+  locale: localeEnum('locale').default('en'),
+  /** User's preferred theme (matches ThemeProvider themes) */
+  theme: text('theme').default('neutral'),
+  /** Record creation timestamp (first login) */
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  /** Record last update timestamp */
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  /** Last successful login timestamp */
+  lastLoginAt: timestamp('last_login_at'),
+});
+
+/**
+ * Admin Users Table (Admin App)
+ *
+ * Stores admin user profile information synced from Logto authentication.
+ * Separate from web users for security isolation.
+ * Role-based access control will be handled via Logto RBAC.
+ *
+ * @example
+ * {
+ *   logtoId: 'admin_xyz789',
+ *   email: 'admin@magiworld.com',
+ *   name: 'Admin User',
+ *   isActive: true
+ * }
+ */
+export const adminUsers = pgTable('admin_users', {
+  /** Unique identifier (UUID v4) */
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** Logto user ID (sub claim) - used for authentication lookup */
+  logtoId: text('logto_id').notNull().unique(),
+  /** Admin's email address from Logto (required for admins) */
+  email: text('email').notNull(),
+  /** Admin's display name from Logto */
+  name: text('name'),
+  /** URL to admin's avatar image from Logto */
+  avatarUrl: text('avatar_url'),
+  /** Whether this admin account is active (can be disabled without deletion) */
+  isActive: boolean('is_active').default(true),
+  /** Record creation timestamp (first login) */
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  /** Record last update timestamp */
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  /** Last successful login timestamp */
+  lastLoginAt: timestamp('last_login_at'),
+});
+
+// ============================================
 // User Task Tables
 // ============================================
 
@@ -282,8 +362,8 @@ export const homeBannerTranslations = pgTable('home_banner_translations', {
  *
  * @example
  * {
- *   userId: 'logto-user-123',
- *   toolId: '<uuid>',
+ *   userId: '<user-uuid>',
+ *   toolId: '<tool-uuid>',
  *   inputParams: { prompt: 'anime style', seed: 42 },
  *   status: 'success',
  *   outputData: { previewUrl: '...', downloadUrl: '...' }
@@ -292,8 +372,8 @@ export const homeBannerTranslations = pgTable('home_banner_translations', {
 export const tasks = pgTable('tasks', {
   /** Unique identifier (UUID v4) */
   id: uuid('id').primaryKey().defaultRandom(),
-  /** External user ID from Logto authentication */
-  userId: text('user_id').notNull(),
+  /** Reference to the user who created this task */
+  userId: uuid('user_id').notNull().references(() => users.id),
   /** Reference to the tool used for this task */
   toolId: uuid('tool_id').notNull().references(() => tools.id),
   /** Input parameters for AI processing (JSON) */
@@ -350,6 +430,16 @@ export type HomeBannerInsert = typeof homeBanners.$inferInsert;
 export type HomeBannerTranslation = typeof homeBannerTranslations.$inferSelect;
 /** Inferred insert type for home_banner_translations table */
 export type HomeBannerTranslationInsert = typeof homeBannerTranslations.$inferInsert;
+
+/** Inferred select type for users table */
+export type User = typeof users.$inferSelect;
+/** Inferred insert type for users table */
+export type UserInsert = typeof users.$inferInsert;
+
+/** Inferred select type for admin_users table */
+export type AdminUser = typeof adminUsers.$inferSelect;
+/** Inferred insert type for admin_users table */
+export type AdminUserInsert = typeof adminUsers.$inferInsert;
 
 /** Inferred select type for tasks table */
 export type Task = typeof tasks.$inferSelect;

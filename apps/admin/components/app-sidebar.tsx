@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
@@ -70,7 +71,11 @@ const menuItems: MenuItem[] = [
   },
 ];
 
-export function AppSidebar() {
+type AppSidebarProps = {
+  footer?: React.ReactNode;
+};
+
+export function AppSidebar({ footer }: AppSidebarProps) {
   const pathname = usePathname();
 
   const isActive = (url: string) => {
@@ -180,6 +185,11 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      {footer && (
+        <SidebarFooter className="border-t">
+          {footer}
+        </SidebarFooter>
+      )}
       <SidebarRail />
     </Sidebar>
   );

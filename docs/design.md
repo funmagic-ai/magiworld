@@ -17,6 +17,10 @@
 14. [Environment Configuration](#14-environment-configuration)
 15. [Development Workflow](#15-development-workflow)
 16. [Open Questions](#16-open-questions)
+17. [AI SDK Integration](#17-ai-sdk-integration)
+18. [CloudFront Signed URLs](#18-cloudfront-signed-urls)
+19. [Magi AI Assistant](#19-magi-ai-assistant)
+20. [Web App Tools](#20-web-app-tools)
 
 ---
 
@@ -139,6 +143,7 @@ A shared `TOOL_REGISTRY` in `@magiworld/types` ensures consistency between the w
 // packages/types/src/index.ts
 export const TOOL_REGISTRY = [
   'background-remove',
+  '3d-crystal',
   // Add new tool slugs here
 ] as const;
 
@@ -151,6 +156,7 @@ import { TOOL_REGISTRY } from '@magiworld/types';
 
 const TOOL_COMPONENTS: Record<string, React.ComponentType<{ tool: ToolData }>> = {
   'background-remove': BackgroundRemoveInterface,
+  '3d-crystal': Crystal3DInterface,
 };
 
 // Development-time validation
@@ -561,160 +567,197 @@ Protected route that redirects to home if not authenticated.
 
 ## 10. File Storage Strategy
 
-> **Decision**: AWS S3 with Multi-Bucket Architecture + Content-Based Routing
+> **Decision**: AWS S3 with 4-Bucket Architecture + CloudFront CDN
 
 ### Architecture Overview
 
-We use **three separate S3 buckets** for better isolation, security, and cost management. **Content-based routing** determines which bucket receives uploads:
+We use **four separate S3 buckets** with CloudFront for better isolation, security, and access control:
 
-- **Public content** (banners, tool images) → `magiworld-cdn` (served via CloudFront)
-- **Private library** (admin internal assets) → `magiworld-admin-assets`
-- **User uploads** (AI inputs) → `magiworld-user-uploads`
+| Bucket | Purpose | Access | CloudFront |
+|--------|---------|--------|------------|
+| `funmagic-admin-users-assets` | Admin library & Magi-generated files | Private (Signed URLs) | Required |
+| `funmagic-web-public-assets` | Banners, tool thumbnails, UI assets | Public | Required (no auth) |
+| `funmagic-web-users-assets-private` | Web user uploads & AI results | Private (Signed URLs) | Required |
+| `funmagic-web-users-assets-shared` | User-shared files (public links) | Public | Required (no auth) |
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        AWS S3 Multi-Bucket Architecture                      │
+│                         S3 + CloudFront Architecture                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                               │
-│                              Admin App (3002)                                 │
-│                    ┌────────────────┴────────────────┐                       │
-│                    │                                 │                       │
-│                    ▼                                 ▼                       │
-│  ┌──────────────────────────┐       ┌──────────────────────────────────┐    │
-│  │ magiworld-admin-assets   │       │       magiworld-cdn              │    │
-│  │ (Private)                │       │       (Public)                   │    │
-│  ├──────────────────────────┤       ├──────────────────────────────────┤    │
-│  │ • Admin library files    │       │ • Banners (homepage)             │    │
-│  │ • Internal documents     │       │ • Tool thumbnails & samples      │    │
-│  │ • Draft assets           │       │ • Marketing images               │    │
-│  │                          │       │ • Static UI assets               │    │
-│  └──────────────────────────┘       └───────────────┬──────────────────┘    │
-│                                                      │                       │
-│                                                      ▼                       │
-│                                               CloudFront CDN                 │
-│                                                      │                       │
-│  ┌──────────────────────────┐                       │                       │
-│  │ magiworld-user-uploads   │                       ▼                       │
-│  │ (Private)                │            Web App (3000) ◄─── Users           │
-│  ├──────────────────────────┤                                                │
-│  │ • User AI inputs         │                                                │
-│  │ • Task results           │                                                │
-│  │ • Temporary processing   │                                                │
-│  └──────────────────────────┘                                                │
+│   Admin App (3002)                           Web App (3000)                  │
+│        │                                           │                          │
+│        ▼                                           ▼                          │
+│   ┌─────────────┐                           ┌─────────────┐                  │
+│   │   Upload    │                           │   Upload    │                  │
+│   └──────┬──────┘                           └──────┬──────┘                  │
+│          │                                         │                          │
+│    ┌─────┴─────┐                            ┌──────┴──────┐                  │
+│    ▼           ▼                            ▼             ▼                  │
+│ ┌────────┐ ┌────────┐                 ┌──────────┐ ┌──────────┐             │
+│ │ admin_ │ │public_ │                 │web_users_│ │web_users_│             │
+│ │ users_ │ │assets  │                 │ assets_  │ │ assets_  │             │
+│ │ assets │ │        │                 │ private  │ │ shared   │             │
+│ │(Private│ │(Public)│                 │(Private) │ │ (Public) │             │
+│ └───┬────┘ └───┬────┘                 └────┬─────┘ └────┬─────┘             │
+│     │          │                           │            │                    │
+│     ▼          ▼                           ▼            ▼                    │
+│ ┌────────────────────┐               ┌────────────────────────┐             │
+│ │  CloudFront (OAC)  │               │    CloudFront (OAC)    │             │
+│ │  + Signed URLs     │               │    + Signed URLs       │             │
+│ └─────────┬──────────┘               └──────────┬─────────────┘             │
+│           │                                      │                           │
+│           ▼                                      ▼                           │
+│ ┌────────────────────┐               ┌────────────────────────┐             │
+│ │  CloudFront (CDN)  │               │    CloudFront (CDN)    │             │
+│ │  Public Access     │               │    Public Access       │             │
+│ └────────────────────┘               └────────────────────────┘             │
+│                                                                               │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Content-Based Routing (Admin App)
-
-The admin app uses two upload endpoints based on content type:
-
-| Upload Route | Destination Bucket | Used For |
-|--------------|-------------------|----------|
-| `/api/upload` | `magiworld-admin-assets` | Library (Assets > Library page) |
-| `/api/upload/cdn` | `magiworld-cdn` | Banners, Tool images (public content) |
-
-```typescript
-// Library uploads → Private bucket (admin-assets)
-const libraryUpload = useUpload({ route: 'images' });  // /api/upload
-
-// Banner/Tool uploads → Public bucket (cdn)
-const bannerUpload = useUpload({ route: 'banners', endpoint: '/api/upload/cdn' });
-```
-
-### Bucket Details
-
-| Bucket | Purpose | Access | Lifecycle |
-|--------|---------|--------|-----------|
-| `magiworld-admin-assets` | Admin library (internal files) | Private (signed URLs) | Permanent |
-| `magiworld-user-uploads` | User-generated content | Private (signed URLs) | 30-90 days |
-| `magiworld-cdn` | Public assets (banners, tool images) | Public (CloudFront) | Permanent |
-
 ### Bucket Structure
 
-#### magiworld-admin-assets (Private)
+#### 1. funmagic-admin-users-assets (Private)
+
+Admin users' library uploads and Magi tool generated files.
+
 ```
-magiworld-admin-assets/
-└── media/                # Admin media library
-    └── {folderId}/
-        └── {filename}
+funmagic-admin-users-assets/
+└── {userid}/
+    └── library/
+        ├── upload/
+        │   └── {yyyymmdd}/
+        │       └── {filename}
+        └── generated/
+            ├── magi-chat/
+            │   └── {yyyymmdd}/
+            │       └── {filename}
+            └── {tool-slug}/
+                └── {yyyymmdd}/
+                    └── {filename}
 ```
 
-#### magiworld-cdn (Public via CloudFront)
+#### 2. funmagic-web-public-assets (Public)
+
+Banners, tool thumbnails, and static UI assets.
+
 ```
-magiworld-cdn/
-├── banners/              # Homepage banners (cache-busted filenames)
-│   └── {name}-{timestamp}.jpg
-├── tools/                # Tool thumbnails and samples
-│   └── {toolId}/
-│       ├── thumbnails/
-│       └── samples/
-├── ui/                   # UI assets (icons, placeholders)
-├── marketing/            # Landing page graphics
-└── fonts/                # Custom web fonts
+funmagic-web-public-assets/
+├── banners/
+│   ├── main/
+│   │   └── {name}-{timestamp}.jpg
+│   └── side/
+│       └── {name}-{timestamp}.jpg
+├── tools/
+│   └── {tool-slug}/
+│       ├── thumbnail/
+│       │   └── {filename}
+│       └── page_banner/
+│           └── {filename}
+├── ui/
+│   └── {icons, placeholders, etc.}
+└── fonts/
+    └── {custom-fonts}
 ```
 
-#### magiworld-user-uploads (Private)
+#### 3. funmagic-web-users-assets-private (Private)
+
+Web users' uploaded and AI-generated files.
+
 ```
-magiworld-user-uploads/
-└── {userId}/
-    ├── inputs/           # User-uploaded source images
-    │   └── {timestamp}-{filename}
-    └── outputs/          # AI-generated results
-        └── {taskId}/
-            ├── preview.jpg
-            ├── result.png
-            └── model.glb
+funmagic-web-users-assets-private/
+└── {userid}/
+    └── {tool-slug}/
+        ├── upload/
+        │   └── {yyyymmdd}/
+        │       └── {filename}
+        └── generated/
+            └── {yyyymmdd}/
+                └── {filename}
 ```
+
+#### 4. funmagic-web-users-assets-shared (Public)
+
+Files shared publicly by users (copied from private bucket).
+
+```
+funmagic-web-users-assets-shared/
+└── {userid}/
+    └── {share-id}/
+        ├── {filename}
+        └── metadata.json   # Optional: share info
+```
+
+**Share workflow:**
+1. User clicks "Share" on a private file
+2. System generates unique `share-id`
+3. File is copied from `funmagic-web-users-assets-private` to `funmagic-web-users-assets-shared`
+4. Public URL is returned for sharing
+5. User can "Unshare" to delete from shared bucket
+
+### CloudFront Distributions
+
+| Distribution | Origin Bucket | Access Control |
+|--------------|---------------|----------------|
+| `funmagic-cf-admin-private` | `funmagic-admin-users-assets` | OAC + Signed URLs |
+| `funmagic-cf-public` | `funmagic-web-public-assets` | Public (no auth) |
+| `funmagic-cf-web-private` | `funmagic-web-users-assets-private` | OAC + Signed URLs |
+| `funmagic-cf-web-shared` | `funmagic-web-users-assets-shared` | Public (no auth) |
 
 ### Security Configuration
 
 #### IAM Policies
 
-**Admin App (Access to admin-assets + CDN buckets)**:
+**Admin App:**
 ```json
 {
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "AdminAssetsFullAccess",
+      "Sid": "AdminAssetsAccess",
       "Effect": "Allow",
-      "Action": ["s3:*"],
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject", "s3:ListBucket"],
       "Resource": [
-        "arn:aws:s3:::magiworld-admin-assets",
-        "arn:aws:s3:::magiworld-admin-assets/*"
+        "arn:aws:s3:::funmagic-admin-users-assets",
+        "arn:aws:s3:::funmagic-admin-users-assets/*"
       ]
     },
     {
-      "Sid": "CDNUploadAccess",
+      "Sid": "PublicAssetsAccess",
       "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",
-        "s3:GetObject",
-        "s3:DeleteObject"
-      ],
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
       "Resource": [
-        "arn:aws:s3:::magiworld-cdn/banners/*",
-        "arn:aws:s3:::magiworld-cdn/tools/*"
+        "arn:aws:s3:::funmagic-web-public-assets/banners/*",
+        "arn:aws:s3:::funmagic-web-public-assets/tools/*"
       ]
     }
   ]
 }
 ```
 
-**Web App (Restricted to user uploads)**:
+**Web App:**
 ```json
 {
   "Version": "2012-10-17",
   "Statement": [
     {
+      "Sid": "WebPrivateAccess",
       "Effect": "Allow",
-      "Action": ["s3:PutObject", "s3:GetObject"],
-      "Resource": "arn:aws:s3:::magiworld-user-uploads/users/*",
-      "Condition": {
-        "StringLessThanEquals": {
-          "s3:content-length": "10485760"
-        }
-      }
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+      "Resource": ["arn:aws:s3:::funmagic-web-users-assets-private/*"]
+    },
+    {
+      "Sid": "WebSharedAccess",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+      "Resource": ["arn:aws:s3:::funmagic-web-users-assets-shared/*"]
+    },
+    {
+      "Sid": "PublicAssetsRead",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::funmagic-web-public-assets/*"]
     }
   ]
 }
@@ -722,69 +765,55 @@ magiworld-user-uploads/
 
 ### CORS Configuration
 
-Apply to both `magiworld-admin-assets` and `magiworld-user-uploads`:
+Apply to all buckets:
 
 ```json
-{
-  "CORSRules": [
-    {
-      "AllowedHeaders": ["*"],
-      "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
-      "AllowedOrigins": [
-        "http://localhost:3000",
-        "http://localhost:3002",
-        "https://magiworld.ai",
-        "https://admin.magiworld.ai"
-      ],
-      "ExposeHeaders": ["ETag", "x-amz-meta-*"],
-      "MaxAgeSeconds": 3000
-    }
-  ]
-}
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
+    "AllowedOrigins": [
+      "http://localhost:3000",
+      "http://localhost:3002",
+      "https://funmagic.ai",
+      "https://admin.funmagic.ai"
+    ],
+    "ExposeHeaders": ["ETag", "Content-Length", "Content-Type"],
+    "MaxAgeSeconds": 3600
+  }
+]
 ```
 
 ### Lifecycle Policies
 
-**magiworld-user-uploads** - Auto-cleanup:
-```json
-{
-  "Rules": [
-    {
-      "ID": "DeleteOldUserInputs",
-      "Status": "Enabled",
-      "Filter": { "Prefix": "users/" },
-      "Expiration": { "Days": 30 }
-    },
-    {
-      "ID": "DeleteIncompleteMultipart",
-      "Status": "Enabled",
-      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 1 }
-    }
-  ]
-}
-```
+| Bucket | Path | Retention |
+|--------|------|-----------|
+| `funmagic-admin-users-assets` | `*/library/*` | Permanent |
+| `funmagic-web-users-assets-private` | `*/upload/*` | 30 days |
+| `funmagic-web-users-assets-private` | `*/generated/*` | 90 days |
+| `funmagic-web-users-assets-shared` | `*` | Until user unshares |
 
 ### Cache Strategy
 
 | Content Type | Cache-Control | CDN TTL |
 |--------------|---------------|---------|
-| Admin banners | `max-age=3600` | 1 hour |
-| User outputs | `max-age=86400` | 1 day |
-| CDN static assets | `max-age=31536000, immutable` | 1 year |
+| Private assets | `private, max-age=3600` | 1 hour |
+| Public banners | `public, max-age=86400` | 1 day |
+| Public static | `public, max-age=31536000, immutable` | 1 year |
 
 ### Filename Strategy (Cache Busting)
 
-To handle CDN cache invalidation when updating content, use **unique filenames**:
+For public assets, use **unique filenames** to handle cache invalidation:
 
 ```typescript
 // Generate unique filename with timestamp
-const generateKey = (filename: string) => {
+const generateKey = (filename: string, folder: string) => {
   const timestamp = Date.now();
   const ext = filename.split('.').pop();
   const name = filename.replace(`.${ext}`, '').replace(/[^a-zA-Z0-9-_]/g, '-');
-  return `banners/${name}-${timestamp}.${ext}`;
+  return `${folder}/${name}-${timestamp}.${ext}`;
 };
-// Result: banners/hero-banner-1704412800000.jpg
+// Result: banners/main/hero-banner-1704412800000.jpg
 ```
 
 ---
@@ -847,8 +876,8 @@ DATABASE_URL=postgresql://user:password@localhost:9000/magi-db
 AWS_REGION=ap-northeast-1
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
-S3_BUCKET_NAME=magiworld-assets
-CLOUDFRONT_URL=https://cdn.magiworld.ai
+S3_BUCKET_NAME=funmagic-assets
+CLOUDFRONT_URL=https://cdn.funmagic.ai
 
 # AI APIs
 AI_API_KEY=
@@ -891,8 +920,8 @@ INNGEST_SIGNING_KEY=
 
 | App | Development | Production |
 |-----|-------------|------------|
-| Web | http://localhost:3000 | magiworld.ai |
-| Admin | http://localhost:3002 | admin.magiworld.ai |
+| Web | http://localhost:3000 | funmagic.ai |
+| Admin | http://localhost:3002 | admin.funmagic.ai |
 
 ---
 
@@ -1052,7 +1081,7 @@ FAL_API_KEY=...                                # Fal.ai API key
 
 ### Overview
 
-Private S3 buckets (`magiworld-admin-assets`) are accessed via CloudFront with signed URLs for secure, time-limited access.
+Private S3 buckets (`funmagic-admin-assets`) are accessed via CloudFront with signed URLs for secure, time-limited access.
 
 ### Architecture
 
@@ -1065,7 +1094,7 @@ Private S3 buckets (`magiworld-admin-assets`) are accessed via CloudFront with s
 │         │                                                                     │
 │         ▼                                                                     │
 │   ┌─────────────────┐                                                        │
-│   │  Upload Route   │ ──► S3 Presigned URL ──► magiworld-admin-assets       │
+│   │  Upload Route   │ ──► S3 Presigned URL ──► funmagic-admin-assets       │
 │   │  /api/upload    │                              (Private Bucket)          │
 │   └────────┬────────┘                                    │                   │
 │            │                                             │                   │
@@ -1139,7 +1168,7 @@ const signedMessages = messages.map(msg => ({
 ```bash
 # CloudFront Configuration
 CLOUDFRONT_ADMIN_URL=https://admin-assets.cloudfront.net  # Admin assets distribution
-CLOUDFRONT_URL=https://cdn.magiworld.ai                   # Public CDN distribution
+CLOUDFRONT_URL=https://cdn.funmagic.ai                   # Public CDN distribution
 CLOUDFRONT_KEY_PAIR_ID=K...                               # CloudFront key pair ID
 CLOUDFRONT_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n..."  # RSA private key
 CLOUDFRONT_SIGNED_URL_EXPIRY=3600                         # Default expiry (seconds)
@@ -1149,9 +1178,9 @@ CLOUDFRONT_SIGNED_URL_EXPIRY=3600                         # Default expiry (seco
 
 | Bucket | CloudFront | Signed URLs | Use Case |
 |--------|------------|-------------|----------|
-| `magiworld-admin-assets` | ✅ OAC | ✅ Required | Admin library, AI chat images |
-| `magiworld-cdn` | ✅ Public | ❌ Not needed | Banners, tool images (public) |
-| `magiworld-user-uploads` | ❌ Direct S3 | ✅ Presigned | User uploads (via presigned) |
+| `funmagic-admin-assets` | ✅ OAC | ✅ Required | Admin library, AI chat images |
+| `funmagic-cdn` | ✅ Public | ❌ Not needed | Banners, tool images (public) |
+| `funmagic-user-uploads` | ❌ Direct S3 | ✅ Presigned | User uploads (via presigned) |
 
 ---
 
@@ -1234,6 +1263,114 @@ Messages support multiple content types stored as JSON:
 
 ---
 
+## 20. Web App Tools
+
+### Registered Tools
+
+The web app includes specialized AI tools with custom interfaces. Each tool is registered in `TOOL_REGISTRY` and has a corresponding React component.
+
+| Tool Slug | Component | Description |
+|-----------|-----------|-------------|
+| `background-remove` | `BackgroundRemoveInterface` | AI-powered background removal using Fal.ai |
+| `3d-crystal` | `Crystal3DInterface` | 3D crystal engraving preview with image cropping |
+
+### 3D Crystal Tool
+
+The 3D Crystal tool (`3d-crystal`) allows users to preview how their images will look when laser-engraved inside a crystal block.
+
+#### Features
+
+- **Tabbed Interface**: Image tab for upload/crop, 3D Crystal tab for preview
+- **Image Cropping**: Built-in cropper with aspect ratio constraints
+- **3D Preview**: Real-time Three.js visualization with:
+  - Rotating crystal cube with glass-like material
+  - Image rendered as 3D texture using Canvas
+  - Orbit controls for 360° viewing
+  - Customizable text overlay on the crystal
+- **Responsive UI**: Full-width upload area on large screens, mobile-optimized layout
+
+#### Technical Implementation
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        3D Crystal Tool Architecture                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│   Crystal3DInterface (index.tsx)                                             │
+│   ├── Tabs Component (Base UI)                                               │
+│   │   ├── Image Tab                                                          │
+│   │   │   ├── Upload Area (drag & drop)                                      │
+│   │   │   └── ImageCropper (embedded mode)                                   │
+│   │   │       └── react-cropper / cropperjs                                  │
+│   │   │                                                                       │
+│   │   └── 3D Crystal Tab                                                     │
+│   │       ├── CubeViewer (Three.js canvas)                                   │
+│   │       │   ├── Crystal cube (MeshPhysicalMaterial)                        │
+│   │       │   └── Text3D (Canvas texture + Double-Plane)                     │
+│   │       └── Controls (text input, re-crop, change image)                   │
+│   │                                                                           │
+│   └── State Management                                                        │
+│       ├── imageState: 'upload' | 'cropping' | 'preview'                      │
+│       ├── rawImage: string | null                                             │
+│       ├── croppedImage: string | null                                         │
+│       └── customText: string                                                  │
+│                                                                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Key Technologies
+
+| Technology | Purpose |
+|------------|---------|
+| `@react-three/fiber` | React renderer for Three.js |
+| `@react-three/drei` | Helper components (OrbitControls, etc.) |
+| `three` | 3D graphics library |
+| `react-cropper` | Image cropping UI |
+| `cropperjs` | Cropping engine |
+
+#### Canvas Texture Approach
+
+For rendering text on the crystal (including CJK characters), we use a Canvas-based approach:
+
+```typescript
+// Create canvas with text
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d');
+ctx.font = '48px sans-serif';
+ctx.fillText(text, x, y);
+
+// Use as texture
+const texture = new THREE.CanvasTexture(canvas);
+```
+
+**Double-Plane Sandwich Technique**: Two planes positioned back-to-back ensure text is visible from both sides of the crystal:
+
+```typescript
+<group>
+  {/* Front-facing plane */}
+  <mesh position={[0, 0, 0.01]}>
+    <planeGeometry args={[width, height]} />
+    <meshBasicMaterial map={texture} transparent />
+  </mesh>
+  {/* Back-facing plane (rotated 180°) */}
+  <mesh position={[0, 0, -0.01]} rotation={[0, Math.PI, 0]}>
+    <planeGeometry args={[width, height]} />
+    <meshBasicMaterial map={texture} transparent />
+  </mesh>
+</group>
+```
+
+#### Component Files
+
+```
+apps/web/components/tools/3d-crystal/
+├── index.tsx          # Main Crystal3DInterface with tabs and state
+├── cube-viewer.tsx    # Three.js canvas with crystal cube and text
+└── image-cropper.tsx  # Cropper component (embedded or dialog mode)
+```
+
+---
+
 ## Document History
 
 | Version | Date | Changes |
@@ -1243,3 +1380,5 @@ Messages support multiple content types stored as JSON:
 | 3.0 | 2025-01-02 | Added Theme System (next-themes), Logto authentication, Profile page |
 | 3.1 | 2025-01-04 | Added Tool Registry Pattern for slug validation between web and admin apps |
 | 4.0 | 2025-01-06 | Added AI SDK Integration, CloudFront Signed URLs, Magi AI Assistant |
+| 5.0 | 2025-01-12 | Added Web App Tools section, 3D Crystal Tool documentation |
+| 5.1 | 2025-01-12 | Updated File Storage Strategy to 4-bucket architecture |

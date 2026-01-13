@@ -21,7 +21,7 @@ export function ToolDiscovery({ tools }: ToolDiscoveryProps) {
   return (
     <section className="container py-8">
       <div className="mb-6">
-        <h2 className="text-xl font-bold tracking-tight md:text-2xl">
+        <h2 className="text-xl font-bold md:text-2xl">
           {t('title')}
         </h2>
         <p className="text-sm text-muted-foreground mt-1">{t('subtitle')}</p>

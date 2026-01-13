@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useActionState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -21,6 +21,17 @@ import {
   FieldError,
 } from '@/components/ui/field';
 import { createToolType, updateToolType, deleteToolType, type ToolTypeFormData } from '@/lib/actions/tool-types';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { toolTypeSchema } from '@/lib/validations/tool-type';
 import {
   DEFAULT_TOOL_TYPE_TRANSLATIONS,
@@ -54,11 +65,12 @@ const BADGE_COLORS = [
 
 type FieldErrors = Record<string, string>;
 
-export function ToolTypeForm({ initialData, mode }: ToolTypeFormProps) {
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const isSubmittingRef = useRef(false);
+type FormState = {
+  errors: FieldErrors;
+  success?: boolean;
+};
 
+export function ToolTypeForm({ initialData, mode }: ToolTypeFormProps) {
   // Translations JSON state
   const [translationsJson, setTranslationsJson] = useState<string>(() => {
     if (initialData?.translations && Object.keys(initialData.translations).length > 0) {
@@ -67,33 +79,14 @@ export function ToolTypeForm({ initialData, mode }: ToolTypeFormProps) {
     return JSON.stringify(DEFAULT_TOOL_TYPE_TRANSLATIONS, null, 2);
   });
 
-  // Format JSON with proper indentation
-  const handleFormatJson = () => {
-    try {
-      const parsed = JSON.parse(translationsJson);
-      setTranslationsJson(JSON.stringify(parsed, null, 2));
-      setErrors((prev) => ({ ...prev, translations: '' }));
-    } catch {
-      setErrors((prev) => ({ ...prev, translations: 'Invalid JSON format' }));
-    }
-  };
-
-  async function handleSubmit(formData: FormData) {
-    // Prevent double-submit with ref check (synchronous)
-    if (isSubmittingRef.current) return;
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
-    setErrors({});
-
+  // Form action with useActionState for proper pending state
+  const handleFormAction = async (_prevState: FormState, formData: FormData): Promise<FormState> => {
     // Parse translations JSON
     let translations: ToolTypeFormData['translations'];
     try {
       translations = JSON.parse(translationsJson);
     } catch {
-      setErrors({ translations: 'Invalid JSON format. Please check the syntax.' });
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-      return;
+      return { errors: { translations: 'Invalid JSON format. Please check the syntax.' } };
     }
 
     const rawData = {
@@ -112,10 +105,7 @@ export function ToolTypeForm({ initialData, mode }: ToolTypeFormProps) {
         const path = issue.path.join('.');
         fieldErrors[path] = issue.message;
       }
-      setErrors(fieldErrors);
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-      return;
+      return { errors: fieldErrors };
     }
 
     const data: ToolTypeFormData = result.data;
@@ -126,20 +116,41 @@ export function ToolTypeForm({ initialData, mode }: ToolTypeFormProps) {
       } else {
         await createToolType(data);
       }
+      return { errors: {}, success: true };
     } catch (error) {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('NEXT_REDIRECT')) {
+        throw error;
+      }
+      return { errors: { _form: `Failed to save: ${errorMessage}` } };
     }
-  }
+  };
+
+  const [formState, formAction, isPending] = useActionState(handleFormAction, { errors: {} });
+
+  // Alias errors from formState for easier access
+  const errors = formState.errors;
+
+  // Format JSON with proper indentation
+  const [jsonError, setJsonError] = useState<string>('');
+  const handleFormatJson = () => {
+    try {
+      const parsed = JSON.parse(translationsJson);
+      setTranslationsJson(JSON.stringify(parsed, null, 2));
+      setJsonError('');
+    } catch {
+      setJsonError('Invalid JSON format');
+    }
+  };
 
   async function handleDelete() {
-    if (initialData?.id && confirm('Are you sure you want to delete this tool type?')) {
+    if (initialData?.id) {
       await deleteToolType(initialData.id);
     }
   }
 
   return (
-    <form action={handleSubmit} className="space-y-6" noValidate>
+    <form action={formAction} className="space-y-6" noValidate>
       <Card>
         <CardHeader>
           <CardTitle>Basic Information</CardTitle>
@@ -214,18 +225,22 @@ export function ToolTypeForm({ initialData, mode }: ToolTypeFormProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <Field data-invalid={!!errors.translations || !!errors['translations.en.name']}>
+          <Field data-invalid={!!errors.translations || !!errors['translations.en.name'] || !!jsonError}>
             <Textarea
               value={translationsJson}
-              onChange={(e) => setTranslationsJson(e.target.value)}
+              onChange={(e) => {
+                setTranslationsJson(e.target.value);
+                setJsonError('');
+              }}
               placeholder={TOOL_TYPE_TRANSLATIONS_EXAMPLE}
               rows={12}
               className="font-mono text-sm"
-              aria-invalid={!!errors.translations || !!errors['translations.en.name']}
+              aria-invalid={!!errors.translations || !!errors['translations.en.name'] || !!jsonError}
             />
             <FieldDescription className="mt-2">
               Required: <code className="rounded bg-muted px-1.5 py-0.5 text-xs">name</code> must be provided for all locales (en, zh, ja, pt).
             </FieldDescription>
+            {jsonError && <FieldError>{jsonError}</FieldError>}
             {errors.translations && <FieldError>{errors.translations}</FieldError>}
             {(errors['translations.en.name'] || errors['translations.zh.name'] || errors['translations.ja.name'] || errors['translations.pt.name']) && (
               <FieldError>Name is required for all locales</FieldError>
@@ -234,24 +249,44 @@ export function ToolTypeForm({ initialData, mode }: ToolTypeFormProps) {
         </CardContent>
       </Card>
 
+      {errors._form && (
+        <div className="rounded-md border border-destructive bg-destructive/10 p-4 text-sm text-destructive">
+          {errors._form}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           {mode === 'edit' && (
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={handleDelete}
-            >
-              Delete
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger
+                render={<Button type="button" variant="destructive" disabled={isPending} />}
+              >
+                Delete
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Tool Type</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete this tool type? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction variant="destructive" onClick={handleDelete}>
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
         </div>
         <div className="flex gap-3">
-          <Button type="button" variant="outline" onClick={() => window.history.back()}>
+          <Button type="button" variant="outline" onClick={() => window.history.back()} disabled={isPending}>
             Cancel
           </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Saving...' : mode === 'create' ? 'Create Tool Type' : 'Save Changes'}
+          <Button type="submit" disabled={isPending}>
+            {isPending ? 'Saving...' : mode === 'create' ? 'Create Tool Type' : 'Save Changes'}
           </Button>
         </div>
       </div>
