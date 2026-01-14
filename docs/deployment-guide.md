@@ -1060,6 +1060,17 @@ COPY --from=deps /app ./
 # Copy all source code (overwrites package.json files, but node_modules remain)
 COPY . .
 
+# Skip environment variable validation during build
+# The apps validate env vars at import time (lib/env.ts), but env vars are only
+# available at runtime via docker-compose env_file, not during Docker build.
+# This tells lib/env.ts to skip validation and return process.env as-is.
+ENV SKIP_ENV_VALIDATION=true
+
+# Increase Node.js memory limit for large builds (default is ~1.7GB)
+# This helps prevent "JavaScript heap out of memory" errors on smaller EC2 instances
+# Adjust value based on your instance size (4096 = 4GB)
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
 # Build only the web app (monorepo filter)
 # This runs: next build --filter=web
 RUN corepack enable pnpm && pnpm --filter web build
@@ -1153,6 +1164,13 @@ WORKDIR /app
 # Copy entire /app from deps (includes workspace node_modules symlinks)
 COPY --from=deps /app ./
 COPY . .
+
+# Skip environment variable validation during build
+# (env vars are only available at runtime via docker-compose env_file)
+ENV SKIP_ENV_VALIDATION=true
+
+# Increase Node.js memory limit for large builds
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 # Build only the admin app (monorepo filter)
 RUN corepack enable pnpm && pnpm --filter admin build
