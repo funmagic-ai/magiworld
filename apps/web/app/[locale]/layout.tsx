@@ -10,6 +10,10 @@ import { AuthStatus } from '@/components/auth/auth-status';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
+// Prevent static prerendering - layout uses AuthStatus which requires Logto
+// 防止静态预渲染 - 布局使用需要Logto的AuthStatus组件
+export const dynamic = 'force-dynamic';
+
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
 }
