@@ -284,10 +284,8 @@ Repeat for all 4 buckets.
                 "s3:DeleteObject"
             ],
             "Resource": [
-                "arn:aws:s3:::funmagic-web-public-assets/banners/*",
-                "arn:aws:s3:::funmagic-web-public-assets/tools/*",
-                "arn:aws:s3:::funmagic-web-public-assets/ui/*",
-                "arn:aws:s3:::funmagic-web-public-assets/fonts/*"
+                "arn:aws:s3:::funmagic-web-public-assets",
+                "arn:aws:s3:::funmagic-web-public-assets/*"
             ]
         },
         {

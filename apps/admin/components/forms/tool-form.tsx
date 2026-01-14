@@ -144,9 +144,11 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
 
         if (result.files && result.files.length > 0) {
           const uploadedFile = result.files[0];
-          finalThumbnailUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL
-            ? `${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/${uploadedFile.objectInfo.key}`
-            : `https://funmagic-web-public-assets.s3.us-east-2.amazonaws.com/${uploadedFile.objectInfo.key}`;
+          const cdnUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
+          if (!cdnUrl) {
+            return { errors: { thumbnailUrl: 'NEXT_PUBLIC_CLOUDFRONT_URL is not configured' } };
+          }
+          finalThumbnailUrl = `${cdnUrl}/${uploadedFile.objectInfo.key}`;
         } else {
           return { errors: { thumbnailUrl: 'Upload failed - no files returned' } };
         }

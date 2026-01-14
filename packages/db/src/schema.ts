@@ -271,6 +271,47 @@ export const homeBannerTranslations = pgTable('home_banner_translations', {
 });
 
 // ============================================
+// OEM & Attribution Tables
+// ============================================
+
+/**
+ * OEM Software Brands Table
+ *
+ * Stores configuration for OEM partner brands (white-labeled desktop software).
+ * Each brand can have custom theming, branding, and tool type filtering.
+ * Managed by admins via apps/admin.
+ *
+ * @example
+ * {
+ *   slug: 'partner-a',
+ *   name: 'Partner A Studio',
+ *   softwareId: 'PARTNER_A_2024',
+ *   themeConfig: { primaryColor: '#FF5722', logo: 'https://...', brandName: 'Partner Studio' },
+ *   allowedToolTypeIds: ['<uuid1>', '<uuid2>']
+ * }
+ */
+export const oemSoftwareBrands = pgTable('oem_software_brands', {
+  /** Unique identifier (UUID v4) */
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** URL-friendly unique identifier */
+  slug: text('slug').notNull().unique(),
+  /** Display name for internal use */
+  name: text('name').notNull(),
+  /** Unique identifier sent by desktop software for brand detection */
+  softwareId: text('software_id').notNull().unique(),
+  /** Brand theme configuration (primaryColor, logo, brandName) */
+  themeConfig: jsonb('theme_config'),
+  /** Array of tool type IDs this brand can access (empty = all) */
+  allowedToolTypeIds: jsonb('allowed_tool_type_ids').$type<string[]>().default([]),
+  /** Whether this brand is active */
+  isActive: boolean('is_active').notNull().default(true),
+  /** Record creation timestamp */
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  /** Record last update timestamp */
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// ============================================
 // User Tables
 // ============================================
 
@@ -286,7 +327,8 @@ export const homeBannerTranslations = pgTable('home_banner_translations', {
  *   logtoId: 'user_abc123',
  *   email: 'user@example.com',
  *   name: 'John Doe',
- *   theme: 'neutral'
+ *   colorMode: 'dark',
+ *   registrationBrandId: '<brand-uuid>'
  * }
  */
 export const users = pgTable('users', {
@@ -304,8 +346,12 @@ export const users = pgTable('users', {
   avatarUrl: text('avatar_url'),
   /** User's preferred locale */
   locale: localeEnum('locale').default('en'),
-  /** User's preferred theme (matches ThemeProvider themes) */
-  theme: text('theme').default('neutral'),
+  /** User's preferred color mode (light/dark/system) */
+  colorMode: text('color_mode').default('system'),
+  /** Brand user first registered from (null = direct web registration) */
+  registrationBrandId: uuid('registration_brand_id').references(() => oemSoftwareBrands.id),
+  /** Channel of first registration */
+  registrationChannel: text('registration_channel').default('web'),
   /** Record creation timestamp (first login) */
   createdAt: timestamp('created_at').notNull().defaultNow(),
   /** Record last update timestamp */
@@ -393,6 +439,119 @@ export const tasks = pgTable('tasks', {
 });
 
 // ============================================
+// Attribution Tables
+// ============================================
+
+/**
+ * User Attributions Table (First-Touch)
+ *
+ * Captures UTM parameters and referrer information at user registration.
+ * One record per user - stores the first-touch attribution data.
+ *
+ * @example
+ * {
+ *   userId: '<user-uuid>',
+ *   utmSource: 'google',
+ *   utmMedium: 'cpc',
+ *   utmCampaign: 'summer-2024'
+ * }
+ */
+export const userAttributions = pgTable('user_attributions', {
+  /** Unique identifier (UUID v4) */
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** Reference to user (one attribution per user) */
+  userId: uuid('user_id').notNull().unique().references(() => users.id, { onDelete: 'cascade' }),
+  /** UTM source parameter (e.g., 'google', 'facebook') */
+  utmSource: text('utm_source'),
+  /** UTM medium parameter (e.g., 'cpc', 'email', 'social') */
+  utmMedium: text('utm_medium'),
+  /** UTM campaign parameter */
+  utmCampaign: text('utm_campaign'),
+  /** UTM term parameter (for paid search keywords) */
+  utmTerm: text('utm_term'),
+  /** UTM content parameter (for A/B testing) */
+  utmContent: text('utm_content'),
+  /** Full referrer URL */
+  referrerUrl: text('referrer_url'),
+  /** Landing page URL */
+  landingPage: text('landing_page'),
+  /** Record creation timestamp */
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+/**
+ * User Logins Table
+ *
+ * Tracks each user login session with brand and channel information.
+ * Used for analyzing which OEM software brands users access from.
+ *
+ * @example
+ * {
+ *   userId: '<user-uuid>',
+ *   brandId: '<brand-uuid>',
+ *   channel: 'desktop',
+ *   ipAddress: '192.168.1.1'
+ * }
+ */
+export const userLogins = pgTable('user_logins', {
+  /** Unique identifier (UUID v4) */
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** Reference to user */
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  /** Brand user logged in from (null = direct web login) */
+  brandId: uuid('brand_id').references(() => oemSoftwareBrands.id),
+  /** Login channel */
+  channel: text('channel').notNull().default('web'),
+  /** Client IP address */
+  ipAddress: text('ip_address'),
+  /** Client user agent string */
+  userAgent: text('user_agent'),
+  /** Login timestamp */
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+/**
+ * Payment Attributions Table (Last-Touch)
+ *
+ * Captures attribution data at the time of payment.
+ * Records the last-touch source for payment attribution analysis.
+ *
+ * @example
+ * {
+ *   userId: '<user-uuid>',
+ *   paymentId: 'pi_abc123',
+ *   brandId: '<brand-uuid>',
+ *   channel: 'desktop',
+ *   amount: 9900,
+ *   currency: 'usd'
+ * }
+ */
+export const paymentAttributions = pgTable('payment_attributions', {
+  /** Unique identifier (UUID v4) */
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** Reference to user */
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  /** External payment reference (e.g., Stripe payment intent ID) */
+  paymentId: text('payment_id').notNull(),
+  /** Brand user paid from (null = direct web payment) */
+  brandId: uuid('brand_id').references(() => oemSoftwareBrands.id),
+  /** Payment channel */
+  channel: text('channel').notNull().default('web'),
+  /** Last-touch UTM source at payment time */
+  utmSource: text('utm_source'),
+  /** Last-touch UTM medium at payment time */
+  utmMedium: text('utm_medium'),
+  /** Last-touch UTM campaign at payment time */
+  utmCampaign: text('utm_campaign'),
+  /** Payment amount in cents */
+  amount: integer('amount').notNull(),
+  /** Payment currency code (e.g., 'usd', 'eur') */
+  currency: text('currency').notNull().default('usd'),
+  /** Payment timestamp */
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// ============================================
 // Type Exports
 // ============================================
 
@@ -445,4 +604,24 @@ export type AdminUserInsert = typeof adminUsers.$inferInsert;
 export type Task = typeof tasks.$inferSelect;
 /** Inferred insert type for tasks table */
 export type TaskInsert = typeof tasks.$inferInsert;
+
+/** Inferred select type for oem_software_brands table */
+export type OemSoftwareBrand = typeof oemSoftwareBrands.$inferSelect;
+/** Inferred insert type for oem_software_brands table */
+export type OemSoftwareBrandInsert = typeof oemSoftwareBrands.$inferInsert;
+
+/** Inferred select type for user_attributions table */
+export type UserAttribution = typeof userAttributions.$inferSelect;
+/** Inferred insert type for user_attributions table */
+export type UserAttributionInsert = typeof userAttributions.$inferInsert;
+
+/** Inferred select type for user_logins table */
+export type UserLogin = typeof userLogins.$inferSelect;
+/** Inferred insert type for user_logins table */
+export type UserLoginInsert = typeof userLogins.$inferInsert;
+
+/** Inferred select type for payment_attributions table */
+export type PaymentAttribution = typeof paymentAttributions.$inferSelect;
+/** Inferred insert type for payment_attributions table */
+export type PaymentAttributionInsert = typeof paymentAttributions.$inferInsert;
 

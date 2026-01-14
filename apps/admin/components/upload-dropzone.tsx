@@ -57,9 +57,12 @@ export function UploadDropzone({
     route,
     api: '/api/upload',
     onUploadComplete: ({ files }) => {
+      const cloudFrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_ADMIN_URL;
       const uploaded = files.map((f: FileUploadInfo<'complete'>) => ({
         name: f.name,
-        url: `https://${process.env.NEXT_PUBLIC_S3_BUCKET || 'funmagic-admin-users-assets'}.s3.${process.env.NEXT_PUBLIC_AWS_REGION || 'ap-northeast-1'}.amazonaws.com/${f.objectInfo.key}`,
+        url: cloudFrontUrl
+          ? `${cloudFrontUrl}/${f.objectInfo.key}`
+          : f.objectInfo.key, // Fallback to key only if CloudFront not configured
         size: f.size,
         type: f.type,
       }));

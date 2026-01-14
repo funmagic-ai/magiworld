@@ -140,7 +140,7 @@ export async function getUserById(id: string): Promise<User | null> {
 }
 
 /**
- * Updates user preferences (locale-only fields, not synced from Logto).
+ * Updates user preferences (local fields, not synced from Logto).
  *
  * @param logtoId - The Logto user ID
  * @param preferences - The preferences to update
@@ -150,7 +150,7 @@ export async function updateUserPreferences(
   logtoId: string,
   preferences: {
     locale?: 'en' | 'ja' | 'pt' | 'zh';
-    theme?: string;
+    colorMode?: 'light' | 'dark' | 'system';
   }
 ): Promise<User | null> {
   const [updatedUser] = await db

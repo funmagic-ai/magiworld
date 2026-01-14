@@ -3,8 +3,8 @@
  *
  * Handles file uploads to AWS S3 using pre-signed URLs.
  * Supports two destinations:
- * - Library uploads → funmagic-admin-users-assets (private)
- * - Public uploads (banners, tools) → funmagic-web-public-assets (public)
+ * - Library uploads → admin-assets bucket (private)
+ * - Public uploads (banners, tools, brands) → public-assets bucket (public)
  *
  * @module apps/admin/app/api/upload/route
  */
@@ -15,46 +15,23 @@ import { aws } from '@better-upload/server/clients';
 import { db, media } from '@magiworld/db';
 import { revalidatePath } from 'next/cache';
 import { generateUniqueFilename, findOrCreateMagiFolder } from '@/lib/actions/library';
+import { env, getAdminAssetUrl, getPublicCdnUrl } from '@/lib/env';
 
 // File size constants (in bytes)
 const MB = 1024 * 1024;
 
-// Bucket names (4-bucket architecture)
-const ADMIN_ASSETS_BUCKET = process.env.S3_ADMIN_ASSETS_BUCKET || 'funmagic-admin-users-assets';
-const PUBLIC_ASSETS_BUCKET = process.env.S3_PUBLIC_ASSETS_BUCKET || 'funmagic-web-public-assets';
+// Helper to build URL for admin assets bucket (uses CloudFront)
+const buildAdminS3Url = (key: string) => getAdminAssetUrl(key);
 
-// Helper to build URL for admin assets bucket
-// Uses CloudFront if configured, otherwise falls back to direct S3
-const buildAdminS3Url = (key: string) => {
-  // Prefer CloudFront URL for admin assets (serves from private bucket via OAC)
-  if (process.env.CLOUDFRONT_ADMIN_PRIVATE_URL) {
-    return `${process.env.CLOUDFRONT_ADMIN_PRIVATE_URL}/${key}`;
-  }
-  // Fallback to direct S3 URL (only works if bucket is public)
-  const region = process.env.AWS_REGION || 'ap-northeast-1';
-  return `https://${ADMIN_ASSETS_BUCKET}.s3.${region}.amazonaws.com/${key}`;
-};
-
-// Helper to build public CDN URL (CloudFront or direct S3)
-const buildPublicUrl = (key: string) => {
-  // Prefer CloudFront URL if configured
-  if (process.env.CLOUDFRONT_PUBLIC_URL) {
-    return `${process.env.CLOUDFRONT_PUBLIC_URL}/${key}`;
-  }
-  // Fallback to direct S3 URL
-  const region = process.env.AWS_REGION || 'ap-northeast-1';
-  return `https://${PUBLIC_ASSETS_BUCKET}.s3.${region}.amazonaws.com/${key}`;
-};
+// Helper to build public CDN URL (uses CloudFront)
+const buildPublicUrl = (key: string) => getPublicCdnUrl(key);
 
 // Lazy initialization of S3 client to avoid build-time errors
 const getS3Client = () => {
-  if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
-    throw new Error('AWS credentials not configured');
-  }
   return aws({
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    region: process.env.AWS_REGION || 'ap-northeast-1',
+    accessKeyId: env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+    region: env.AWS_REGION,
   });
 };
 
@@ -63,10 +40,10 @@ const router: Router = {
   get client() {
     return getS3Client();
   },
-  bucketName: ADMIN_ASSETS_BUCKET,
+  bucketName: env.S3_ADMIN_ASSETS_BUCKET,
   routes: {
     // ============================================
-    // Library Uploads → funmagic-admin-users-assets (Private)
+    // Library Uploads → Admin Assets Bucket (Private)
     // Used by: Assets > Library page
     // ============================================
 
@@ -190,15 +167,15 @@ const router: Router = {
 };
 
 // ============================================
-// Public Assets Router → funmagic-web-public-assets (Public)
-// Used by: Banners, Tool images (public content)
+// Public Assets Router → Public Assets Bucket (Public CDN)
+// Used by: Banners, Tool images, Brand logos (public content)
 // ============================================
 
 const cdnRouter: Router = {
   get client() {
     return getS3Client();
   },
-  bucketName: PUBLIC_ASSETS_BUCKET,
+  bucketName: env.S3_PUBLIC_ASSETS_BUCKET,
   routes: {
     // Banner images → CDN
     banners: route<true>({
@@ -251,6 +228,33 @@ const cdnRouter: Router = {
       },
       onAfterSignedUrl: async ({ files }) => {
         console.log(`[CDN Upload] ${files.length} tool image(s) uploaded`);
+      },
+    }),
+
+    // OEM brand logos → CDN
+    brands: route<true>({
+      fileTypes: ['image/*'],
+      maxFileSize: 10 * MB,
+      multipleFiles: true,
+      maxFiles: 5,
+      onBeforeUpload: () => {
+        // Generate unique keys with timestamp for cache busting
+        return {
+          generateObjectInfo: ({ file }) => {
+            const timestamp = Date.now();
+            const ext = file.name.split('.').pop() || 'jpg';
+            const name = file.name.replace(`.${ext}`, '').replace(/[^a-zA-Z0-9-_]/g, '-');
+            return {
+              key: `brands/${name}-${timestamp}.${ext}`,
+              cacheControl: 'public, max-age=31536000, immutable',
+            };
+          },
+        };
+      },
+      onAfterSignedUrl: async ({ files }) => {
+        // Note: Brand records are created by the brand form, not here
+        // This callback just logs for debugging
+        console.log(`[CDN Upload] ${files.length} brand image(s) uploaded`);
       },
     }),
   },

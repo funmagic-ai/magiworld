@@ -6,15 +6,13 @@ const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
-      // Public CDN (banners, tool images)
-      { hostname: 'cdn.funmagic.ai' },
-      // Shared files CDN
-      { hostname: 'shared.funmagic.ai' },
-      // CloudFront distributions (fallback domains)
+      // CloudFront distributions (covers all *.cloudfront.net domains)
       { hostname: '*.cloudfront.net' },
-      // S3 direct access (development fallback)
-      { hostname: 'funmagic-web-public-assets.s3.us-east-2.amazonaws.com' },
-      { hostname: 'funmagic-web-users-assets-shared.s3.us-east-2.amazonaws.com' },
+      // Custom CDN domains (configure via DNS CNAME to CloudFront)
+      { hostname: 'cdn.funmagic.ai' },
+      { hostname: 'shared.funmagic.ai' },
+      // S3 direct access (wildcard for any bucket in any region)
+      { hostname: '*.s3.*.amazonaws.com' },
     ],
   },
 };

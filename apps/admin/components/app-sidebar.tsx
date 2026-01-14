@@ -30,6 +30,7 @@ import {
   FolderLibraryIcon,
   AiGenerativeIcon,
   ArrowDown01Icon,
+  Building03Icon,
 } from '@hugeicons/core-free-icons';
 
 type MenuItem = {
@@ -67,6 +68,13 @@ const menuItems: MenuItem[] = [
       { title: 'Library', url: '/library' },
       { title: 'Ideas', url: '/ideas' },
       { title: 'Magi', url: '/magi' },
+    ],
+  },
+  {
+    title: 'OEM',
+    icon: Building03Icon,
+    children: [
+      { title: 'Brands', url: '/oem-brands' },
     ],
   },
 ];
