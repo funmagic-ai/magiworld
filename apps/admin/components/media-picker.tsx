@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Media Picker Component
+ * @fileoverview 媒体选择器组件
+ *
+ * Dialog-based media picker with library browse and upload tabs.
+ * Returns selected media ID and URL for form integration.
+ * 基于对话框的媒体选择器，包含媒体库浏览和上传标签页。
+ * 返回选中媒体的ID和URL用于表单集成。
+ *
+ * @module components/media-picker
+ */
+
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';

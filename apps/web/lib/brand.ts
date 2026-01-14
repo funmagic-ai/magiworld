@@ -1,11 +1,14 @@
 /**
  * @fileoverview Brand Context Utilities
+ * @fileoverview 品牌上下文工具
  *
  * Provides functions to detect, store, and retrieve OEM brand context.
  * Brand detection is based on the software_id query parameter sent by
  * desktop software when embedding the web app.
+ * 提供检测、存储和获取OEM品牌上下文的函数。
+ * 品牌检测基于桌面软件嵌入Web应用时发送的software_id查询参数。
  *
- * @module lib/brand
+ * @module apps/web/lib/brand
  */
 
 import { cookies } from 'next/headers';

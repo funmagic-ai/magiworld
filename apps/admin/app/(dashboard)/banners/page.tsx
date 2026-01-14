@@ -1,13 +1,16 @@
 /**
  * @fileoverview Homepage Banners Management Page
+ * @fileoverview 首页横幅管理页面
  *
- * Admin page for managing promotional banners displayed on the Magiworld homepage.
- * Supports both main carousel banners and sidebar banners.
+ * Admin page for managing promotional banners displayed on homepage.
+ * Supports main carousel and sidebar banners with multi-locale.
+ * 管理首页展示的推广横幅的管理页面。
+ * 支持主轮播和侧边栏横幅，带多语言翻译。
  *
- * Features:
- * - Grid display of banner cards with image previews
- * - Search, filter, and sort toolbar
- * - Banner type indicators (main/side)
+ * Features / 功能:
+ * - Grid display with image previews / 带图片预览的网格显示
+ * - Search, filter, sort toolbar / 搜索、筛选、排序工具栏
+ * - Banner type indicators / 横幅类型指示器
  * - Quick active toggle switches
  * - Display order management
  * - Edit links for each banner

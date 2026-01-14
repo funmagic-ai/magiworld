@@ -1,6 +1,19 @@
+/**
+ * @fileoverview AI Tool Form Component
+ * @fileoverview AI工具表单组件
+ *
+ * Client-side form for creating and editing AI tools with component selection,
+ * thumbnail upload, configuration JSON, and multi-locale translations.
+ * Tool slugs are restricted to registered components in the web app.
+ * 用于创建和编辑AI工具的客户端表单，支持组件选择、
+ * 缩略图上传、配置JSON、以及多语言翻译。工具slug限制为web应用中已注册的组件。
+ *
+ * @module components/forms/tool-form
+ */
+
 'use client';
 
-import { useState, useEffect, useActionState } from 'react';
+import { useState, useActionState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -44,6 +57,7 @@ import {
   TOOL_TRANSLATIONS_EXAMPLE,
 } from '@/lib/locales';
 import { validateFileSize, MAX_FILE_SIZE_MB } from '@/lib/utils/file';
+import { useImageDimensions, validateAspectRatio, ASPECT_RATIOS, DEFAULT_RATIO_TOLERANCE } from '@/lib/utils/image';
 
 type TranslationData = {
   title: string;
@@ -86,9 +100,12 @@ type FormState = {
 
 export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
   // Thumbnail state: either a URL (existing/pasted) or a pending file
+  // 缩略图状态：现有/粘贴的URL或待上传文件
   const [thumbnailUrl, setThumbnailUrl] = useState<string>(initialData?.thumbnailUrl || '');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string>('');
+
+  // Use centralized image dimension detection hook / 使用集中的图片尺寸检测Hook
+  const { dimensions: imageDimensions, previewUrl } = useImageDimensions(pendingFile);
 
   // Translations JSON state
   const [translationsJson, setTranslationsJson] = useState<string>(() => {
@@ -205,42 +222,11 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
   // Alias errors from formState for easier access
   const errors = formState.errors;
 
-  // Image dimension detection
-  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
-
-  // Create/cleanup object URL for local preview and detect dimensions
-  useEffect(() => {
-    if (pendingFile) {
-      const url = URL.createObjectURL(pendingFile);
-      setPreviewUrl(url);
-
-      // Detect image dimensions
-      const img = new window.Image();
-      img.onload = () => {
-        setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
-      };
-      img.src = url;
-
-      return () => URL.revokeObjectURL(url);
-    } else {
-      setPreviewUrl('');
-      setImageDimensions(null);
-    }
-  }, [pendingFile]);
-
-  // Check if image ratio is 1:1 (square) - 5% tolerance
+  // Check if image ratio is 1:1 (square) / 检查图片比例是否为1:1（正方形）
   const getRatioStatus = () => {
     if (!imageDimensions) return null;
-    const actualRatio = imageDimensions.width / imageDimensions.height;
-    const expectedRatio = 1; // 1:1 square
-    const diff = Math.abs(actualRatio - expectedRatio) / expectedRatio;
-    const isMatch = diff <= 0.05;
-    return {
-      isMatch,
-      actualRatio: actualRatio.toFixed(2),
-      width: imageDimensions.width,
-      height: imageDimensions.height,
-    };
+    const { ratio, label } = ASPECT_RATIOS['1:1'];
+    return validateAspectRatio(imageDimensions, ratio, label, DEFAULT_RATIO_TOLERANCE);
   };
 
   const ratioStatus = getRatioStatus();
@@ -430,7 +416,7 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
                       {ratioStatus.width}×{ratioStatus.height}px
                     </span>
                     <span>
-                      (ratio: {ratioStatus.actualRatio})
+                      (ratio: {ratioStatus.actualRatioFormatted})
                     </span>
                     {ratioStatus.isMatch ? (
                       <span className="ml-auto flex items-center gap-1">

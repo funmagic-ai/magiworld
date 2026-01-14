@@ -14,8 +14,8 @@ This guide walks you through deploying the Magiworld platform including AWS S3, 
 8. [Step 6: Configure Signed URLs](#step-6-configure-signed-urls)
 9. [Step 7: Set Up Lifecycle Policies](#step-7-set-up-lifecycle-policies)
 10. [Step 8: Configure Cloudflare DNS](#step-8-configure-cloudflare-dns)
-11. [Step 9: Set Up AWS RDS PostgreSQL](#step-9-set-up-aws-rds-postgresql)
-12. [Step 10: Deploy to AWS EC2 with Docker](#step-10-deploy-to-aws-ec2-with-docker)
+11. [Step 9: Deploy to AWS EC2 with Docker](#step-9-deploy-to-aws-ec2-with-docker)
+12. [Step 10: Set Up AWS RDS PostgreSQL](#step-10-set-up-aws-rds-postgresql)
 13. [Step 11: Configure Environment Variables](#step-11-configure-environment-variables)
 14. [Step 12: Test the Configuration](#step-12-test-the-configuration)
 15. [Quick Checklist](#quick-checklist)
@@ -560,7 +560,7 @@ For both `funmagic-cf-admin-private` and `funmagic-cf-web-private` distributions
    awk 'NF {sub(/\r/, ""); printf "%s\\n",$0;}' cloudfront-private-key.pem
    ```
 
-2. **Add to `.env.local`** (see Step 10)
+2. **Add to `.env.local`** (see Step 11)
 
 3. **Delete the local key files** after copying to env:
    ```bash
@@ -776,11 +776,920 @@ For caching static assets:
 
 ---
 
-## Step 9: Set Up AWS RDS PostgreSQL
+## Step 9: Deploy to AWS EC2 with Docker
+
+This guide uses a **simple EC2 + Docker** approach for easy setup. You can migrate to ECS later if needed.
+
+### 9.1 Prerequisites
+
+- AWS CLI configured
+- SSH key pair created in AWS EC2 console
+- Docker images ready (we'll build them on EC2)
+
+### 9.2 Create Security Group
+
+1. Go to **EC2** → **Security Groups** → **Create security group**
+2. **Name**: `funmagic-ec2-sg`
+3. **Description**: Security group for Funmagic EC2 instance
+4. **VPC**: Default VPC (or your VPC)
+5. **Inbound rules**:
+
+| Type | Port | Source | Description |
+|------|------|--------|-------------|
+| SSH | 22 | Your IP | SSH access |
+| HTTP | 80 | 0.0.0.0/0 | Web traffic |
+| HTTPS | 443 | 0.0.0.0/0 | Secure web traffic |
+
+6. **Outbound rules**: Keep default (all traffic allowed)
+7. Click **Create security group**
+
+### 9.3 Launch EC2 Instance
+
+1. Go to **EC2** → **Instances** → **Launch instances**
+2. **Name**: `funmagic-server`
+3. **AMI**: Amazon Linux 2023 (or Ubuntu 22.04 LTS)
+4. **Instance type**: `t3.small` (2 vCPU, 2GB RAM) - can run both apps
+   - For lower cost: `t3.micro` (1 vCPU, 1GB RAM) - tight but works
+5. **Key pair**: Select your SSH key pair
+6. **Network settings**:
+   - **VPC**: Default VPC
+   - **Subnet**: Any public subnet
+   - **Auto-assign public IP**: Enable
+   - **Security group**: Select `funmagic-ec2-sg`
+7. **Storage**: 20 GB gp3 (default is fine)
+8. Click **Launch instance**
+
+### 9.4 Allocate Elastic IP (Recommended)
+
+An Elastic IP ensures your server IP doesn't change on reboot:
+
+1. Go to **EC2** → **Elastic IPs** → **Allocate Elastic IP address**
+2. Click **Allocate**
+3. Select the new IP → **Actions** → **Associate Elastic IP address**
+4. **Instance**: Select `funmagic-server`
+5. Click **Associate**
+
+> Note the Elastic IP address (e.g., `3.15.xxx.xxx`) - you'll use this for DNS.
+
+### 9.5 Connect to EC2 and Install Docker
+
+```bash
+# SSH into your instance
+ssh -i your-key.pem ec2-user@YOUR_ELASTIC_IP
+
+# For Ubuntu: ssh -i your-key.pem ubuntu@YOUR_ELASTIC_IP
+```
+
+**Install Docker (Amazon Linux 2023)**:
+
+```bash
+# Update system
+sudo dnf update -y
+
+# Install Docker
+sudo dnf install docker -y
+
+# Start Docker and enable on boot
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Add current user to docker group (avoid sudo)
+sudo usermod -aG docker $USER
+
+# Install Docker Compose
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# Log out and back in for group changes
+exit
+```
+
+**Install Docker (Ubuntu)**:
+
+```bash
+# Update system
+sudo apt update && sudo apt upgrade -y
+
+# Install Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+# Add current user to docker group
+sudo usermod -aG docker $USER
+
+# Install Docker Compose
+sudo apt install docker-compose-plugin -y
+
+# Log out and back in
+exit
+```
+
+### 9.6 Set Up Project on EC2
+
+SSH back in and set up your project:
+
+```bash
+ssh -i your-key.pem ec2-user@YOUR_ELASTIC_IP
+
+# Create app directory
+mkdir -p ~/funmagic
+cd ~/funmagic
+
+# Install git
+sudo dnf install git -y  # Amazon Linux
+# sudo apt install git -y  # Ubuntu
+```
+
+### 9.7 Create Docker Files
+
+**Create `docker-compose.yml`** in `~/funmagic`:
+nano docker-compose.yml
+
+
+```yaml
+# =============================================================================
+# Docker Compose Configuration for Magiworld
+# =============================================================================
+# This file defines 3 services that run together:
+# 1. web    - Next.js frontend for end users (port 3000)
+# 2. admin  - Next.js admin dashboard (port 3001)
+# 3. nginx  - Reverse proxy handling SSL and routing (ports 80, 443)
+#
+# Architecture:
+#   Internet → Nginx (SSL termination) → web/admin containers → RDS database
+#
+# Commands:
+#   docker-compose up -d --build    # Build and start all services
+#   docker-compose logs -f web      # View web app logs
+#   docker-compose restart web      # Restart a specific service
+#   docker-compose down             # Stop and remove all containers
+# =============================================================================
+
+version: '3.8'  # Docker Compose file format version
+
+services:
+  # ---------------------------------------------------------------------------
+  # Web App Service (User-facing Next.js application)
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: .                    # Build context is current directory (repo root)
+      dockerfile: Dockerfile.web    # Use web-specific Dockerfile
+    container_name: funmagic-web    # Fixed container name for easy reference
+    restart: unless-stopped         # Auto-restart on crash, but not on manual stop
+    ports:
+      - "3000:3000"                 # Map host:container ports (internal only, Nginx proxies)
+    environment:
+      - NODE_ENV=production         # Enable Next.js production optimizations
+    env_file:
+      - .env.web                    # Load environment variables from file
+    # Note: No healthcheck needed for simple setup; add if using load balancer
+
+  # ---------------------------------------------------------------------------
+  # Admin App Service (Admin dashboard Next.js application)
+  # ---------------------------------------------------------------------------
+  admin:
+    build:
+      context: .                    # Same build context as web
+      dockerfile: Dockerfile.admin  # Use admin-specific Dockerfile
+    container_name: funmagic-admin
+    restart: unless-stopped
+    ports:
+      - "3001:3001"                 # Different port to avoid conflict with web
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - .env.admin                  # Separate env file with admin-specific configs
+
+  # ---------------------------------------------------------------------------
+  # Nginx Reverse Proxy Service
+  # ---------------------------------------------------------------------------
+  # Handles:
+  # - SSL/TLS termination (HTTPS)
+  # - Routing: funmagic.ai → web:3000, admin.funmagic.ai → admin:3001
+  # - Security headers, compression, caching
+  nginx:
+    image: nginx:alpine             # Lightweight Alpine-based Nginx image
+    container_name: funmagic-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"                     # HTTP (redirects to HTTPS)
+      - "443:443"                   # HTTPS (main traffic)
+    volumes:
+      # Mount nginx config as read-only (:ro) for security
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # Mount SSL certificates (origin.pem + origin.key from Cloudflare)
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - web                         # Wait for web to start before nginx
+      - admin                       # Wait for admin to start before nginx
+    # Note: depends_on only waits for container start, not app readiness
+```
+
+**Create `Dockerfile.web`**:
+nano Dockerfile.web
+
+```dockerfile
+# =============================================================================
+# Multi-Stage Dockerfile for Next.js Web Application
+# =============================================================================
+# This Dockerfile uses multi-stage builds to create a minimal production image:
+#
+# Stage 1 (base):   Base Node.js Alpine image
+# Stage 2 (deps):   Install all dependencies (dev + prod)
+# Stage 3 (builder): Build the Next.js application
+# Stage 4 (runner):  Minimal runtime image with only production files
+#
+# Benefits of multi-stage builds:
+# - Final image is ~150MB instead of ~1GB (no dev dependencies, build tools)
+# - Faster container startup and lower memory usage
+# - Better security (fewer packages = smaller attack surface)
+#
+# Next.js Standalone Output:
+# - Requires `output: 'standalone'` in next.config.js
+# - Creates server.js with all dependencies bundled
+# - No need to copy node_modules to production image
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Base Image
+# -----------------------------------------------------------------------------
+# Alpine Linux is a minimal distro (~5MB), perfect for containers
+FROM node:20-alpine AS base
+
+# -----------------------------------------------------------------------------
+# Stage 2: Dependencies
+# -----------------------------------------------------------------------------
+# Install all dependencies (including devDependencies for build)
+FROM base AS deps
+
+# libc6-compat: Fixes Alpine compatibility issues with some npm packages
+# Alpine uses musl libc, but some packages expect glibc
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+# Copy package files for dependency installation
+# This is done first to leverage Docker layer caching:
+# - If package.json doesn't change, deps layer is cached
+# - Even if source code changes, we skip npm install (saves ~60s)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json ./apps/web/
+COPY packages/db/package.json ./packages/db/
+COPY packages/types/package.json ./packages/types/
+COPY packages/utils/package.json ./packages/utils/
+
+# Enable pnpm and install dependencies
+# --frozen-lockfile: Fail if lock file is out of sync (ensures reproducibility)
+RUN corepack enable pnpm && pnpm install --frozen-lockfile
+
+# -----------------------------------------------------------------------------
+# Stage 3: Builder
+# -----------------------------------------------------------------------------
+# Build the Next.js application
+FROM base AS builder
+WORKDIR /app
+
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copy all source code
+COPY . .
+
+# Build only the web app (monorepo filter)
+# This runs: next build --filter=web
+RUN corepack enable pnpm && pnpm --filter web build
+
+# -----------------------------------------------------------------------------
+# Stage 4: Runner (Production)
+# -----------------------------------------------------------------------------
+# Minimal production image
+FROM base AS runner
+WORKDIR /app
+
+# Set production environment
+ENV NODE_ENV=production
+
+# Security: Create non-root user to run the app
+# Running as root is a security risk; containers should use least privilege
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Copy public assets (images, fonts, etc.)
+COPY --from=builder /app/apps/web/public ./apps/web/public
+
+# Copy the standalone server output
+# standalone/ contains:
+# - server.js: The Node.js server
+# - Bundled dependencies (no node_modules needed)
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
+
+# Copy static files (CSS, JS bundles)
+# These are served directly by Next.js
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+
+# Switch to non-root user for security
+USER nextjs
+
+# Expose port 3000 (documentation only, actual mapping is in docker-compose)
+EXPOSE 3000
+
+# Configure Next.js to listen on all interfaces (required for Docker)
+# Without HOSTNAME="0.0.0.0", the app only listens on localhost (unreachable from outside)
+ENV PORT=3000 HOSTNAME="0.0.0.0"
+
+# Start the Next.js server
+# server.js is created by Next.js standalone output mode
+CMD ["node", "apps/web/server.js"]
+```
+
+**Create `Dockerfile.admin`**:
+
+```dockerfile
+# =============================================================================
+# Multi-Stage Dockerfile for Next.js Admin Application
+# =============================================================================
+# Same structure as Dockerfile.web, but builds the admin app instead.
+#
+# Key differences from Dockerfile.web:
+# - Builds apps/admin instead of apps/web
+# - Runs on port 3001 instead of 3000
+# - Used for internal admin dashboard, not public-facing
+#
+# See Dockerfile.web comments for detailed explanation of each step.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Base Image
+# -----------------------------------------------------------------------------
+FROM node:20-alpine AS base
+
+# -----------------------------------------------------------------------------
+# Stage 2: Dependencies
+# -----------------------------------------------------------------------------
+FROM base AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+# Copy package files for all workspace packages needed by admin
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/admin/package.json ./apps/admin/
+COPY packages/db/package.json ./packages/db/
+COPY packages/types/package.json ./packages/types/
+COPY packages/utils/package.json ./packages/utils/
+
+RUN corepack enable pnpm && pnpm install --frozen-lockfile
+
+# -----------------------------------------------------------------------------
+# Stage 3: Builder
+# -----------------------------------------------------------------------------
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Build only the admin app (monorepo filter)
+RUN corepack enable pnpm && pnpm --filter admin build
+
+# -----------------------------------------------------------------------------
+# Stage 4: Runner (Production)
+# -----------------------------------------------------------------------------
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+# Create non-root user for security
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Copy production files from builder
+COPY --from=builder /app/apps/admin/public ./apps/admin/public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/.next/static ./apps/admin/.next/static
+
+USER nextjs
+
+# Admin runs on port 3001 (web uses 3000)
+EXPOSE 3001
+ENV PORT=3001 HOSTNAME="0.0.0.0"
+
+CMD ["node", "apps/admin/server.js"]
+```
+
+**Create `nginx.conf`**:
+nano nginx.conf
+```nginx
+# =============================================================================
+# Nginx Reverse Proxy Configuration
+# =============================================================================
+# This configuration handles:
+# 1. SSL/TLS termination (HTTPS)
+# 2. Domain-based routing to different Next.js apps
+# 3. WebSocket support (required for Next.js hot reload in dev, optional in prod)
+# 4. Proper header forwarding for the apps to know the original client info
+#
+# Traffic Flow:
+#   Client → Nginx (443) → web container (3000) or admin container (3001)
+#
+# File locations (inside container):
+#   /etc/nginx/nginx.conf  - This config file
+#   /etc/nginx/ssl/        - SSL certificates (Cloudflare Origin or Let's Encrypt)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Events Block - Worker Connection Settings
+# -----------------------------------------------------------------------------
+events {
+    # Maximum simultaneous connections per worker process
+    # 1024 is suitable for most small-medium sites
+    # For high traffic: increase to 4096 or higher
+    worker_connections 1024;
+}
+
+# -----------------------------------------------------------------------------
+# HTTP Block - Main Configuration
+# -----------------------------------------------------------------------------
+http {
+    # -------------------------------------------------------------------------
+    # Upstream Definitions - Backend Server Groups
+    # -------------------------------------------------------------------------
+    # Define backend servers that Nginx will proxy to
+    # Docker Compose service names (web, admin) are used as hostnames
+
+    upstream web {
+        server web:3000;  # Docker service name:port
+    }
+
+    upstream admin {
+        server admin:3001;
+    }
+
+    # -------------------------------------------------------------------------
+    # HTTP → HTTPS Redirect Server
+    # -------------------------------------------------------------------------
+    # All HTTP traffic is permanently redirected to HTTPS
+    # 301 = permanent redirect (browsers cache this)
+    server {
+        listen 80;
+        server_name funmagic.ai www.funmagic.ai admin.funmagic.ai;
+
+        # Redirect to HTTPS, preserving the host and full URI
+        return 301 https://$host$request_uri;
+    }
+
+    # -------------------------------------------------------------------------
+    # Main Website Server (funmagic.ai)
+    # -------------------------------------------------------------------------
+    server {
+        listen 443 ssl;
+        server_name funmagic.ai www.funmagic.ai;
+
+        # SSL certificates
+        # Option A (Cloudflare Origin): origin.pem + origin.key (15-year validity)
+        # Option B (Let's Encrypt):     fullchain.pem + privkey.pem (90-day validity)
+        ssl_certificate /etc/nginx/ssl/origin.pem;         # Certificate
+        ssl_certificate_key /etc/nginx/ssl/origin.key;     # Private key
+
+        location / {
+            # Forward requests to the web upstream
+            proxy_pass http://web;
+
+            # HTTP/1.1 required for WebSocket and keepalive
+            proxy_http_version 1.1;
+
+            # WebSocket support (for Next.js HMR, real-time features)
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+
+            # Forward original client information to the app
+            proxy_set_header Host $host;                           # Original domain
+            proxy_set_header X-Real-IP $remote_addr;               # Client IP
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  # Proxy chain
+            proxy_set_header X-Forwarded-Proto $scheme;            # http or https
+
+            # Don't cache WebSocket connections
+            proxy_cache_bypass $http_upgrade;
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # Admin Dashboard Server (admin.funmagic.ai)
+    # -------------------------------------------------------------------------
+    server {
+        listen 443 ssl;
+        server_name admin.funmagic.ai;
+
+        # Same SSL certificates (wildcard covers *.funmagic.ai)
+        ssl_certificate /etc/nginx/ssl/origin.pem;
+        ssl_certificate_key /etc/nginx/ssl/origin.key;
+
+        location / {
+            # Forward requests to the admin upstream
+            proxy_pass http://admin;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_cache_bypass $http_upgrade;
+        }
+    }
+}
+```
+
+### 9.7.1 Prerequisites: Next.js Standalone Output
+
+**IMPORTANT**: The Dockerfiles require Next.js standalone output mode. Add this to both `next.config.ts` files:
+
+**`apps/web/next.config.ts`**:
+```typescript
+const nextConfig: NextConfig = {
+  output: 'standalone',  // Required for Docker deployment
+  // ... other config
+};
+```
+
+**`apps/admin/next.config.ts`**:
+```typescript
+const nextConfig: NextConfig = {
+  output: 'standalone',  // Required for Docker deployment
+  // ... other config
+};
+```
+
+This setting makes Next.js:
+- Bundle all dependencies into `.next/standalone/`
+- Create a minimal `server.js` that doesn't need `node_modules`
+- Reduce Docker image size from ~1GB to ~150MB
+
+### 9.7.2 ARM64 Architecture Support (AWS Graviton / Apple Silicon)
+
+The Dockerfiles work on both AMD64 (x86_64) and ARM64 (aarch64) architectures without modification. Here's what you need to know:
+
+**Why ARM64?**
+- **AWS Graviton** (t4g, m7g, c7g instances): Up to 40% better price-performance than x86
+- **Apple Silicon** (M1/M2/M3): Native development on Mac
+
+**Compatibility Notes:**
+
+| Component | ARM64 Compatible | Notes |
+|-----------|------------------|-------|
+| `node:20-alpine` | ✅ Yes | Multi-arch image (amd64, arm64) |
+| `nginx:alpine` | ✅ Yes | Multi-arch image |
+| `libc6-compat` | ✅ Yes | Available on ARM64 Alpine |
+| `pnpm` | ✅ Yes | Pure JavaScript |
+| `drizzle-orm` | ✅ Yes | Pure JavaScript |
+| `@aws-sdk/*` | ✅ Yes | Pure JavaScript |
+| `next` | ✅ Yes | Pure JavaScript |
+
+**Building for ARM64:**
+
+Option 1: **Build on ARM64 instance** (recommended for production)
+```bash
+# SSH to your ARM64 EC2 instance (t4g.medium, etc.)
+# Build normally - Docker auto-detects architecture
+docker-compose up -d --build
+```
+
+Option 2: **Cross-compile from AMD64/x86** (for testing)
+```bash
+# Specify target platform in docker-compose.yml
+# Add under each service that needs building:
+services:
+  web:
+    platform: linux/arm64  # Add this line
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+```
+
+Or build with platform flag:
+```bash
+docker-compose build --platform linux/arm64
+```
+
+Option 3: **Multi-arch build with buildx** (for registries)
+```bash
+# Create multi-arch builder
+docker buildx create --name multiarch --use
+
+# Build and push to registry (supports both architectures)
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t your-registry/funmagic-web:latest \
+  -f Dockerfile.web --push .
+```
+
+**EC2 Instance Types for ARM64:**
+
+| Type | vCPU | RAM | Use Case |
+|------|------|-----|----------|
+| t4g.micro | 2 | 1 GB | Testing |
+| t4g.small | 2 | 2 GB | Light production |
+| t4g.medium | 2 | 4 GB | Recommended for start |
+| t4g.large | 2 | 8 GB | Production with headroom |
+
+> **Note**: When using ARM64 instances, make sure to select an ARM64-compatible AMI (e.g., "Amazon Linux 2023 ARM" or "Ubuntu 22.04 LTS ARM").
+
+### 9.8 Create Environment Files
+
+**Create `.env.web`**:
+
+```bash
+DATABASE_URL=postgresql://user:password@your-db-host:5432/funmagic
+AWS_REGION=us-east-2
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=...
+S3_WEB_PRIVATE_BUCKET=funmagic-web-users-assets-private
+S3_WEB_SHARED_BUCKET=funmagic-web-users-assets-shared
+CLOUDFRONT_WEB_PRIVATE_URL=https://dXXXX.cloudfront.net
+CLOUDFRONT_WEB_SHARED_URL=https://shared.funmagic.ai
+CLOUDFRONT_PUBLIC_URL=https://cdn.funmagic.ai
+CLOUDFRONT_KEY_PAIR_ID=K2XXXXXX
+CLOUDFRONT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+CLOUDFRONT_SIGNED_URL_EXPIRY=3600
+LOGTO_ENDPOINT=https://your-tenant.logto.app/
+LOGTO_APP_ID=your-app-id
+LOGTO_APP_SECRET=your-app-secret
+LOGTO_COOKIE_SECRET=random-32-char-string
+LOGTO_BASE_URL=https://funmagic.ai
+```
+
+**Create `.env.admin`**:
+
+```bash
+DATABASE_URL=postgresql://user:password@your-db-host:5432/funmagic
+AWS_REGION=us-east-2
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=...
+S3_ADMIN_ASSETS_BUCKET=funmagic-admin-users-assets
+S3_PUBLIC_ASSETS_BUCKET=funmagic-web-public-assets
+CLOUDFRONT_ADMIN_PRIVATE_URL=https://dXXXX.cloudfront.net
+CLOUDFRONT_PUBLIC_URL=https://cdn.funmagic.ai
+CLOUDFRONT_KEY_PAIR_ID=K2XXXXXX
+CLOUDFRONT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+CLOUDFRONT_SIGNED_URL_EXPIRY=3600
+```
+
+### 9.9 Set Up SSL Certificates
+
+You have two options for SSL certificates. **Option A (Cloudflare Origin Certificate)** is recommended if you're using Cloudflare proxy.
+
+#### Comparison
+
+| Feature | Cloudflare Origin Cert | Let's Encrypt |
+|---------|----------------------|---------------|
+| **Validity** | 15 years | 90 days |
+| **Renewal** | None needed | Auto-renew required |
+| **Setup** | Simple (download files) | Complex (certbot) |
+| **Wildcard** | ✅ Yes (free) | ❌ Requires DNS challenge |
+| **Works without Cloudflare** | ❌ No | ✅ Yes |
+| **Trust** | Cloudflare only | Publicly trusted |
+
+---
+
+#### Option A: Cloudflare Origin Certificate (Recommended)
+
+This creates a certificate trusted by Cloudflare for the connection between Cloudflare and your server. Combined with Cloudflare's edge SSL, you get full end-to-end encryption.
+
+**Step 1: Configure Cloudflare SSL Mode**
+
+1. Go to **Cloudflare Dashboard** → Your domain → **SSL/TLS** → **Overview**
+2. Set encryption mode to: **Full (strict)**
+
+```
+┌──────────────┐      HTTPS       ┌──────────────┐      HTTPS       ┌──────────────┐
+│   Browser    │ ◄──────────────► │  Cloudflare  │ ◄──────────────► │   Server     │
+│              │   Edge SSL       │   (Proxy)    │   Origin Cert    │   (Nginx)    │
+└──────────────┘   (auto)         └──────────────┘                  └──────────────┘
+```
+
+**Step 2: Create Origin Certificate**
+
+1. Go to **SSL/TLS** → **Origin Server** → **Create Certificate**
+2. Configure:
+   - **Private key type**: RSA (2048)
+   - **Hostnames**:
+     - `funmagic.ai`
+     - `*.funmagic.ai` (wildcard - covers www, admin, etc.)
+   - **Validity**: 15 years
+3. Click **Create**
+4. **IMPORTANT**: Download both files immediately (private key is shown only once!):
+   - `origin.pem` (Certificate)
+   - `origin.key` (Private Key)
+
+**Step 3: Install Certificate on Server**
+
+```bash
+# Create SSL directory
+mkdir -p ~/funmagic/ssl
+
+# Upload the certificate files to your server
+# Option 1: SCP from your local machine
+scp origin.pem origin.key ec2-user@YOUR_EC2_IP:~/funmagic/ssl/
+
+# Option 2: Copy-paste content (if SCP not available)
+nano ~/funmagic/ssl/origin.pem   # Paste certificate content
+nano ~/funmagic/ssl/origin.key   # Paste private key content
+
+# Set proper permissions
+chmod 600 ~/funmagic/ssl/origin.key
+chmod 644 ~/funmagic/ssl/origin.pem
+```
+
+**Step 4: Update nginx.conf for Cloudflare Origin Cert**
+
+Update the SSL certificate paths in your `nginx.conf`:
+
+```nginx
+# In both server blocks (funmagic.ai and admin.funmagic.ai):
+ssl_certificate /etc/nginx/ssl/origin.pem;
+ssl_certificate_key /etc/nginx/ssl/origin.key;
+```
+
+**Step 5: Update docker-compose.yml volume mount**
+
+The volume mount should map to the new files:
+```yaml
+volumes:
+  - ./ssl:/etc/nginx/ssl:ro  # origin.pem and origin.key should be in ./ssl/
+```
+
+**Done!** No renewal needed for 15 years.
+
+---
+
+#### Option B: Let's Encrypt (Alternative)
+
+Use this if you need certificates that work without Cloudflare proxy, or for other services.
+
+```bash
+# Install Certbot
+sudo dnf install certbot -y  # Amazon Linux
+# sudo apt install certbot -y  # Ubuntu
+
+# IMPORTANT: Temporarily set Cloudflare DNS to "DNS only" (grey cloud)
+# Let's Encrypt needs to reach your server directly on port 80
+
+# Stop nginx temporarily (if running)
+docker-compose stop nginx 2>/dev/null || true
+
+# Get certificates
+sudo certbot certonly --standalone \
+  -d funmagic.ai \
+  -d www.funmagic.ai \
+  -d admin.funmagic.ai \
+  --email magify@funmagic.ai \
+  --agree-tos
+
+# Copy certificates to your project
+mkdir -p ~/funmagic/ssl
+sudo cp /etc/letsencrypt/live/funmagic.ai/fullchain.pem ~/funmagic/ssl/
+sudo cp /etc/letsencrypt/live/funmagic.ai/privkey.pem ~/funmagic/ssl/
+sudo chown -R $USER:$USER ~/funmagic/ssl
+
+# IMPORTANT: Re-enable Cloudflare proxy (orange cloud) after success
+```
+
+**Set up auto-renewal** (required - certificates expire in 90 days):
+
+```bash
+# Create renewal script
+cat > ~/funmagic/renew-ssl.sh << 'EOF'
+#!/bin/bash
+cd ~/funmagic
+docker-compose stop nginx
+sudo certbot renew --quiet
+sudo cp /etc/letsencrypt/live/funmagic.ai/fullchain.pem ~/funmagic/ssl/
+sudo cp /etc/letsencrypt/live/funmagic.ai/privkey.pem ~/funmagic/ssl/
+sudo chown -R $USER:$USER ~/funmagic/ssl
+docker-compose start nginx
+EOF
+
+chmod +x ~/funmagic/renew-ssl.sh
+
+# Add to crontab (runs monthly at 3 AM on the 1st)
+(crontab -l 2>/dev/null; echo "0 3 1 * * ~/funmagic/renew-ssl.sh") | crontab -
+```
+
+> **Note**: For Let's Encrypt with Cloudflare proxy enabled, you need to use the DNS challenge method instead of standalone. This is more complex and requires Cloudflare API tokens.
+
+### 9.10 Update Cloudflare DNS
+
+Point your domains to the EC2 Elastic IP:
+
+| Type | Name | Content | Proxy |
+|------|------|---------|-------|
+| A | `@` | `YOUR_ELASTIC_IP` | Proxied (orange) |
+| A | `www` | `YOUR_ELASTIC_IP` | Proxied (orange) |
+| A | `admin` | `YOUR_ELASTIC_IP` | Proxied (orange) |
+
+> **Note**: Using A records (not CNAME) because we have a static Elastic IP.
+
+### 9.11 Clone Your Code and Build
+
+**Option A: Clone from Git**
+
+```bash
+cd ~/funmagic
+
+# Clone your repository
+git clone https://github.com/your-org/magiworld.git .
+
+# Copy your Dockerfiles and configs (if not in repo)
+# ... copy files created above ...
+
+# Build and start
+docker-compose up -d --build
+```
+
+**Option B: Upload from Local**
+
+```bash
+# From your local machine
+cd /path/to/magiworld
+rsync -avz --exclude='node_modules' --exclude='.next' --exclude='.git' \
+  -e "ssh -i your-key.pem" \
+  . ec2-user@YOUR_ELASTIC_IP:~/funmagic/
+```
+
+### 9.12 Useful Docker Commands
+
+```bash
+# View running containers
+docker-compose ps
+
+# View logs
+docker-compose logs -f web
+docker-compose logs -f admin
+docker-compose logs -f nginx
+
+# Restart services
+docker-compose restart web
+docker-compose restart admin
+
+# Rebuild and restart (after code changes)
+docker-compose up -d --build
+
+# Stop everything
+docker-compose down
+
+# Clean up unused images
+docker system prune -a
+```
+
+### 9.13 Deploy Updates
+
+When you need to deploy code changes:
+
+```bash
+# SSH into server
+ssh -i your-key.pem ec2-user@YOUR_ELASTIC_IP
+cd ~/funmagic
+
+# Pull latest code (if using git)
+git pull origin main
+
+# Or rsync from local (if not using git)
+# rsync -avz --exclude='node_modules' -e "ssh -i your-key.pem" . ec2-user@IP:~/funmagic/
+
+# Rebuild and restart
+docker-compose up -d --build
+```
+
+### 9.14 Cost Estimate
+
+**Minimal EC2 setup**:
+- 1x t3.small EC2 (On-Demand): ~$15/month
+- Elastic IP (while attached): Free
+- 20GB EBS storage: ~$2/month
+- Data transfer: ~$5/month
+- **Total: ~$22/month**
+
+**Even cheaper options**:
+- Use t3.micro: ~$8/month (free tier eligible for 12 months)
+- Use Spot instance: 60-90% savings (can be interrupted)
+- Reserved instance (1 year): 30-40% savings
+
+### 9.15 Future Migration to ECS
+
+When you're ready to scale, you can migrate to ECS:
+1. Push your Docker images to ECR
+2. Create ECS task definitions using the same Dockerfiles
+3. Set up an Application Load Balancer
+4. Create ECS services
+5. Update Cloudflare DNS to point to ALB
+
+The Dockerfiles you created here will work directly with ECS.
+
+---
+
+## Step 10: Set Up AWS RDS PostgreSQL
 
 AWS RDS provides a managed PostgreSQL database with automatic backups, updates, and high availability.
 
-### 9.1 Create a Database Security Group
+### 10.1 Create a Database Security Group
 
 1. Go to **EC2** → **Security Groups** → **Create security group**
 2. **Name**: `funmagic-rds-sg`
@@ -798,7 +1707,7 @@ AWS RDS provides a managed PostgreSQL database with automatic backups, updates, 
 6. **Outbound rules**: Keep default (all traffic allowed)
 7. Click **Create security group**
 
-### 9.2 Create RDS PostgreSQL Instance
+### 10.2 Create RDS PostgreSQL Instance
 
 1. Go to **RDS** → **Create database**
 2. **Engine options**:
@@ -832,27 +1741,28 @@ AWS RDS provides a managed PostgreSQL database with automatic backups, updates, 
 
 > **Wait 5-10 minutes** for the database to be created and become "Available".
 
-### 9.3 Get the Connection Endpoint
+### 10.3 Get the Connection Endpoint
 
 1. Go to **RDS** → **Databases** → Click on `funmagic-db`
 2. Find the **Endpoint** in the "Connectivity & security" section
    - Example: `funmagic-db.abc123xyz.us-east-2.rds.amazonaws.com`
 3. Note the **Port**: `5432` (default)
 
-### 9.4 Build Your Connection String
+### 10.4 Build Your Connection String
 
 Your `DATABASE_URL` follows this format:
 
 ```
 postgresql://USERNAME:PASSWORD@ENDPOINT:PORT/DATABASE
 ```
-
+**BE CAREFUL:use "postgresql://USERNAME:PASSWORD@ENDPOINT:PORT/DATABASE
+?sslmode=no-verify" if you connect the AWS DB and got authentication error
 **Example**:
 ```
 postgresql://postgres:YourSecurePassword123@funmagic-db.abc123xyz.us-east-2.rds.amazonaws.com:5432/funmagic
 ```
 
-### 9.5 Test the Connection
+### 10.5 Test the Connection
 
 **From your local machine** (if public access enabled):
 
@@ -882,7 +1792,7 @@ sudo dnf install postgresql15 -y  # Amazon Linux 2023
 psql "postgresql://postgres:YourPassword@funmagic-db.abc123xyz.us-east-2.rds.amazonaws.com:5432/funmagic"
 ```
 
-### 9.6 Initialize the Database Schema
+### 10.6 Initialize the Database Schema
 
 This project uses **Drizzle ORM** for database management.
 
@@ -940,7 +1850,7 @@ pnpm db:push
 | `pnpm db:migrate` | Apply generated migration files |
 | `pnpm db:studio` | Open Drizzle Studio to browse database |
 
-### 9.7 Update Environment Variables
+### 10.7 Update Environment Variables
 
 Update your `.env.local` files with the RDS connection string:
 
@@ -960,7 +1870,7 @@ DATABASE_URL=postgresql://postgres:password@localhost:5432/funmagic
 DATABASE_URL=postgresql://postgres:YourPassword@funmagic-db.abc123xyz.us-east-2.rds.amazonaws.com:5432/funmagic
 ```
 
-### 9.8 Cost Estimate
+### 10.8 Cost Estimate
 
 | Instance Type | vCPU | RAM | Monthly Cost |
 |---------------|------|-----|--------------|
@@ -977,7 +1887,7 @@ DATABASE_URL=postgresql://postgres:YourPassword@funmagic-db.abc123xyz.us-east-2.
 - **Development/Testing**: `db.t3.micro` (free tier) - ~$13/month
 - **Production**: `db.t3.small` with Multi-AZ - ~$52/month
 
-### 9.9 Production Best Practices
+### 10.9 Production Best Practices
 
 1. **Enable Multi-AZ** for high availability (doubles cost but provides failover)
 2. **Enable encryption at rest** (free, just check the box)
@@ -990,529 +1900,6 @@ DATABASE_URL=postgresql://postgres:YourPassword@funmagic-db.abc123xyz.us-east-2.
 
 ---
 
-## Step 10: Deploy to AWS EC2 with Docker
-
-This guide uses a **simple EC2 + Docker** approach for easy setup. You can migrate to ECS later if needed.
-
-### 10.1 Prerequisites
-
-- AWS CLI configured
-- SSH key pair created in AWS EC2 console
-- Docker images ready (we'll build them on EC2)
-
-### 10.2 Create Security Group
-
-1. Go to **EC2** → **Security Groups** → **Create security group**
-2. **Name**: `funmagic-ec2-sg`
-3. **Description**: Security group for Funmagic EC2 instance
-4. **VPC**: Default VPC (or your VPC)
-5. **Inbound rules**:
-
-| Type | Port | Source | Description |
-|------|------|--------|-------------|
-| SSH | 22 | Your IP | SSH access |
-| HTTP | 80 | 0.0.0.0/0 | Web traffic |
-| HTTPS | 443 | 0.0.0.0/0 | Secure web traffic |
-
-6. **Outbound rules**: Keep default (all traffic allowed)
-7. Click **Create security group**
-
-### 10.3 Launch EC2 Instance
-
-1. Go to **EC2** → **Instances** → **Launch instances**
-2. **Name**: `funmagic-server`
-3. **AMI**: Amazon Linux 2023 (or Ubuntu 22.04 LTS)
-4. **Instance type**: `t3.small` (2 vCPU, 2GB RAM) - can run both apps
-   - For lower cost: `t3.micro` (1 vCPU, 1GB RAM) - tight but works
-5. **Key pair**: Select your SSH key pair
-6. **Network settings**:
-   - **VPC**: Default VPC
-   - **Subnet**: Any public subnet
-   - **Auto-assign public IP**: Enable
-   - **Security group**: Select `funmagic-ec2-sg`
-7. **Storage**: 20 GB gp3 (default is fine)
-8. Click **Launch instance**
-
-### 10.4 Allocate Elastic IP (Recommended)
-
-An Elastic IP ensures your server IP doesn't change on reboot:
-
-1. Go to **EC2** → **Elastic IPs** → **Allocate Elastic IP address**
-2. Click **Allocate**
-3. Select the new IP → **Actions** → **Associate Elastic IP address**
-4. **Instance**: Select `funmagic-server`
-5. Click **Associate**
-
-> Note the Elastic IP address (e.g., `3.15.xxx.xxx`) - you'll use this for DNS.
-
-### 10.5 Connect to EC2 and Install Docker
-
-```bash
-# SSH into your instance
-ssh -i your-key.pem ec2-user@YOUR_ELASTIC_IP
-
-# For Ubuntu: ssh -i your-key.pem ubuntu@YOUR_ELASTIC_IP
-```
-
-**Install Docker (Amazon Linux 2023)**:
-
-```bash
-# Update system
-sudo dnf update -y
-
-# Install Docker
-sudo dnf install docker -y
-
-# Start Docker and enable on boot
-sudo systemctl start docker
-sudo systemctl enable docker
-
-# Add current user to docker group (avoid sudo)
-sudo usermod -aG docker $USER
-
-# Install Docker Compose
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-
-# Log out and back in for group changes
-exit
-```
-
-**Install Docker (Ubuntu)**:
-
-```bash
-# Update system
-sudo apt update && sudo apt upgrade -y
-
-# Install Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-
-# Add current user to docker group
-sudo usermod -aG docker $USER
-
-# Install Docker Compose
-sudo apt install docker-compose-plugin -y
-
-# Log out and back in
-exit
-```
-
-### 10.6 Set Up Project on EC2
-
-SSH back in and set up your project:
-
-```bash
-ssh -i your-key.pem ec2-user@YOUR_ELASTIC_IP
-
-# Create app directory
-mkdir -p ~/funmagic
-cd ~/funmagic
-
-# Install git
-sudo dnf install git -y  # Amazon Linux
-# sudo apt install git -y  # Ubuntu
-```
-
-### 10.7 Create Docker Files
-
-**Create `docker-compose.yml`** in `~/funmagic`:
-
-```yaml
-version: '3.8'
-
-services:
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile.web
-    container_name: funmagic-web
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-    env_file:
-      - .env.web
-
-  admin:
-    build:
-      context: .
-      dockerfile: Dockerfile.admin
-    container_name: funmagic-admin
-    restart: unless-stopped
-    ports:
-      - "3001:3001"
-    environment:
-      - NODE_ENV=production
-    env_file:
-      - .env.admin
-
-  nginx:
-    image: nginx:alpine
-    container_name: funmagic-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - web
-      - admin
-```
-
-**Create `Dockerfile.web`**:
-
-```dockerfile
-FROM node:20-alpine AS base
-
-FROM base AS deps
-RUN apk add --no-cache libc6-compat
-WORKDIR /app
-
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/web/package.json ./apps/web/
-COPY packages/db/package.json ./packages/db/
-COPY packages/types/package.json ./packages/types/
-COPY packages/utils/package.json ./packages/utils/
-
-RUN corepack enable pnpm && pnpm install --frozen-lockfile
-
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN corepack enable pnpm && pnpm --filter web build
-
-FROM base AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/apps/web/public ./apps/web/public
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
-
-USER nextjs
-EXPOSE 3000
-ENV PORT=3000 HOSTNAME="0.0.0.0"
-
-CMD ["node", "apps/web/server.js"]
-```
-
-**Create `Dockerfile.admin`**:
-
-```dockerfile
-FROM node:20-alpine AS base
-
-FROM base AS deps
-RUN apk add --no-cache libc6-compat
-WORKDIR /app
-
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/admin/package.json ./apps/admin/
-COPY packages/db/package.json ./packages/db/
-COPY packages/types/package.json ./packages/types/
-COPY packages/utils/package.json ./packages/utils/
-
-RUN corepack enable pnpm && pnpm install --frozen-lockfile
-
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN corepack enable pnpm && pnpm --filter admin build
-
-FROM base AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/apps/admin/public ./apps/admin/public
-COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/.next/static ./apps/admin/.next/static
-
-USER nextjs
-EXPOSE 3001
-ENV PORT=3001 HOSTNAME="0.0.0.0"
-
-CMD ["node", "apps/admin/server.js"]
-```
-
-**Create `nginx.conf`**:
-
-```nginx
-events {
-    worker_connections 1024;
-}
-
-http {
-    upstream web {
-        server web:3000;
-    }
-
-    upstream admin {
-        server admin:3001;
-    }
-
-    # Redirect HTTP to HTTPS
-    server {
-        listen 80;
-        server_name funmagic.ai www.funmagic.ai admin.funmagic.ai;
-        return 301 https://$host$request_uri;
-    }
-
-    # Main site
-    server {
-        listen 443 ssl;
-        server_name funmagic.ai www.funmagic.ai;
-
-        ssl_certificate /etc/nginx/ssl/fullchain.pem;
-        ssl_certificate_key /etc/nginx/ssl/privkey.pem;
-
-        location / {
-            proxy_pass http://web;
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection 'upgrade';
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-            proxy_cache_bypass $http_upgrade;
-        }
-    }
-
-    # Admin site
-    server {
-        listen 443 ssl;
-        server_name admin.funmagic.ai;
-
-        ssl_certificate /etc/nginx/ssl/fullchain.pem;
-        ssl_certificate_key /etc/nginx/ssl/privkey.pem;
-
-        location / {
-            proxy_pass http://admin;
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection 'upgrade';
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-            proxy_cache_bypass $http_upgrade;
-        }
-    }
-}
-```
-
-### 10.8 Create Environment Files
-
-**Create `.env.web`**:
-
-```bash
-DATABASE_URL=postgresql://user:password@your-db-host:5432/funmagic
-AWS_REGION=us-east-2
-AWS_ACCESS_KEY_ID=AKIA...
-AWS_SECRET_ACCESS_KEY=...
-S3_WEB_PRIVATE_BUCKET=funmagic-web-users-assets-private
-S3_WEB_SHARED_BUCKET=funmagic-web-users-assets-shared
-CLOUDFRONT_WEB_PRIVATE_URL=https://dXXXX.cloudfront.net
-CLOUDFRONT_WEB_SHARED_URL=https://shared.funmagic.ai
-CLOUDFRONT_PUBLIC_URL=https://cdn.funmagic.ai
-CLOUDFRONT_KEY_PAIR_ID=K2XXXXXX
-CLOUDFRONT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
-CLOUDFRONT_SIGNED_URL_EXPIRY=3600
-LOGTO_ENDPOINT=https://your-tenant.logto.app/
-LOGTO_APP_ID=your-app-id
-LOGTO_APP_SECRET=your-app-secret
-LOGTO_COOKIE_SECRET=random-32-char-string
-LOGTO_BASE_URL=https://funmagic.ai
-```
-
-**Create `.env.admin`**:
-
-```bash
-DATABASE_URL=postgresql://user:password@your-db-host:5432/funmagic
-AWS_REGION=us-east-2
-AWS_ACCESS_KEY_ID=AKIA...
-AWS_SECRET_ACCESS_KEY=...
-S3_ADMIN_ASSETS_BUCKET=funmagic-admin-users-assets
-S3_PUBLIC_ASSETS_BUCKET=funmagic-web-public-assets
-CLOUDFRONT_ADMIN_PRIVATE_URL=https://dXXXX.cloudfront.net
-CLOUDFRONT_PUBLIC_URL=https://cdn.funmagic.ai
-CLOUDFRONT_KEY_PAIR_ID=K2XXXXXX
-CLOUDFRONT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
-CLOUDFRONT_SIGNED_URL_EXPIRY=3600
-```
-
-### 10.9 Clone Your Code and Build
-
-**Option A: Clone from Git**
-
-```bash
-cd ~/funmagic
-
-# Clone your repository
-git clone https://github.com/your-org/magiworld.git .
-
-# Copy your Dockerfiles and configs (if not in repo)
-# ... copy files created above ...
-
-# Build and start
-docker-compose up -d --build
-```
-
-**Option B: Upload from Local**
-
-```bash
-# From your local machine
-cd /path/to/magiworld
-rsync -avz --exclude='node_modules' --exclude='.next' --exclude='.git' \
-  -e "ssh -i your-key.pem" \
-  . ec2-user@YOUR_ELASTIC_IP:~/funmagic/
-```
-
-### 10.10 Set Up SSL with Let's Encrypt
-
-Install Certbot and get free SSL certificates:
-
-```bash
-# Install Certbot
-sudo dnf install certbot -y  # Amazon Linux
-# sudo apt install certbot -y  # Ubuntu
-
-# Stop nginx temporarily
-docker-compose stop nginx
-
-# Get certificates (replace with your domain)
-sudo certbot certonly --standalone \
-  -d funmagic.ai \
-  -d www.funmagic.ai \
-  -d admin.funmagic.ai \
-  --email your-email@example.com \
-  --agree-tos
-
-# Copy certificates to your project
-mkdir -p ~/funmagic/ssl
-sudo cp /etc/letsencrypt/live/funmagic.ai/fullchain.pem ~/funmagic/ssl/
-sudo cp /etc/letsencrypt/live/funmagic.ai/privkey.pem ~/funmagic/ssl/
-sudo chown -R $USER:$USER ~/funmagic/ssl
-
-# Start nginx again
-docker-compose up -d nginx
-```
-
-**Set up auto-renewal**:
-
-```bash
-# Create renewal script
-cat > ~/funmagic/renew-ssl.sh << 'EOF'
-#!/bin/bash
-cd ~/funmagic
-docker-compose stop nginx
-sudo certbot renew --quiet
-sudo cp /etc/letsencrypt/live/funmagic.ai/fullchain.pem ~/funmagic/ssl/
-sudo cp /etc/letsencrypt/live/funmagic.ai/privkey.pem ~/funmagic/ssl/
-sudo chown -R $USER:$USER ~/funmagic/ssl
-docker-compose start nginx
-EOF
-
-chmod +x ~/funmagic/renew-ssl.sh
-
-# Add to crontab (runs monthly)
-(crontab -l 2>/dev/null; echo "0 3 1 * * ~/funmagic/renew-ssl.sh") | crontab -
-```
-
-### 10.11 Update Cloudflare DNS
-
-Point your domains to the EC2 Elastic IP:
-
-| Type | Name | Content | Proxy |
-|------|------|---------|-------|
-| A | `@` | `YOUR_ELASTIC_IP` | Proxied (orange) |
-| A | `www` | `YOUR_ELASTIC_IP` | Proxied (orange) |
-| A | `admin` | `YOUR_ELASTIC_IP` | Proxied (orange) |
-
-> **Note**: Using A records (not CNAME) because we have a static Elastic IP.
-
-### 10.12 Useful Docker Commands
-
-```bash
-# View running containers
-docker-compose ps
-
-# View logs
-docker-compose logs -f web
-docker-compose logs -f admin
-docker-compose logs -f nginx
-
-# Restart services
-docker-compose restart web
-docker-compose restart admin
-
-# Rebuild and restart (after code changes)
-docker-compose up -d --build
-
-# Stop everything
-docker-compose down
-
-# Clean up unused images
-docker system prune -a
-```
-
-### 10.13 Deploy Updates
-
-When you need to deploy code changes:
-
-```bash
-# SSH into server
-ssh -i your-key.pem ec2-user@YOUR_ELASTIC_IP
-cd ~/funmagic
-
-# Pull latest code (if using git)
-git pull origin main
-
-# Or rsync from local (if not using git)
-# rsync -avz --exclude='node_modules' -e "ssh -i your-key.pem" . ec2-user@IP:~/funmagic/
-
-# Rebuild and restart
-docker-compose up -d --build
-```
-
-### 10.14 Cost Estimate
-
-**Minimal EC2 setup**:
-- 1x t3.small EC2 (On-Demand): ~$15/month
-- Elastic IP (while attached): Free
-- 20GB EBS storage: ~$2/month
-- Data transfer: ~$5/month
-- **Total: ~$22/month**
-
-**Even cheaper options**:
-- Use t3.micro: ~$8/month (free tier eligible for 12 months)
-- Use Spot instance: 60-90% savings (can be interrupted)
-- Reserved instance (1 year): 30-40% savings
-
-### 10.15 Future Migration to ECS
-
-When you're ready to scale, you can migrate to ECS:
-1. Push your Docker images to ECR
-2. Create ECS task definitions using the same Dockerfiles
-3. Set up an Application Load Balancer
-4. Create ECS services
-5. Update Cloudflare DNS to point to ALB
-
-The Dockerfiles you created here will work directly with ECS
-
----
-
 ## Step 11: Configure Environment Variables
 
 ### For Local Development
@@ -1520,64 +1907,154 @@ The Dockerfiles you created here will work directly with ECS
 **Admin App (`apps/admin/.env.local`)**:
 
 ```bash
+# ==============================================
 # Database
+# ==============================================
+# PostgreSQL connection string
+# For local: localhost:5432 or your Docker port
+# For RDS: your-rds-endpoint.region.rds.amazonaws.com:5432
 DATABASE_URL=postgresql://user:password@localhost:5432/magi-db
 
-# AWS S3 Configuration
+# ==============================================
+# AWS S3 Configuration (funmagic-admin-app IAM user)
+# ==============================================
 AWS_REGION=us-east-2
+
+# From IAM > Users > funmagic-admin-app > Security credentials > Access keys
 AWS_ACCESS_KEY_ID=AKIA...your-admin-key
 AWS_SECRET_ACCESS_KEY=...your-admin-secret
 
-# Buckets
+# ==============================================
+# S3 Buckets
+# ==============================================
+# Admin uploads (library, Magi-generated files) - private with signed URLs
 S3_ADMIN_ASSETS_BUCKET=funmagic-admin-users-assets
+# Public assets (banners, tool thumbnails) - publicly accessible
 S3_PUBLIC_ASSETS_BUCKET=funmagic-web-public-assets
 
+# ==============================================
 # CloudFront URLs
+# ==============================================
+# Private distribution for admin assets (requires signed URLs)
 CLOUDFRONT_ADMIN_PRIVATE_URL=https://d1234admin.cloudfront.net
+# Public CDN for banners and tool images
 CLOUDFRONT_PUBLIC_URL=https://cdn.funmagic.ai
+# Client-side accessible public CDN URL (same as CLOUDFRONT_PUBLIC_URL)
+NEXT_PUBLIC_CLOUDFRONT_URL=https://cdn.funmagic.ai
 
-# Signed URLs Configuration
+# ==============================================
+# CloudFront Signed URLs (for private bucket access)
+# ==============================================
+# From CloudFront > Key management > Public keys
 CLOUDFRONT_KEY_PAIR_ID=K2XXXXXXXXXXXXXX
+# Private key (single line with \n escapes)
+# Generate with: awk 'NF {sub(/\r/, ""); printf "%s\\n",$0;}' cloudfront-private-key.pem
 CLOUDFRONT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIE...your-key...==\n-----END PRIVATE KEY-----\n"
+# URL expiry in seconds (default: 1 hour)
 CLOUDFRONT_SIGNED_URL_EXPIRY=3600
 
+# ==============================================
+# Authentication (Logto - Admin Tenant)
+# ==============================================
+# Admin app uses a separate Logto tenant/application from web app
+LOGTO_ENDPOINT=https://your-admin-tenant.logto.app/
+LOGTO_APP_ID=your-admin-app-id
+LOGTO_APP_SECRET=your-admin-app-secret
+LOGTO_COOKIE_SECRET=random-32-char-string-for-admin
+LOGTO_BASE_URL=https://admin.funmagic.ai
+
+# ==============================================
 # AI APIs
+# ==============================================
+# Fal.ai - for AI image generation (Flux, BRIA RMBG, etc.)
 FAL_API_KEY=...
+# OpenAI - for GPT-based features
 OPENAI_API_KEY=...
+# Google AI - for Gemini-based features
 GOOGLE_GENERATIVE_AI_API_KEY=...
+
+# ==============================================
+# Upload Limits
+# ==============================================
+# Maximum file upload size in MB (server-side validation)
+UPLOAD_MAX_SIZE_MB=50
+# Maximum file upload size in MB (client-side validation)
+NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB=50
+
+# ==============================================
+# Debug (optional)
+# ==============================================
+# Log level: debug, info, warn, error
+LOG_LEVEL=info
 ```
 
 **Web App (`apps/web/.env.local`)**:
 
 ```bash
+# ==============================================
 # Database
+# ==============================================
+# PostgreSQL connection string
+# For local: localhost:5432 or your Docker port
+# For RDS: your-rds-endpoint.region.rds.amazonaws.com:5432
 DATABASE_URL=postgresql://user:password@localhost:5432/magi-db
 
-# AWS S3 Configuration
+# ==============================================
+# AWS S3 Configuration (funmagic-web-app IAM user)
+# ==============================================
 AWS_REGION=us-east-2
+
+# From IAM > Users > funmagic-web-app > Security credentials > Access keys
 AWS_ACCESS_KEY_ID=AKIA...your-web-key
 AWS_SECRET_ACCESS_KEY=...your-web-secret
 
-# Buckets
+# ==============================================
+# S3 Buckets
+# ==============================================
+# User uploads and AI results - private with signed URLs
 S3_WEB_PRIVATE_BUCKET=funmagic-web-users-assets-private
+# User-shared files (public download links)
 S3_WEB_SHARED_BUCKET=funmagic-web-users-assets-shared
 
+# ==============================================
 # CloudFront URLs
+# ==============================================
+# Private distribution for user assets (requires signed URLs)
 CLOUDFRONT_WEB_PRIVATE_URL=https://d5678private.cloudfront.net
+# Public distribution for shared files
 CLOUDFRONT_WEB_SHARED_URL=https://shared.funmagic.ai
+# Public CDN for banners and tool images (same as admin)
 CLOUDFRONT_PUBLIC_URL=https://cdn.funmagic.ai
 
-# Signed URLs Configuration
+# ==============================================
+# CloudFront Signed URLs (for private bucket access)
+# ==============================================
+# From CloudFront > Key management > Public keys
 CLOUDFRONT_KEY_PAIR_ID=K2XXXXXXXXXXXXXX
+# Private key (single line with \n escapes)
+# Generate with: awk 'NF {sub(/\r/, ""); printf "%s\\n",$0;}' cloudfront-private-key.pem
 CLOUDFRONT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIE...your-key...==\n-----END PRIVATE KEY-----\n"
+# URL expiry in seconds (default: 1 hour)
 CLOUDFRONT_SIGNED_URL_EXPIRY=3600
 
-# Authentication
-LOGTO_ENDPOINT=https://your-tenant.logto.app/
-LOGTO_APP_ID=your-app-id
-LOGTO_APP_SECRET=your-app-secret
-LOGTO_COOKIE_SECRET=random-32-char-string
+# ==============================================
+# Authentication (Logto - Web Tenant)
+# ==============================================
+# Web app uses a separate Logto tenant/application from admin app
+LOGTO_ENDPOINT=https://your-web-tenant.logto.app/
+LOGTO_APP_ID=your-web-app-id
+LOGTO_APP_SECRET=your-web-app-secret
+LOGTO_COOKIE_SECRET=random-32-char-string-for-web
+# Production URL (must match Logto redirect URI settings)
 LOGTO_BASE_URL=https://funmagic.ai
+
+# ==============================================
+# Upload Limits
+# ==============================================
+# Maximum file upload size in MB (server-side validation)
+UPLOAD_MAX_SIZE_MB=50
+# Maximum file upload size in MB (client-side validation)
+NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB=50
 ```
 
 ### For ECS Production
@@ -1701,19 +2178,19 @@ docker-compose logs -f admin
 | 8.2 | Configure Google Workspace email records (MX, SPF, DKIM) | ⬜ |
 | 8.3 | Configure DNS for CloudFront distributions | ⬜ |
 | 8.4 | Configure DNS for EC2 | ⬜ |
-| 9.1 | Create RDS security group (`funmagic-rds-sg`) | ⬜ |
-| 9.2 | Create RDS PostgreSQL instance (`funmagic-db`) | ⬜ |
-| 9.3 | Get RDS endpoint and build connection string | ⬜ |
-| 9.4 | Test database connection | ⬜ |
-| 9.5 | Run Drizzle migrations to initialize schema (`pnpm db:push`) | ⬜ |
-| 10.1 | Create EC2 security group | ⬜ |
-| 10.2 | Launch EC2 instance | ⬜ |
-| 10.3 | Allocate Elastic IP | ⬜ |
-| 10.4 | Install Docker on EC2 | ⬜ |
-| 10.5 | Create Docker Compose and Dockerfiles | ⬜ |
-| 10.6 | Clone code and build containers | ⬜ |
-| 10.7 | Set up SSL with Let's Encrypt | ⬜ |
-| 10.8 | Update Cloudflare DNS to EC2 IP | ⬜ |
+| 9.1 | Create EC2 security group | ⬜ |
+| 9.2 | Launch EC2 instance | ⬜ |
+| 9.3 | Allocate Elastic IP | ⬜ |
+| 9.4 | Install Docker on EC2 | ⬜ |
+| 9.5 | Create Docker Compose and Dockerfiles | ⬜ |
+| 9.6 | Clone code and build containers | ⬜ |
+| 9.7 | Set up SSL (Cloudflare Origin Cert or Let's Encrypt) | ⬜ |
+| 9.8 | Update Cloudflare DNS to EC2 IP | ⬜ |
+| 10.1 | Create RDS security group (`funmagic-rds-sg`) | ⬜ |
+| 10.2 | Create RDS PostgreSQL instance (`funmagic-db`) | ⬜ |
+| 10.3 | Get RDS endpoint and build connection string | ⬜ |
+| 10.4 | Test database connection | ⬜ |
+| 10.5 | Run Drizzle migrations to initialize schema (`pnpm db:push`) | ⬜ |
 | 11 | Configure `.env.local` files for both apps | ⬜ |
 | 12.1 | Test admin library upload | ⬜ |
 | 12.2 | Test public banner upload | ⬜ |

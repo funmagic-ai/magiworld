@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Checkbox UI Component
+ * @fileoverview 复选框UI组件
+ *
+ * Checkbox input with checked/unchecked states.
+ * Based on Base UI Checkbox primitive.
+ * 带选中/未选中状态的复选框输入。
+ * 基于Base UI Checkbox原语构建。
+ *
+ * @module components/ui/checkbox
+ */
+
 "use client"
 
 import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox"

@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Edit OEM Brand Page
+ * @fileoverview 编辑OEM品牌页面
+ *
+ * Form page for editing existing OEM partner brands.
+ * Fetches brand data by ID and populates the form.
+ * 编辑现有OEM合作伙伴品牌的表单页面。
+ * 通过ID获取品牌数据并填充表单。
+ *
+ * @module app/(dashboard)/oem-brands/[id]/page
+ */
+
 import { notFound } from 'next/navigation';
 import { OemBrandForm } from '@/components/forms/oem-brand-form';
 import { getOemBrandById } from '@/lib/actions/oem-brands';

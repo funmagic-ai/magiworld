@@ -1,6 +1,19 @@
+/**
+ * @fileoverview OEM Brand Form Component
+ * @fileoverview OEM品牌表单组件
+ *
+ * Client-side form for creating and editing white-label brand configurations.
+ * Supports logo upload with dimension validation, color palette selection,
+ * and tool type access control for restricting available features per brand.
+ * 用于创建和编辑白标品牌配置的客户端表单。
+ * 支持带尺寸验证的Logo上传、颜色调色板选择、以及按品牌限制可用功能的工具类型访问控制。
+ *
+ * @module components/forms/oem-brand-form
+ */
+
 'use client';
 
-import { useState, useEffect, useActionState } from 'react';
+import { useState, useActionState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -42,6 +55,12 @@ import { oemBrandSchema } from '@/lib/validations/oem-brand';
 import { brandPalettes } from '@/lib/brand-palettes';
 import { useUploadFiles } from '@better-upload/client';
 import { validateFileSize } from '@/lib/utils/file';
+import {
+  useImageDimensions,
+  isSquare,
+  validateMinDimensions,
+  DEFAULT_RATIO_TOLERANCE,
+} from '@/lib/utils/image';
 import Image from 'next/image';
 
 type ToolTypeOption = {
@@ -73,9 +92,8 @@ type FormState = {
   success?: boolean;
 };
 
-// Logo size requirements
+// Logo size requirements / Logo尺寸要求
 const LOGO_MIN_SIZE = 80;
-const LOGO_RATIO_TOLERANCE = 0.05; // 5% tolerance for square
 
 export function OemBrandForm({ initialData, mode, toolTypes }: OemBrandFormProps) {
   // Theme config state
@@ -84,13 +102,13 @@ export function OemBrandForm({ initialData, mode, toolTypes }: OemBrandFormProps
   const [slug, setSlug] = useState(initialData?.slug || '');
 
   // Logo state: either a URL (existing) or a pending file
+  // Logo状态：现有的URL或待上传文件
   const [logoUrl, setLogoUrl] = useState<string>(initialData?.themeConfig?.logo || '');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string>('');
-
-  // Logo dimension state
-  const [logoDimensions, setLogoDimensions] = useState<{ width: number; height: number } | null>(null);
   const [logoError, setLogoError] = useState<string>('');
+
+  // Use centralized image dimension detection hook / 使用集中的图片尺寸检测Hook
+  const { dimensions: logoDimensions, previewUrl } = useImageDimensions(pendingFile);
 
   // Allowed tool types state
   const [selectedToolTypeIds, setSelectedToolTypeIds] = useState<string[]>(
@@ -109,37 +127,23 @@ export function OemBrandForm({ initialData, mode, toolTypes }: OemBrandFormProps
     );
   };
 
-  // Create/cleanup object URL for local preview and detect dimensions
-  useEffect(() => {
-    if (pendingFile) {
-      const url = URL.createObjectURL(pendingFile);
-      setPreviewUrl(url);
-
-      // Detect image dimensions
-      const img = new window.Image();
-      img.onload = () => {
-        setLogoDimensions({ width: img.naturalWidth, height: img.naturalHeight });
-      };
-      img.src = url;
-
-      return () => URL.revokeObjectURL(url);
-    } else {
-      setPreviewUrl('');
-      setLogoDimensions(null);
-    }
-  }, [pendingFile]);
-
-  // Validate logo dimensions
+  // Validate logo dimensions using centralized utilities
+  // 使用集中的工具函数验证Logo尺寸
   const validateLogoDimensions = (width: number, height: number): string | null => {
-    const ratio = width / height;
-    const isSquare = Math.abs(ratio - 1) <= LOGO_RATIO_TOLERANCE;
+    const dimensions = { width, height };
 
-    if (!isSquare) {
+    // Check if square / 检查是否正方形
+    if (!isSquare(dimensions, DEFAULT_RATIO_TOLERANCE)) {
+      const ratio = width / height;
       return `Logo must be square. Current ratio: ${ratio.toFixed(2)}:1`;
     }
-    if (width < LOGO_MIN_SIZE || height < LOGO_MIN_SIZE) {
-      return `Logo must be at least ${LOGO_MIN_SIZE}×${LOGO_MIN_SIZE}px. Current: ${width}×${height}px`;
+
+    // Check minimum size / 检查最小尺寸
+    const minCheck = validateMinDimensions(dimensions, LOGO_MIN_SIZE);
+    if (!minCheck.isValid) {
+      return minCheck.error || null;
     }
+
     return null;
   };
 
@@ -199,11 +203,10 @@ export function OemBrandForm({ initialData, mode, toolTypes }: OemBrandFormProps
     e.target.value = '';
   };
 
-  // Clear the pending file or existing URL
+  // Clear the pending file or existing URL / 清除待上传文件或现有URL
   const handleClearLogo = () => {
     setPendingFile(null);
     setLogoUrl('');
-    setLogoDimensions(null);
     setLogoError('');
   };
 

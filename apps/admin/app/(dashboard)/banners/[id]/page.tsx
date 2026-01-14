@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Edit Banner Page
+ * @fileoverview 编辑横幅页面
+ *
+ * Form page for editing existing homepage banners.
+ * Fetches banner data by ID and populates the form.
+ * 编辑现有首页横幅的表单页面。
+ * 通过ID获取横幅数据并填充表单。
+ *
+ * @module app/(dashboard)/banners/[id]/page
+ */
+
 import { notFound } from 'next/navigation';
 import { BannerForm } from '@/components/forms/banner-form';
 import { getBannerById } from '@/lib/actions/banners';

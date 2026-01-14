@@ -1,25 +1,29 @@
-'use server';
-
 /**
  * @fileoverview Library Server Actions
+ * @fileoverview 媒体库服务端操作
  *
  * Server actions for managing folders and media assets in the library.
  * Supports CRUD operations for folders and media, with support for
  * hierarchical folder structure and drag-and-drop file organization.
+ * 用于管理媒体库中文件夹和媒体资产的服务端函数。
+ * 支持文件夹和媒体的CRUD操作，包含层级文件夹结构和拖放文件组织功能。
  *
- * @module apps/admin/lib/actions/library
+ * @module lib/actions/library
  */
+
+'use server';
 
 import { db, folders, media, eq, isNull, asc, desc, and, count, sum, sql } from '@magiworld/db';
 import { revalidatePath } from 'next/cache';
 import { maybeSignUrl } from '@/lib/cloudfront';
 
 // ============================================
-// Duplicate Check Helpers
+// Duplicate Check Helpers / 重复检查辅助函数
 // ============================================
 
 /**
  * Check if a folder with the same name exists in the same parent
+ * 检查同一父目录下是否存在同名文件夹
  */
 async function folderNameExists(
   name: string,
@@ -43,6 +47,7 @@ async function folderNameExists(
 
 /**
  * Check if a file with the same name exists in the same folder
+ * 检查同一文件夹下是否存在同名文件
  */
 async function fileNameExists(
   filename: string,
@@ -66,6 +71,11 @@ async function fileNameExists(
 
 /**
  * Generate a unique filename by appending a number suffix
+ * 通过添加数字后缀生成唯一文件名
+ *
+ * @param filename - Original filename / 原始文件名
+ * @param folderId - Target folder ID / 目标文件夹ID
+ * @returns Unique filename / 唯一文件名
  */
 export async function generateUniqueFilename(
   filename: string,
@@ -91,8 +101,12 @@ export async function generateUniqueFilename(
 }
 
 /**
- * Find or create the Magi folder structure: magi/{yyyymmdd}/
- * Returns the folder ID for the date folder
+ * Find or create the Magi folder structure / 查找或创建Magi文件夹结构
+ *
+ * Creates folder structure: magi/{yyyymmdd}/ for AI-generated images.
+ * 创建文件夹结构：magi/{yyyymmdd}/，用于AI生成的图片。
+ *
+ * @returns Folder ID for the date folder / 日期文件夹的ID
  */
 export async function findOrCreateMagiFolder(): Promise<string> {
   // Get current date in yyyymmdd format
@@ -131,7 +145,13 @@ export async function findOrCreateMagiFolder(): Promise<string> {
 }
 
 /**
- * Get statistics for a folder (subfolder count, file count, total size)
+ * Get statistics for a folder / 获取文件夹统计信息
+ *
+ * Returns subfolder count, file count, and total size.
+ * 返回子文件夹数、文件数和总大小。
+ *
+ * @param folderId - Folder ID to get stats for / 要获取统计的文件夹ID
+ * @returns Folder statistics / 文件夹统计信息
  */
 async function getFolderStats(folderId: string): Promise<{
   subfolderCount: number;
@@ -161,7 +181,7 @@ async function getFolderStats(folderId: string): Promise<{
 }
 
 // ============================================
-// Types
+// Types / 类型定义
 // ============================================
 
 export type Folder = {
@@ -204,11 +224,17 @@ export type LibraryContents = {
 };
 
 // ============================================
-// Folder Actions
+// Folder Actions / 文件夹操作
 // ============================================
 
 /**
- * Get the contents of a folder (subfolders and media)
+ * Get the contents of a folder / 获取文件夹内容
+ *
+ * Returns subfolders, media items, breadcrumbs, and statistics.
+ * 返回子文件夹、媒体项、面包屑和统计信息。
+ *
+ * @param folderId - Folder ID (null for root) / 文件夹ID（null表示根目录）
+ * @returns Library contents with folders, media, and stats / 包含文件夹、媒体和统计的库内容
  */
 export async function getFolderContents(folderId?: string | null): Promise<LibraryContents> {
   // Get current folder info
@@ -294,8 +320,15 @@ export async function getFolderContents(folderId?: string | null): Promise<Libra
 }
 
 /**
- * Create a new folder
- * @throws Error if folder name already exists in the same parent
+ * Create a new folder / 创建新文件夹
+ *
+ * Creates folder in specified parent or root if no parent specified.
+ * 在指定父目录创建文件夹，未指定父目录则创建在根目录。
+ *
+ * @param name - Folder name / 文件夹名称
+ * @param parentId - Parent folder ID (null for root) / 父文件夹ID（null表示根目录）
+ * @returns Created folder / 创建的文件夹
+ * @throws Error if folder name already exists in the same parent / 同名文件夹已存在时抛出错误
  */
 export async function createFolder(name: string, parentId?: string | null): Promise<Folder> {
   const trimmedName = name.trim();
@@ -319,8 +352,15 @@ export async function createFolder(name: string, parentId?: string | null): Prom
 }
 
 /**
- * Rename a folder
- * @throws Error if folder name already exists in the same parent
+ * Rename a folder / 重命名文件夹
+ *
+ * Updates folder name in the same parent directory.
+ * 在同一父目录中更新文件夹名称。
+ *
+ * @param folderId - Folder ID to rename / 要重命名的文件夹ID
+ * @param name - New folder name / 新文件夹名称
+ * @returns Updated folder / 更新后的文件夹
+ * @throws Error if folder name already exists in the same parent / 同名文件夹已存在时抛出错误
  */
 export async function renameFolder(folderId: string, name: string): Promise<Folder> {
   const trimmedName = name.trim();
@@ -355,7 +395,13 @@ export async function renameFolder(folderId: string, name: string): Promise<Fold
 }
 
 /**
- * Recursively delete a folder and all its contents (subfolders and files)
+ * Recursively delete a folder and all its contents / 递归删除文件夹及其所有内容
+ *
+ * Deletes folder, all subfolders, and soft-deletes all media files.
+ * 删除文件夹、所有子文件夹，并软删除所有媒体文件。
+ *
+ * @param folderId - Folder ID to delete / 要删除的文件夹ID
+ * @returns Count of deleted folders and files / 删除的文件夹和文件数量
  */
 export async function deleteFolder(folderId: string): Promise<{ deletedFolders: number; deletedFiles: number }> {
   let deletedFolders = 0;
@@ -410,8 +456,15 @@ export async function deleteFolder(folderId: string): Promise<{ deletedFolders: 
 }
 
 /**
- * Move a folder to a different parent
- * @throws Error if folder name already exists in target location
+ * Move a folder to a different parent / 将文件夹移动到不同的父目录
+ *
+ * Relocates folder to new parent. Prevents moving into self or descendants.
+ * 将文件夹重定位到新的父目录。防止移动到自身或其子目录。
+ *
+ * @param folderId - Folder ID to move / 要移动的文件夹ID
+ * @param newParentId - Target parent folder ID (null for root) / 目标父文件夹ID（null表示根目录）
+ * @returns Updated folder / 更新后的文件夹
+ * @throws Error if folder name already exists in target / 目标位置已存在同名文件夹时抛出错误
  */
 export async function moveFolder(folderId: string, newParentId: string | null): Promise<Folder> {
   // Get current folder
@@ -460,11 +513,17 @@ export async function moveFolder(folderId: string, newParentId: string | null): 
 }
 
 // ============================================
-// Media Actions
+// Media Actions / 媒体操作
 // ============================================
 
 /**
- * Get a single media item by ID
+ * Get a single media item by ID / 按ID获取单个媒体项
+ *
+ * Returns media item with signed URL for secure access.
+ * 返回带签名URL的媒体项以实现安全访问。
+ *
+ * @param mediaId - Media UUID / 媒体UUID
+ * @returns Media item or null if not found / 媒体项，未找到返回null
  */
 export async function getMediaItem(mediaId: string): Promise<MediaItem | null> {
   const [item] = await db
@@ -483,7 +542,14 @@ export async function getMediaItem(mediaId: string): Promise<MediaItem | null> {
 }
 
 /**
- * Update media metadata
+ * Update media metadata / 更新媒体元数据
+ *
+ * Updates filename and/or alt text for a media item.
+ * 更新媒体项的文件名和/或替代文本。
+ *
+ * @param mediaId - Media UUID / 媒体UUID
+ * @param data - Fields to update / 要更新的字段
+ * @returns Updated media item / 更新后的媒体项
  */
 export async function updateMedia(
   mediaId: string,
@@ -503,8 +569,15 @@ export async function updateMedia(
 }
 
 /**
- * Move media to a different folder
- * @throws Error if filename already exists in target folder
+ * Move media to a different folder / 将媒体移动到不同文件夹
+ *
+ * Relocates a single media item to target folder.
+ * 将单个媒体项重定位到目标文件夹。
+ *
+ * @param mediaId - Media UUID / 媒体UUID
+ * @param folderId - Target folder ID (null for root) / 目标文件夹ID（null表示根目录）
+ * @returns Updated media item / 更新后的媒体项
+ * @throws Error if filename already exists in target folder / 目标文件夹已存在同名文件时抛出错误
  */
 export async function moveMedia(mediaId: string, folderId: string | null): Promise<MediaItem> {
   // Get current media item
@@ -534,8 +607,14 @@ export async function moveMedia(mediaId: string, folderId: string | null): Promi
 }
 
 /**
- * Move multiple media items to a folder
- * Files with duplicate names will be renamed with a suffix
+ * Move multiple media items to a folder / 批量移动媒体到文件夹
+ *
+ * Relocates multiple media items, renaming duplicates with a suffix.
+ * 批量重定位媒体项，重复的文件会添加后缀重命名。
+ *
+ * @param mediaIds - Array of media UUIDs / 媒体UUID数组
+ * @param folderId - Target folder ID (null for root) / 目标文件夹ID（null表示根目录）
+ * @returns Count of moved items and list of renamed files / 移动的项目数和重命名文件列表
  */
 export async function moveMediaBatch(
   mediaIds: string[],
@@ -573,9 +652,13 @@ export async function moveMediaBatch(
 }
 
 /**
- * Soft delete a media item
+ * Soft delete a media item / 软删除媒体项
+ *
  * Sets deletedAt timestamp instead of actually deleting.
  * S3 file cleanup should be handled by a background job later.
+ * 设置deletedAt时间戳而不是真正删除。S3文件清理应由后台任务处理。
+ *
+ * @param mediaId - Media UUID / 媒体UUID
  */
 export async function deleteMedia(mediaId: string): Promise<void> {
   // Soft delete: set deletedAt timestamp instead of hard delete
@@ -587,7 +670,12 @@ export async function deleteMedia(mediaId: string): Promise<void> {
 }
 
 /**
- * Soft delete multiple media items
+ * Soft delete multiple media items / 批量软删除媒体项
+ *
+ * Sets deletedAt timestamp for multiple media items.
+ * 为多个媒体项设置deletedAt时间戳。
+ *
+ * @param mediaIds - Array of media UUIDs / 媒体UUID数组
  */
 export async function deleteMediaBatch(mediaIds: string[]): Promise<void> {
   const now = new Date();
@@ -598,7 +686,12 @@ export async function deleteMediaBatch(mediaIds: string[]): Promise<void> {
 }
 
 /**
- * Get all folders for folder picker
+ * Get all folders for folder picker / 获取所有文件夹用于文件夹选择器
+ *
+ * Returns flat list of all folders ordered by name.
+ * 返回按名称排序的所有文件夹平面列表。
+ *
+ * @returns Array of all folders / 所有文件夹的数组
  */
 export async function getAllFolders(): Promise<Folder[]> {
   const allFolders = await db

@@ -1,14 +1,17 @@
 /**
  * @fileoverview Banner Ideas Page
+ * @fileoverview 横幅创意页面
  *
  * Displays suggested banner assets based on calendar events and
  * global popular events. Helps operators discover timely content ideas.
+ * 根据日历事件和全球热门事件显示建议的横幅素材。
+ * 帮助运营人员发现及时的内容创意。
  *
- * Features:
- * - Calendar-based event suggestions
- * - Global holidays and observances
- * - Seasonal themes and trends
- * - Database-driven event management
+ * Features / 功能:
+ * - Calendar-based event suggestions / 基于日历的事件建议
+ * - Global holidays and observances / 全球节日和纪念日
+ * - Seasonal themes and trends / 季节性主题和趋势
+ * - Database-driven event management / 数据库驱动的事件管理
  *
  * @module apps/admin/app/ideas/page
  */

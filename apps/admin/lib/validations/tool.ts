@@ -1,12 +1,50 @@
+/**
+ * @fileoverview Tool Form Validation Schema
+ * @fileoverview 工具表单验证模式
+ *
+ * Zod validation schemas for AI tool create/update forms.
+ * Includes slug validation against the TOOL_REGISTRY to ensure
+ * only registered tool components can be created.
+ * 用于AI工具创建/更新表单的Zod验证模式。
+ * 包含针对TOOL_REGISTRY的slug验证，确保只能创建已注册的工具组件。
+ *
+ * @module lib/validations/tool
+ */
+
 import { z } from 'zod';
 import { TOOL_REGISTRY } from '@magiworld/types';
 
+/**
+ * Translation schema for tool content / 工具内容翻译模式
+ *
+ * Validates title (required), description, and promptTemplate (optional) for each locale.
+ * 验证每个语言的标题（必填）、描述和提示词模板（可选）。
+ */
 const translationSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
   promptTemplate: z.string().optional(),
 });
 
+/**
+ * Tool form validation schema / 工具表单验证模式
+ *
+ * Complete schema for tool form data including translations.
+ * Slug must match a registered tool component in TOOL_REGISTRY.
+ * 工具表单数据的完整模式，包含翻译。
+ * Slug必须匹配TOOL_REGISTRY中已注册的工具组件。
+ *
+ * @property slug - Must match TOOL_REGISTRY / 必须匹配TOOL_REGISTRY
+ * @property toolTypeId - Parent tool type UUID / 父工具类型UUID
+ * @property thumbnailUrl - Tool thumbnail CDN URL / 工具缩略图CDN URL
+ * @property aiEndpoint - AI service endpoint / AI服务端点
+ * @property promptTemplate - Default prompt template / 默认提示词模板
+ * @property configJson - Tool-specific config / 工具特定配置
+ * @property order - Display order (0+) / 显示顺序
+ * @property isActive - Whether tool is enabled / 是否启用
+ * @property isFeatured - Whether tool is featured / 是否推荐
+ * @property translations - Multi-locale content / 多语言内容
+ */
 export const toolSchema = z.object({
   slug: z
     .string()
@@ -34,8 +72,17 @@ export const toolSchema = z.object({
   }),
 });
 
+/**
+ * TypeScript type inferred from tool schema / 从工具模式推断的TypeScript类型
+ */
 export type ToolFormValues = z.infer<typeof toolSchema>;
 
+/**
+ * Human-readable field error messages / 人类可读的字段错误消息
+ *
+ * Used for custom error display in form components.
+ * 用于表单组件中的自定义错误显示。
+ */
 export const toolFieldErrors = {
   slug: {
     required: 'Slug is required',
@@ -50,5 +97,10 @@ export const toolFieldErrors = {
   },
 };
 
-/** List of valid tool slugs for display in UI */
+/**
+ * List of valid tool slugs for display in UI / 在UI中显示的有效工具slug列表
+ *
+ * Exported for use in form dropdowns and validation messages.
+ * 导出用于表单下拉列表和验证消息。
+ */
 export const validToolSlugs = TOOL_REGISTRY;

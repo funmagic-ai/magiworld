@@ -1,20 +1,20 @@
 /**
- * @fileoverview Next.js Middleware
+ * @fileoverview Next.js Proxy
  *
  * Combines:
- * 1. next-intl internationalization middleware
+ * 1. next-intl internationalization routing
  * 2. OEM brand detection based on software_id query parameter
  *
  * Brand Detection Flow:
  * 1. Desktop software opens: https://yoursite.com/?software_id=PARTNER_A_2024
- * 2. Middleware detects software_id, validates brand via direct DB call
+ * 2. Proxy detects software_id, validates brand via direct DB call
  * 3. If valid: sets brand cookie, redirects to clean URL
  * 4. Subsequent requests: brand context read from cookie (no DB call)
  *
- * Note: This middleware uses Node.js runtime (not Edge) to support
- * direct database access. Consider switching to Redis for Edge compatibility.
+ * Note: Proxy uses Node.js runtime (default) which supports
+ * direct database access.
  *
- * @module middleware
+ * @module proxy
  */
 
 import createMiddleware from 'next-intl/middleware';
@@ -22,9 +22,6 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { routing } from './i18n/routing';
 import { db, oemSoftwareBrands, eq } from '@magiworld/db';
-
-// Force Node.js runtime for database access
-export const runtime = 'nodejs';
 
 const BRAND_COOKIE_NAME = 'oem_brand';
 const BRAND_COOKIE_MAX_AGE = 60 * 60 * 24; // 24 hours
@@ -56,12 +53,12 @@ async function getBrandBySoftwareId(softwareId: string) {
       allowedToolTypeIds: brand.allowedToolTypeIds || [],
     };
   } catch (error) {
-    console.error('[Middleware] Brand lookup error:', error);
+    console.error('[Proxy] Brand lookup error:', error);
     return null;
   }
 }
 
-export default async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const { searchParams, pathname } = request.nextUrl;
   const softwareId = searchParams.get('software_id');
 

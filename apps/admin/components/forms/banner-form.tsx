@@ -1,6 +1,19 @@
+/**
+ * @fileoverview Banner Form Component
+ * @fileoverview 横幅表单组件
+ *
+ * Client-side form for creating and editing homepage banners.
+ * Features image upload to S3/CloudFront, aspect ratio validation,
+ * and multi-locale translations (en/zh/ja/pt) in JSON format.
+ * 用于创建和编辑首页横幅的客户端表单。
+ * 支持S3/CloudFront图片上传、宽高比验证、以及JSON格式的多语言翻译。
+ *
+ * @module components/forms/banner-form
+ */
+
 'use client';
 
-import { useState, useEffect, useActionState } from 'react';
+import { useState, useActionState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -39,6 +52,7 @@ import {
   BANNER_TRANSLATIONS_EXAMPLE,
 } from '@/lib/locales';
 import { validateFileSize, MAX_FILE_SIZE_MB } from '@/lib/utils/file';
+import { useImageDimensions, validateAspectRatio, DEFAULT_RATIO_TOLERANCE } from '@/lib/utils/image';
 
 type TranslationData = {
   title: string;
@@ -72,26 +86,23 @@ type FormState = {
   success?: boolean;
 };
 
-// Expected aspect ratios for each banner type
+// Expected aspect ratios for each banner type / 各横幅类型的预期宽高比
 const EXPECTED_RATIOS = {
   main: { ratio: 21 / 9, label: '21:9' },
   side: { ratio: 16 / 9, label: '16:9' },
 } as const;
 
-// Tolerance for aspect ratio comparison (5%)
-const RATIO_TOLERANCE = 0.05;
-
 export function BannerForm({ initialData, mode }: BannerFormProps) {
   // Image state: either a URL (existing/pasted) or a pending file
+  // 图片状态：现有/粘贴的URL或待上传文件
   const [imageUrl, setImageUrl] = useState<string>(initialData?.imageUrl || '');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string>('');
-
-  // Image dimension detection
-  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [bannerType, setBannerType] = useState<'main' | 'side'>(
     (initialData?.type as 'main' | 'side') || 'main'
   );
+
+  // Use centralized image dimension detection hook / 使用集中的图片尺寸检测Hook
+  const { dimensions: imageDimensions, previewUrl } = useImageDimensions(pendingFile);
 
   // Translations JSON state
   const [translationsJson, setTranslationsJson] = useState<string>(() => {
@@ -181,40 +192,12 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
 
   const [formState, formAction, isPending] = useActionState(handleFormAction, { errors: {} });
 
-  // Create/cleanup object URL for local preview and detect dimensions
-  useEffect(() => {
-    if (pendingFile) {
-      const url = URL.createObjectURL(pendingFile);
-      setPreviewUrl(url);
-
-      // Detect image dimensions
-      const img = new window.Image();
-      img.onload = () => {
-        setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
-      };
-      img.src = url;
-
-      return () => URL.revokeObjectURL(url);
-    } else {
-      setPreviewUrl('');
-      setImageDimensions(null);
-    }
-  }, [pendingFile]);
-
   // Check if image ratio matches expected ratio for current banner type
+  // 检查图片比例是否匹配当前横幅类型的预期比例
   const getRatioStatus = () => {
     if (!imageDimensions) return null;
-    const actualRatio = imageDimensions.width / imageDimensions.height;
     const expected = EXPECTED_RATIOS[bannerType];
-    const diff = Math.abs(actualRatio - expected.ratio) / expected.ratio;
-    const isMatch = diff <= RATIO_TOLERANCE;
-    return {
-      isMatch,
-      actualRatio: actualRatio.toFixed(2),
-      expectedLabel: expected.label,
-      width: imageDimensions.width,
-      height: imageDimensions.height,
-    };
+    return validateAspectRatio(imageDimensions, expected.ratio, expected.label, DEFAULT_RATIO_TOLERANCE);
   };
 
   const ratioStatus = getRatioStatus();
@@ -339,7 +322,7 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
                       {ratioStatus.width}×{ratioStatus.height}px
                     </span>
                     <span>
-                      (ratio: {ratioStatus.actualRatio})
+                      (ratio: {ratioStatus.actualRatioFormatted})
                     </span>
                     {ratioStatus.isMatch ? (
                       <span className="ml-auto flex items-center gap-1">

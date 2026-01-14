@@ -1,13 +1,18 @@
 /**
  * @fileoverview Brand Color Palettes
+ * @fileoverview 品牌颜色调色板
  *
  * Predefined color palettes for OEM software brands that map to
  * the existing CSS theme classes in globals.css.
+ * OEM软件品牌的预定义颜色调色板，
+ * 映射到globals.css中现有的CSS主题类。
  *
  * Each palette key corresponds to a CSS theme class (e.g., 'blue' -> '.blue').
  * The theme class is applied to <html> element to change the color scheme.
+ * 每个调色板键对应一个CSS主题类（例如'blue' -> '.blue'）。
+ * 主题类应用于<html>元素以改变配色方案。
  *
- * @module lib/brand-palettes
+ * @module apps/web/lib/brand-palettes
  */
 
 export type BrandPalette = {

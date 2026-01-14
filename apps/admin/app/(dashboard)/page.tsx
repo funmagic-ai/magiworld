@@ -1,16 +1,18 @@
 /**
  * @fileoverview Admin Dashboard Page
+ * @fileoverview 管理仪表板页面
  *
  * The main dashboard page for the Magiworld Admin application.
- * Displays an overview of content statistics with quick links to
- * manage each content type.
+ * Displays an overview of content statistics with quick links.
+ * Magiworld管理后台的主仪表板页面。
+ * 显示内容统计概览和快速链接。
  *
- * Features:
- * - Real-time statistics from the database
- * - Clickable stat cards linking to management pages
- * - Server-side rendering for fresh data
+ * Features / 功能:
+ * - Real-time statistics from database / 数据库实时统计
+ * - Clickable stat cards / 可点击的统计卡片
+ * - Server-side rendering / 服务端渲染
  *
- * @module apps/admin/app/page
+ * @module app/(dashboard)/page
  */
 
 import { db, tools, toolTypes, media, homeBanners, count } from '@magiworld/db';

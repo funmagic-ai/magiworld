@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Input UI Component
+ * @fileoverview 输入框UI组件
+ *
+ * Text input with consistent styling and focus states.
+ * Based on Base UI Input primitive.
+ * 带统一样式和焦点状态的文本输入框。
+ * 基于Base UI Input原语构建。
+ *
+ * @module components/ui/input
+ */
+
 import * as React from "react"
 import { Input as InputPrimitive } from "@base-ui/react/input"
 

@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Restore Banner Button Component
+ * @fileoverview 恢复横幅按钮组件
+ *
+ * Button to restore a soft-deleted banner from the trash.
+ * Uses React transitions for optimistic UI updates.
+ * 用于从回收站恢复软删除横幅的按钮。
+ * 使用React transitions实现乐观UI更新。
+ *
+ * @module components/restore-banner-button
+ */
+
 'use client';
 
 import { useTransition } from 'react';

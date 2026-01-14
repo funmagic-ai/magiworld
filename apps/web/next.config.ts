@@ -4,6 +4,8 @@ import createNextIntlPlugin from 'next-intl/plugin';
 const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 
 const nextConfig: NextConfig = {
+  // Required for Docker deployment - creates standalone server.js
+  output: 'standalone',
   images: {
     remotePatterns: [
       // CloudFront distributions (covers all *.cloudfront.net domains)

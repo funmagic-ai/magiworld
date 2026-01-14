@@ -1,13 +1,16 @@
-'use client';
-
 /**
  * @fileoverview Nanobanana Pro Component
+ * @fileoverview Nanobanana Pro组件
  *
  * Chat-like UI for Gemini 3 Pro image generation.
  * Supports multi-round conversations with per-message options.
+ * 类聊天界面的Gemini 3 Pro图像生成工具。
+ * 支持多轮对话，每条消息可配置不同选项。
  *
- * @module apps/admin/components/ai/nanobanana-pro
+ * @module components/ai/nanobanana-pro
  */
+
+'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -252,7 +255,7 @@ export function NanobananaPro() {
         <div className="py-4 space-y-3">
           {/* Options Row */}
           <div className="flex items-center gap-3">
-            <Select value={aspectRatio} onValueChange={setAspectRatio}>
+            <Select value={aspectRatio} onValueChange={(v) => v && setAspectRatio(v)}>
               <SelectTrigger className="w-24 h-9">
                 <SelectValue />
               </SelectTrigger>
@@ -265,7 +268,7 @@ export function NanobananaPro() {
               </SelectContent>
             </Select>
 
-            <Select value={imageSize} onValueChange={setImageSize}>
+            <Select value={imageSize} onValueChange={(v) => v && setImageSize(v)}>
               <SelectTrigger className="w-20 h-9">
                 <SelectValue />
               </SelectTrigger>

@@ -1,13 +1,16 @@
-'use client';
-
 /**
  * @fileoverview Prompt Editor Component
+ * @fileoverview 提示词编辑器组件
  *
  * Collapsible prompt editor with preset templates.
  * Used for AI tools that require text prompts with sensible defaults.
+ * 可折叠的提示词编辑器，带有预设模板。
+ * 用于需要文本提示词的AI工具，提供合理的默认值。
  *
- * @module apps/admin/components/ai/prompt-editor
+ * @module components/ai/prompt-editor
  */
+
+'use client';
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';

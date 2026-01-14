@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Tabs UI Component
+ * @fileoverview 标签页UI组件
+ *
+ * Tab navigation with content panels.
+ * Based on Base UI Tabs primitive.
+ * 带内容面板的标签页导航。
+ * 基于Base UI Tabs原语构建。
+ *
+ * @module components/ui/tabs
+ */
+
 "use client"
 
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs"

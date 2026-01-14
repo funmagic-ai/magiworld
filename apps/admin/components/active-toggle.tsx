@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Active Toggle Component
+ * @fileoverview 激活状态切换组件
+ *
+ * Generic toggle switch for enabling/disabling items.
+ * Accepts a callback for the actual toggle action.
+ * 用于启用/禁用项目的通用切换开关。
+ * 接收回调函数执行实际的切换操作。
+ *
+ * @module components/active-toggle
+ */
+
 'use client';
 
 import { useTransition } from 'react';

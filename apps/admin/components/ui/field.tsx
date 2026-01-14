@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Field UI Components
+ * @fileoverview 字段UI组件
+ *
+ * Form field components including FieldSet, Field, and FieldGroup.
+ * Provides consistent layout for form inputs with labels and descriptions.
+ * 表单字段组件，包括FieldSet、Field和FieldGroup。
+ * 为表单输入提供统一的标签和描述布局。
+ *
+ * @module components/ui/field
+ */
+
 "use client"
 
 import { useMemo } from "react"

@@ -1,3 +1,16 @@
+/**
+ * @fileoverview Tool Type Form Component
+ * @fileoverview 工具类型表单组件
+ *
+ * Client-side form for creating and editing tool categories.
+ * Supports badge color styling and multi-locale translations.
+ * Tool types are used to group and filter AI tools.
+ * 用于创建和编辑工具分类的客户端表单。
+ * 支持徽章颜色样式和多语言翻译。工具类型用于分组和筛选AI工具。
+ *
+ * @module components/forms/tool-type-form
+ */
+
 'use client';
 
 import { useState, useActionState } from 'react';

@@ -1,7 +1,13 @@
 /**
  * @fileoverview Nanobanana Pro API Route
+ * @fileoverview Nanobanana Pro API路由
  *
- * POST /api/ai/nanobanana - Generate images using Gemini 3 Pro Image
+ * POST /api/ai/nanobanana - Generate images using Gemini 3 Pro Image.
+ * Accepts prompt text and optional reference images for generation.
+ * POST /api/ai/nanobanana - 使用Gemini 3 Pro Image生成图片。
+ * 接受提示文本和可选的参考图片进行生成。
+ *
+ * @module apps/admin/app/api/ai/nanobanana/route
  */
 
 import { NextRequest, NextResponse } from 'next/server';

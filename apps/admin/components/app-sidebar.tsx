@@ -1,3 +1,15 @@
+/**
+ * @fileoverview App Sidebar Component
+ * @fileoverview 应用侧边栏组件
+ *
+ * Main navigation sidebar with collapsible menu groups.
+ * Supports icon-only mode and highlights active routes.
+ * 带可折叠菜单组的主导航侧边栏。
+ * 支持仅图标模式并高亮当前路由。
+ *
+ * @module components/app-sidebar
+ */
+
 'use client';
 
 import { useState, useEffect } from 'react';

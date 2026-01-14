@@ -1,13 +1,16 @@
-'use client';
-
 /**
  * @fileoverview Tool View Component
+ * @fileoverview 工具视图组件
  *
  * Full-screen wrapper for individual AI tools.
  * Includes header with back button, tool name, and close button.
+ * 单个AI工具的全屏包装器。
+ * 包含带返回按钮、工具名称和关闭按钮的头部。
  *
- * @module apps/admin/components/ai/tool-view
+ * @module components/ai/tool-view
  */
+
+'use client';
 
 import { useRouter } from 'next/navigation';
 import { HugeiconsIcon } from '@hugeicons/react';

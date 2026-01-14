@@ -1,13 +1,16 @@
-'use client';
-
 /**
  * @fileoverview Background Remover Component
+ * @fileoverview 背景移除组件
  *
  * UI component for removing backgrounds from images using AI.
  * Supports upload and library selection with before/after comparison.
+ * 使用AI从图片中移除背景的UI组件。
+ * 支持上传和从媒体库选择，并提供前后对比视图。
  *
- * @module apps/admin/components/ai/background-remover
+ * @module components/ai/background-remover
  */
+
+'use client';
 
 import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';

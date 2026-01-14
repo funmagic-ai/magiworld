@@ -1,13 +1,16 @@
-'use client';
-
 /**
  * @fileoverview Image Upscaler Component
+ * @fileoverview 图像放大组件
  *
  * UI component for upscaling images to higher resolution using AI.
  * Uses ImageSourcePicker for input and ResultActions for actions.
+ * 使用AI将图像放大到更高分辨率的UI组件。
+ * 使用ImageSourcePicker选择图片、ResultActions操作栏。
  *
- * @module apps/admin/components/ai/image-upscaler
+ * @module components/ai/image-upscaler
  */
+
+'use client';
 
 import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';

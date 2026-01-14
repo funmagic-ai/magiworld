@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Create OEM Brand Page
+ * @fileoverview 创建OEM品牌页面
+ *
+ * Form page for creating new OEM partner brands.
+ * Loads tool types for access control configuration.
+ * 创建新OEM合作伙伴品牌的表单页面。
+ * 加载工具类型用于访问控制配置。
+ *
+ * @module app/(dashboard)/oem-brands/new/page
+ */
+
 import { OemBrandForm } from '@/components/forms/oem-brand-form';
 import { getToolTypesForSelect } from '@/lib/actions/tools';
 

@@ -1,10 +1,13 @@
 /**
  * @fileoverview Better-Upload API Route Handler
+ * @fileoverview Better-Upload 文件上传路由处理器
  *
  * Handles file uploads to AWS S3 using pre-signed URLs.
- * Supports two destinations:
- * - Library uploads → admin-assets bucket (private)
- * - Public uploads (banners, tools, brands) → public-assets bucket (public)
+ * 使用预签名URL处理文件上传到AWS S3。
+ *
+ * Supports two destinations / 支持两个目标存储桶:
+ * - Library uploads → admin-assets bucket (private) / 媒体库上传 → 管理员资产桶（私有）
+ * - Public uploads (banners, tools, brands) → public-assets bucket (public) / 公共上传 → 公共资产桶（公开）
  *
  * @module apps/admin/app/api/upload/route
  */
@@ -15,18 +18,35 @@ import { aws } from '@better-upload/server/clients';
 import { db, media } from '@magiworld/db';
 import { revalidatePath } from 'next/cache';
 import { generateUniqueFilename, findOrCreateMagiFolder } from '@/lib/actions/library';
-import { env, getAdminAssetUrl, getPublicCdnUrl } from '@/lib/env';
+import { env, getAdminAssetUrl, getPublicCdnUrl, getUploadMaxSize } from '@/lib/env';
 
-// File size constants (in bytes)
-const MB = 1024 * 1024;
+/**
+ * Get max file size from environment / 从环境变量获取最大文件大小
+ * Uses UPLOAD_MAX_SIZE_MB env var, defaults to 20MB.
+ * 使用UPLOAD_MAX_SIZE_MB环境变量，默认20MB。
+ */
+const MAX_FILE_SIZE = getUploadMaxSize();
 
-// Helper to build URL for admin assets bucket (uses CloudFront)
+/**
+ * Build CloudFront URL for admin assets / 构建管理员资产的CloudFront URL
+ * @param key - S3 object key / S3对象键
+ * @returns CloudFront URL / CloudFront URL
+ */
 const buildAdminS3Url = (key: string) => getAdminAssetUrl(key);
 
-// Helper to build public CDN URL (uses CloudFront)
+/**
+ * Build CloudFront URL for public CDN assets / 构建公共CDN资产的CloudFront URL
+ * @param key - S3 object key / S3对象键
+ * @returns CloudFront URL / CloudFront URL
+ */
 const buildPublicUrl = (key: string) => getPublicCdnUrl(key);
 
-// Lazy initialization of S3 client to avoid build-time errors
+/**
+ * Lazy initialization of S3 client / 延迟初始化S3客户端
+ * Avoids build-time errors when env vars are not available.
+ * 避免环境变量不可用时的构建错误。
+ * @returns AWS S3 client instance / AWS S3客户端实例
+ */
 const getS3Client = () => {
   return aws({
     accessKeyId: env.AWS_ACCESS_KEY_ID,
@@ -35,70 +55,30 @@ const getS3Client = () => {
   });
 };
 
-// Define upload router (will be evaluated at runtime)
+/**
+ * Library Upload Router / 媒体库上传路由
+ *
+ * Handles uploads to admin-assets bucket (private).
+ * 处理上传到管理员资产桶（私有）。
+ *
+ * Routes / 路由:
+ * - assets: General image/video uploads / 通用图片/视频上传
+ * - magi: AI-generated results / AI生成的结果
+ */
 const router: Router = {
   get client() {
     return getS3Client();
   },
   bucketName: env.S3_ADMIN_ASSETS_BUCKET,
   routes: {
-    // ============================================
-    // Library Uploads → Admin Assets Bucket (Private)
-    // Used by: Assets > Library page
-    // ============================================
-
-    // Image uploads for library
-    images: route<true>({
-      fileTypes: ['image/*'],
-      maxFileSize: 10 * MB,
-      multipleFiles: true,
-      maxFiles: 20,
-      onAfterSignedUrl: async ({ files, clientMetadata }) => {
-        const metadata = clientMetadata as { folderId?: string } | undefined;
-        const folderId = metadata?.folderId || null;
-        for (const file of files) {
-          const uniqueFilename = await generateUniqueFilename(file.name, folderId);
-          await db.insert(media).values({
-            filename: uniqueFilename,
-            url: buildAdminS3Url(file.objectInfo.key),
-            mimeType: file.type,
-            size: file.size,
-            folderId,
-          });
-        }
-        revalidatePath('/library');
-      },
-    }),
-
-    // Video uploads for library (with multipart support)
-    videos: route<true, true>({
-      fileTypes: ['video/*'],
-      maxFileSize: 100 * MB,
-      multipleFiles: true,
-      maxFiles: 5,
-      multipart: true,
-      partSize: 10 * MB,
-      onAfterSignedUrl: async ({ files, clientMetadata }) => {
-        const metadata = clientMetadata as { folderId?: string } | undefined;
-        const folderId = metadata?.folderId || null;
-        for (const file of files) {
-          const uniqueFilename = await generateUniqueFilename(file.name, folderId);
-          await db.insert(media).values({
-            filename: uniqueFilename,
-            url: buildAdminS3Url(file.objectInfo.key),
-            mimeType: file.type,
-            size: file.size,
-            folderId,
-          });
-        }
-        revalidatePath('/library');
-      },
-    }),
-
-    // General assets for library (images + videos)
+    /**
+     * General assets upload / 通用资产上传
+     * Used by: UploadDropzone component in Library page
+     * 使用者：媒体库页面的UploadDropzone组件
+     */
     assets: route<true>({
       fileTypes: ['image/*', 'video/*'],
-      maxFileSize: 50 * MB,
+      maxFileSize: MAX_FILE_SIZE,
       multipleFiles: true,
       maxFiles: 10,
       onAfterSignedUrl: async ({ files, clientMetadata }) => {
@@ -118,12 +98,17 @@ const router: Router = {
       },
     }),
 
-    // Magi AI results → saved to library under magi/{yyyymmdd}/ folder
+    /**
+     * Magi AI results upload / Magi AI结果上传
+     * Saves AI-generated images to library under magi/{yyyymmdd}/ folder.
+     * 将AI生成的图片保存到媒体库的magi/{yyyymmdd}/文件夹下。
+     * Used by: ResultActions component
+     * 使用者：ResultActions组件
+     */
     magi: route({
       fileTypes: ['image/png', 'image/jpeg', 'image/webp'],
-      maxFileSize: 20 * MB,
+      maxFileSize: MAX_FILE_SIZE,
       onAfterSignedUrl: async ({ file }) => {
-        // Get or create magi/{yyyymmdd}/ folder structure
         const folderId = await findOrCreateMagiFolder();
         const uniqueFilename = await generateUniqueFilename(file.name, folderId);
         await db.insert(media).values({
@@ -136,55 +121,37 @@ const router: Router = {
         revalidatePath('/library');
       },
     }),
-
-    // Chat image uploads → stored under chat/{conversationId}/ folder
-    // Used for image input to AI models (editing, vision)
-    chatImages: route<true>({
-      fileTypes: ['image/*'],
-      maxFileSize: 10 * MB,
-      multipleFiles: true,
-      maxFiles: 16,
-      onBeforeUpload: ({ clientMetadata }) => {
-        const metadata = clientMetadata as { conversationId?: string } | undefined;
-        const conversationId = metadata?.conversationId || 'temp';
-        return {
-          generateObjectInfo: ({ file }) => {
-            const timestamp = Date.now();
-            const ext = file.name.split('.').pop() || 'jpg';
-            const name = file.name.replace(`.${ext}`, '').replace(/[^a-zA-Z0-9-_]/g, '-');
-            return {
-              key: `chat/${conversationId}/${name}-${timestamp}.${ext}`,
-            };
-          },
-        };
-      },
-      onAfterSignedUrl: async ({ files }) => {
-        // No DB insert here - chat component handles message storage
-        console.log(`[Chat Upload] ${files.length} image(s) uploaded for chat`);
-      },
-    }),
   },
 };
 
-// ============================================
-// Public Assets Router → Public Assets Bucket (Public CDN)
-// Used by: Banners, Tool images, Brand logos (public content)
-// ============================================
-
+/**
+ * Public CDN Upload Router / 公共CDN上传路由
+ *
+ * Handles uploads to public-assets bucket (served via CloudFront CDN).
+ * 处理上传到公共资产桶（通过CloudFront CDN提供服务）。
+ *
+ * Routes / 路由:
+ * - banners: Homepage banner images / 首页横幅图片
+ * - tools: Tool thumbnails and samples / 工具缩略图和示例
+ * - brands: OEM brand logos / OEM品牌Logo
+ */
 const cdnRouter: Router = {
   get client() {
     return getS3Client();
   },
   bucketName: env.S3_PUBLIC_ASSETS_BUCKET,
   routes: {
-    // Banner images → CDN
+    /**
+     * Banner images upload / 横幅图片上传
+     * Used by: BannerForm component
+     * 使用者：BannerForm组件
+     */
     banners: route<true>({
       fileTypes: ['image/*'],
-      maxFileSize: 10 * MB,
+      maxFileSize: MAX_FILE_SIZE,
       multipleFiles: true,
       maxFiles: 5,
       onBeforeUpload: () => {
-        // Generate unique keys with timestamp for cache busting
         return {
           generateObjectInfo: ({ file }) => {
             const timestamp = Date.now();
@@ -198,16 +165,20 @@ const cdnRouter: Router = {
         };
       },
       onAfterSignedUrl: async ({ files }) => {
-        // Note: Banner records are created by the banner form, not here
-        // This callback just logs for debugging
         console.log(`[CDN Upload] ${files.length} banner image(s) uploaded`);
       },
     }),
 
-    // Tool images (thumbnails, samples) → CDN
+    /**
+     * Tool images upload / 工具图片上传
+     * Thumbnails and sample images for tools.
+     * 工具的缩略图和示例图片。
+     * Used by: ToolForm component
+     * 使用者：ToolForm组件
+     */
     tools: route<true>({
       fileTypes: ['image/*'],
-      maxFileSize: 10 * MB,
+      maxFileSize: MAX_FILE_SIZE,
       multipleFiles: true,
       maxFiles: 10,
       onBeforeUpload: ({ clientMetadata }) => {
@@ -231,14 +202,19 @@ const cdnRouter: Router = {
       },
     }),
 
-    // OEM brand logos → CDN
+    /**
+     * OEM brand logos upload / OEM品牌Logo上传
+     * Logo images for white-label software brands.
+     * 白标软件品牌的Logo图片。
+     * Used by: OemBrandForm component
+     * 使用者：OemBrandForm组件
+     */
     brands: route<true>({
       fileTypes: ['image/*'],
-      maxFileSize: 10 * MB,
+      maxFileSize: MAX_FILE_SIZE,
       multipleFiles: true,
       maxFiles: 5,
       onBeforeUpload: () => {
-        // Generate unique keys with timestamp for cache busting
         return {
           generateObjectInfo: ({ file }) => {
             const timestamp = Date.now();
@@ -252,26 +228,34 @@ const cdnRouter: Router = {
         };
       },
       onAfterSignedUrl: async ({ files }) => {
-        // Note: Brand records are created by the brand form, not here
-        // This callback just logs for debugging
         console.log(`[CDN Upload] ${files.length} brand image(s) uploaded`);
       },
     }),
   },
 };
 
-// Helper to get public CDN URL for uploaded files
+/**
+ * Get public CDN URL for uploaded files / 获取已上传文件的公共CDN URL
+ * @param key - S3 object key / S3对象键
+ * @returns Full CloudFront URL / 完整的CloudFront URL
+ */
 export function getPublicUrl(key: string): string {
   return buildPublicUrl(key);
 }
 
-// Alias for backwards compatibility
+/** Alias for backwards compatibility / 向后兼容的别名 */
 export const getCdnUrl = getPublicUrl;
 
-// Export Next.js route handlers
-// Main router handles library uploads to admin-assets bucket
+/**
+ * Next.js POST handler for library uploads / 媒体库上传的Next.js POST处理器
+ * Endpoint: /api/upload
+ * 端点：/api/upload
+ */
 export const { POST } = toRouteHandler(router);
 
-// Export CDN router for public uploads
-// Usage: Import cdnRouter in a separate route if needed, or use clientMetadata to distinguish
+/**
+ * CDN router for public uploads / 公共上传的CDN路由
+ * Used by: /api/upload/cdn route
+ * 使用者：/api/upload/cdn路由
+ */
 export { cdnRouter };

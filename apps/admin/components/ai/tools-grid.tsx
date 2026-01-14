@@ -1,13 +1,16 @@
-'use client';
-
 /**
  * @fileoverview Tools Grid Component
+ * @fileoverview 工具网格组件
  *
  * Displays a responsive grid of AI tool cards.
  * Clicking a card navigates to the tool view.
+ * 显示AI工具卡片的响应式网格。
+ * 点击卡片导航到工具视图。
  *
- * @module apps/admin/components/ai/tools-grid
+ * @module components/ai/tools-grid
  */
+
+'use client';
 
 import { useRouter } from 'next/navigation';
 import { HugeiconsIcon } from '@hugeicons/react';

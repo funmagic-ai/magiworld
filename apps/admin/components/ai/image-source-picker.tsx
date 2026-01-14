@@ -1,13 +1,16 @@
-'use client';
-
 /**
  * @fileoverview Image Source Picker Component
+ * @fileoverview 图片来源选择器组件
  *
  * Allows users to either upload an image or select from the library.
  * Provides a unified interface for image input across AI tools.
+ * 允许用户上传图片或从媒体库选择图片。
+ * 为所有AI工具提供统一的图片输入界面。
  *
- * @module apps/admin/components/ai/image-source-picker
+ * @module components/ai/image-source-picker
  */
+
+'use client';
 
 import { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';

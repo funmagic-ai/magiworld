@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Sidebar UI Components
+ * @fileoverview 侧边栏UI组件
+ *
+ * Comprehensive sidebar system with collapsible state, menus, and responsive behavior.
+ * Includes SidebarProvider context for state management.
+ * 完整的侧边栏系统，支持折叠状态、菜单和响应式行为。
+ * 包含SidebarProvider上下文用于状态管理。
+ *
+ * @module components/ui/sidebar
+ */
+
 "use client"
 
 import * as React from "react"

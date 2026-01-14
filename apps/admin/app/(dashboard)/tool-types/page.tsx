@@ -1,13 +1,15 @@
 /**
  * @fileoverview Tool Types Management Page
+ * @fileoverview 工具类型管理页面
  *
- * Admin page for managing tool type classifications on the Magiworld platform.
- * Tool types define categories of AI tools (e.g., stylize, edit, 3d_gen) and
- * map to specific React components for the tool interface.
+ * Admin page for managing tool type classifications.
+ * Tool types define categories of AI tools (stylize, edit, 3d_gen).
+ * 管理工具类型分类的管理页面。
+ * 工具类型定义AI工具的分类（风格化、编辑、3D生成）。
  *
- * Features:
- * - Grid display of tool type cards
- * - Badge color preview for each type
+ * Features / 功能:
+ * - Grid display of type cards / 类型卡片的网格显示
+ * - Badge color preview / 徽章颜色预览
  * - Component key reference
  * - Edit links for each tool type
  * - Add new tool type button

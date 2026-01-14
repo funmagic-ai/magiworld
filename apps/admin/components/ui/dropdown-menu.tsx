@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Dropdown Menu UI Component
+ * @fileoverview 下拉菜单UI组件
+ *
+ * Menu with trigger, items, separators, and submenus.
+ * Based on Base UI Menu primitive.
+ * 带触发器、菜单项、分隔符和子菜单的下拉菜单。
+ * 基于Base UI Menu原语构建。
+ *
+ * @module components/ui/dropdown-menu
+ */
+
 "use client"
 
 import * as React from "react"

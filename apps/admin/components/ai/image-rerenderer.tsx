@@ -1,13 +1,16 @@
-'use client';
-
 /**
  * @fileoverview Image Rerenderer Component
+ * @fileoverview 图像重渲染组件
  *
  * UI component for transforming images using AI with text prompts.
  * Uses ImageSourcePicker, PromptEditor, and ResultActions.
+ * 使用AI根据文本提示转换图像的UI组件。
+ * 使用ImageSourcePicker选择图片、PromptEditor编辑提示词、ResultActions操作栏。
  *
- * @module apps/admin/components/ai/image-rerenderer
+ * @module components/ai/image-rerenderer
  */
+
+'use client';
 
 import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';

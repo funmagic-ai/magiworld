@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Dashboard Layout
+ * @fileoverview 仪表板布局
+ *
+ * Protected layout with sidebar navigation and auth check.
+ * Redirects to login if not authenticated.
+ * 带侧边栏导航和认证检查的受保护布局。
+ * 未认证则重定向到登录页面。
+ *
+ * @module app/(dashboard)/layout
+ */
+
 import { redirect } from 'next/navigation';
 import { getLogtoContext } from '@logto/next/server-actions';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';

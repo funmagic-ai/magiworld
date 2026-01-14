@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Edit Tool Type Page
+ * @fileoverview 编辑工具类型页面
+ *
+ * Form page for editing existing tool type classifications.
+ * Fetches tool type data by ID and populates the form.
+ * 编辑现有工具类型分类的表单页面。
+ * 通过ID获取工具类型数据并填充表单。
+ *
+ * @module app/(dashboard)/tool-types/[id]/page
+ */
+
 import { notFound } from 'next/navigation';
 import { ToolTypeForm } from '@/components/forms/tool-type-form';
 import { getToolTypeById } from '@/lib/actions/tool-types';

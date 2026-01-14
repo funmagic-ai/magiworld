@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Create Banner Page
+ * @fileoverview 创建横幅页面
+ *
+ * Form page for creating new homepage banners.
+ * Includes image upload and multi-locale translations.
+ * 创建新首页横幅的表单页面。
+ * 包含图片上传和多语言翻译。
+ *
+ * @module app/(dashboard)/banners/new/page
+ */
+
 import { BannerForm } from '@/components/forms/banner-form';
 
 export default async function NewBannerPage() {

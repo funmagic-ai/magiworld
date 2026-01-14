@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Switch UI Component
+ * @fileoverview 开关UI组件
+ *
+ * Toggle switch for boolean on/off states.
+ * Based on Base UI Switch primitive.
+ * 布尔开/关状态的切换开关。
+ * 基于Base UI Switch原语构建。
+ *
+ * @module components/ui/switch
+ */
+
 "use client"
 
 import { Switch as SwitchPrimitive } from "@base-ui/react/switch"

@@ -1,13 +1,16 @@
-'use client';
-
 /**
  * @fileoverview Result Actions Component
+ * @fileoverview 结果操作组件
  *
  * Action buttons for AI tool results: save to library, download.
  * Uses better-upload for saving to library via presigned URLs.
+ * AI工具结果的操作按钮：保存到媒体库、下载。
+ * 使用better-upload通过预签名URL保存到媒体库。
  *
- * @module apps/admin/components/ai/result-actions
+ * @module components/ai/result-actions
  */
+
+'use client';
 
 import { useState, useCallback } from 'react';
 import { useUploadFiles } from '@better-upload/client';

@@ -1,3 +1,15 @@
+/**
+ * @fileoverview User Button Component
+ * @fileoverview 用户按钮组件
+ *
+ * Displays current user avatar/name in sidebar with dropdown menu.
+ * Provides sign-out action and user info display.
+ * 在侧边栏显示当前用户头像/名称，带下拉菜单。
+ * 提供登出操作和用户信息显示。
+ *
+ * @module components/auth/user-button
+ */
+
 'use client';
 
 import {

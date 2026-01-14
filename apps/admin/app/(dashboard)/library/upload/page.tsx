@@ -2,6 +2,18 @@
 
 /**
  * @fileoverview Media Upload Page
+ * @fileoverview 媒体上传页面
+ *
+ * Client-side page for uploading media files to the library.
+ * Provides drag-and-drop interface with image preview and validation.
+ * 上传媒体文件到资源库的客户端页面。
+ * 提供拖拽界面，支持图片预览和验证。
+ *
+ * Features / 功能:
+ * - Drag-and-drop or click to upload / 拖拽或点击上传
+ * - Image preview with dimensions / 图片预览含尺寸
+ * - File size validation / 文件大小验证
+ * - Alt text for accessibility / 无障碍替代文本
  *
  * @module apps/admin/app/library/upload/page
  */

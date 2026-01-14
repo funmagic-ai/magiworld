@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Edit Tool Page
+ * @fileoverview 编辑工具页面
+ *
+ * Form page for editing existing AI tools.
+ * Fetches tool data by ID and populates the form.
+ * 编辑现有AI工具的表单页面。
+ * 通过ID获取工具数据并填充表单。
+ *
+ * @module app/(dashboard)/tools/[id]/page
+ */
+
 import { notFound } from 'next/navigation';
 import { ToolForm } from '@/components/forms/tool-form';
 import { getToolById, getToolTypesForSelect } from '@/lib/actions/tools';

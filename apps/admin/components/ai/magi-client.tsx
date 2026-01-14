@@ -1,17 +1,20 @@
-'use client';
-
 /**
  * @fileoverview Magi Client Component
+ * @fileoverview Magi客户端组件
  *
  * Main client component for the Magi AI Tools page.
  * Handles URL-based routing between grid view and tool view.
+ * Magi AI工具页面的主客户端组件。
+ * 处理网格视图和工具视图之间的URL路由。
  *
- * URL Pattern:
- * - /magi              → Tools grid
- * - /magi?tool=xxx     → Tool view (maximized)
+ * URL Pattern / URL模式:
+ * - /magi              → Tools grid / 工具网格
+ * - /magi?tool=xxx     → Tool view / 工具视图
  *
- * @module apps/admin/components/ai/magi-client
+ * @module components/ai/magi-client
  */
+
+'use client';
 
 import { useSearchParams } from 'next/navigation';
 import {

@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Textarea UI Component
+ * @fileoverview 文本域UI组件
+ *
+ * Multi-line text input with auto-resizing support.
+ * Consistent styling with Input component.
+ * 多行文本输入框，支持自动调整大小。
+ * 与Input组件保持一致的样式。
+ *
+ * @module components/ui/textarea
+ */
+
 import * as React from "react"
 
 import { cn } from "@/lib/utils"

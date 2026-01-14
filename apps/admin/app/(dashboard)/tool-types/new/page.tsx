@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Create Tool Type Page
+ * @fileoverview 创建工具类型页面
+ *
+ * Form page for creating new tool type classifications.
+ * Includes badge color selection and translations.
+ * 创建新工具类型分类的表单页面。
+ * 包含徽章颜色选择和翻译。
+ *
+ * @module app/(dashboard)/tool-types/new/page
+ */
+
 import { ToolTypeForm } from '@/components/forms/tool-type-form';
 
 export default function NewToolTypePage() {

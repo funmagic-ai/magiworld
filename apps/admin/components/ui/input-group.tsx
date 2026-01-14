@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Input Group UI Component
+ * @fileoverview 输入组UI组件
+ *
+ * Groups input with prefix/suffix elements like icons or buttons.
+ * Handles focus states across child components.
+ * 将输入框与前缀/后缀元素（如图标或按钮）组合。
+ * 处理子组件的焦点状态。
+ *
+ * @module components/ui/input-group
+ */
+
 "use client"
 
 import * as React from "react"

@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Create Tool Page
+ * @fileoverview 创建工具页面
+ *
+ * Form page for creating new AI tools.
+ * Loads tool types for category selection.
+ * 创建新AI工具的表单页面。
+ * 加载工具类型用于分类选择。
+ *
+ * @module app/(dashboard)/tools/new/page
+ */
+
 import { ToolForm } from '@/components/forms/tool-form';
 import { getToolTypesForSelect } from '@/lib/actions/tools';
 

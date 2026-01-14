@@ -1,14 +1,17 @@
 /**
  * @fileoverview Data Access Layer
+ * @fileoverview 数据访问层
  *
  * This module provides data fetching functions for the Magiworld web application.
  * All functions support internationalization (i18n) by accepting a locale parameter
  * and returning localized content from the database.
+ * 本模块为Magiworld Web应用提供数据获取函数。
+ * 所有函数通过接受locale参数支持国际化(i18n)，返回数据库中的本地化内容。
  *
- * The data layer handles:
- * - Joining base tables with their translation tables
- * - Filtering by locale and active status
- * - Transforming database results to application types
+ * The data layer handles / 数据层处理:
+ * - Joining base tables with their translation tables / 连接基础表和翻译表
+ * - Filtering by locale and active status / 按语言和激活状态过滤
+ * - Transforming database results to application types / 将数据库结果转换为应用类型
  *
  * @module apps/web/lib/data
  */

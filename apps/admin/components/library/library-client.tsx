@@ -1,13 +1,16 @@
-'use client';
-
 /**
  * @fileoverview Library Client Component
+ * @fileoverview 媒体库客户端组件
  *
  * Client-side component for the media library with folder navigation,
  * file selection, upload support, and drag-and-drop organization.
+ * 媒体库的客户端组件，支持文件夹导航、
+ * 文件选择、上传功能和拖放整理。
  *
- * @module apps/admin/components/library/library-client
+ * @module components/library/library-client
  */
+
+'use client';
 
 import { useState, useCallback, useTransition } from 'react';
 import { useRouter } from 'next/navigation';

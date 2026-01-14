@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Sheet UI Component
+ * @fileoverview 侧边抽屉UI组件
+ *
+ * Slide-out panel from edge of screen with overlay.
+ * Based on Base UI Dialog primitive with custom positioning.
+ * 从屏幕边缘滑出的面板，带遮罩层。
+ * 基于Base UI Dialog原语构建，具有自定义定位。
+ *
+ * @module components/ui/sheet
+ */
+
 "use client"
 
 import * as React from "react"

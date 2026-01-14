@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Login Page
+ * @fileoverview 登录页面
+ *
+ * Authentication page with Logto sign-in integration.
+ * Redirects to dashboard if already authenticated.
+ * 使用Logto登录集成的认证页面。
+ * 如果已认证则重定向到仪表板。
+ *
+ * @module app/login/page
+ */
+
 import { redirect } from 'next/navigation';
 import { getLogtoContext, signIn } from '@logto/next/server-actions';
 import { logtoConfig } from '@/lib/logto';

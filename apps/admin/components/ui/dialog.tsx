@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Dialog UI Component
+ * @fileoverview 对话框UI组件
+ *
+ * Modal dialog with overlay, header, content, and footer.
+ * Based on Base UI Dialog primitive.
+ * 带遮罩层、头部、内容和底部的模态对话框。
+ * 基于Base UI Dialog原语构建。
+ *
+ * @module components/ui/dialog
+ */
+
 "use client"
 
 import * as React from "react"

@@ -1,13 +1,16 @@
 /**
- * @fileoverview OEM Software Brands Management Page
+ * @fileoverview OEM Brands Management Page
+ * @fileoverview OEM品牌管理页面
  *
- * Admin page for managing OEM partner brands (white-labeled desktop software).
- * Each brand can have custom theming, branding, and tool type filtering.
+ * Admin page for managing OEM partner brands (white-label software).
+ * Each brand has custom theming, branding, and tool type filtering.
+ * 管理OEM合作伙伴品牌（白标软件）的管理页面。
+ * 每个品牌可配置主题、品牌标识和工具类型过滤。
  *
- * Features:
- * - Grid display of brand cards
- * - Theme color preview
- * - Software ID reference
+ * Features / 功能:
+ * - Grid display of brand cards / 品牌卡片的网格显示
+ * - Theme color preview / 主题颜色预览
+ * - Software ID reference / 软件ID引用
  * - Active status indicator
  * - Edit links for each brand
  * - Add new brand button

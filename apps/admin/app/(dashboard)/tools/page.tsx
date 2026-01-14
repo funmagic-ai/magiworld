@@ -1,13 +1,15 @@
 /**
  * @fileoverview Tools Management Page
+ * @fileoverview 工具管理页面
  *
- * Admin page for managing AI tools available on the Magiworld platform.
- * Displays a table of all tools with their metadata and provides
- * navigation to create or edit tools.
+ * Admin page for managing AI tools on the Magiworld platform.
+ * Displays table with metadata and navigation to create/edit.
+ * 管理Magiworld平台上AI工具的管理页面。
+ * 显示带元数据的表格和创建/编辑导航。
  *
- * Features:
- * - Tabular list of all tools with localized names
- * - Search, filter, and sort toolbar
+ * Features / 功能:
+ * - Tabular list with localized names / 带本地化名称的表格列表
+ * - Search, filter, sort toolbar / 搜索、筛选、排序工具栏
  * - Tool type badges for visual classification
  * - Quick active toggle switches
  * - Edit links for each tool

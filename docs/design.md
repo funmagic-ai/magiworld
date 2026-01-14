@@ -21,6 +21,10 @@
 18. [CloudFront Signed URLs](#18-cloudfront-signed-urls)
 19. [Magi AI Assistant](#19-magi-ai-assistant)
 20. [Web App Tools](#20-web-app-tools)
+21. [Shared Utilities (Admin App)](#21-shared-utilities-admin-app)
+22. [OEM/White-Label System](#22-oemwhite-label-system)
+23. [Attribution Tracking](#23-attribution-tracking)
+24. [Admin User Management](#24-admin-user-management)
 
 ---
 
@@ -258,41 +262,87 @@ export const outputTypeEnum = pgEnum('output_type', ['image', 'model_3d', 'fabri
 export const localeEnum = pgEnum('locale', ['en', 'ja', 'pt', 'zh']);
 ```
 
-#### Content Tables
-- `tool_types` + `tool_type_translations` - Tool classifications
-- `categories` + `category_translations` - Tool categories
-- `tools` + `tool_translations` - Individual AI tools
-- `home_banners` + `home_banner_translations` - Homepage banners
-- `media` - Uploaded media files
+#### Content Management Tables
+- `tool_types` + `tool_type_translations` - Tool classifications (slug, badgeColor, order, isActive)
+- `tools` + `tool_translations` - Individual AI tools (aiEndpoint, promptTemplate, thumbnailUrl, configJson)
+- `home_banners` + `home_banner_translations` - Homepage banners (type: 'main' | 'side')
+- `folders` - Hierarchical media organization (self-referencing parentId)
+- `media` - Uploaded media files (url, mimeType, dimensions, size)
+
+#### User Tables
+- `users` - Web app users synced from Logto (logtoId, email, locale, colorMode, registrationBrandId)
+- `admin_users` - Admin dashboard users (email required, isActive flag for soft disable)
+
+#### OEM & White-Label Tables
+- `oem_software_brands` - White-label brand configurations (softwareId, themeConfig, allowedToolTypeIds)
 
 #### Task Tables
-- `tasks` - User-generated AI tasks (high volume, transactional)
+- `tasks` - User-generated AI tasks (userId, toolId, inputParams, outputType, outputData, status)
+
+#### Attribution Tables
+- `user_attributions` - First-touch UTM tracking at registration
+- `user_logins` - Per-session login tracking (brandId, channel, ipAddress, userAgent)
+- `payment_attributions` - Last-touch payment attribution (paymentId, amount, currency, UTM params)
 
 ### 5.2 Entity Relationship
 
 ```
-┌─────────────────┐     ┌─────────────────────────┐
-│   tool_types    │────▶│  tool_type_translations │
-└────────┬────────┘     └─────────────────────────┘
-         │ 1:N
-         ▼
-┌─────────────────┐     ┌─────────────────────────┐
-│     tools       │────▶│    tool_translations    │
-└────────┬────────┘     └─────────────────────────┘
-         │
-         │ N:1
-         ▼
-┌─────────────────┐     ┌─────────────────────────┐
-│   categories    │────▶│  category_translations  │
-└─────────────────┘     └─────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           CONTENT MANAGEMENT                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌─────────────────┐     ┌─────────────────────────┐                        │
+│  │   tool_types    │────▶│  tool_type_translations │                        │
+│  └────────┬────────┘     └─────────────────────────┘                        │
+│           │ 1:N                                                              │
+│           ▼                                                                  │
+│  ┌─────────────────┐     ┌─────────────────────────┐                        │
+│  │     tools       │────▶│    tool_translations    │                        │
+│  └────────┬────────┘     └─────────────────────────┘                        │
+│           │                                                                  │
+│  ┌─────────────────┐     ┌─────────────────────────┐                        │
+│  │  home_banners   │────▶│ home_banner_translations│                        │
+│  └─────────────────┘     └─────────────────────────┘                        │
+│                                                                               │
+│  ┌─────────────────┐     ┌─────────────────────────┐                        │
+│  │    folders      │────▶│        media            │                        │
+│  │ (self-referencing)    └─────────────────────────┘                        │
+│  └─────────────────┘                                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
 
-┌─────────────────┐     ┌─────────────────────────┐
-│  home_banners   │────▶│ home_banner_translations│
-└─────────────────┘     └─────────────────────────┘
-
-┌─────────────────┐
-│      tasks      │ (references tools by toolId)
-└─────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           USER & OEM SYSTEM                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌─────────────────────┐                                                     │
+│  │ oem_software_brands │◀─────────────────────────────────┐                 │
+│  └──────────┬──────────┘                                  │                 │
+│             │ 1:N                                         │ N:1             │
+│             ▼                                             │                 │
+│  ┌─────────────────────┐     ┌─────────────────────┐     │                 │
+│  │       users         │────▶│  user_attributions  │     │                 │
+│  │ (registrationBrandId)     │   (first-touch UTM) │     │                 │
+│  └──────────┬──────────┘     └─────────────────────┘     │                 │
+│             │ 1:N                                         │                 │
+│             ├────────────────▶┌─────────────────────┐    │                 │
+│             │                 │    user_logins      │────┘                 │
+│             │                 │ (per-session track) │                       │
+│             │                 └─────────────────────┘                       │
+│             │                                                                │
+│             ├────────────────▶┌─────────────────────┐                       │
+│             │                 │ payment_attributions│                       │
+│             │                 │  (last-touch UTM)   │                       │
+│             │                 └─────────────────────┘                       │
+│             │                                                                │
+│             └────────────────▶┌─────────────────────┐                       │
+│                               │       tasks         │                       │
+│                               │ (AI generation jobs)│                       │
+│                               └─────────────────────┘                       │
+│                                                                               │
+│  ┌─────────────────────┐                                                     │
+│  │    admin_users      │  (separate from web users for security)            │
+│  └─────────────────────┘                                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -869,28 +919,82 @@ Use Next.js `<Image>` component with remote patterns configured.
 ```bash
 # .env.example
 
-# Database
+# ==============================================
+# Database (REQUIRED)
+# ==============================================
 DATABASE_URL=postgresql://user:password@localhost:9000/magi-db
 
-# AWS S3 Storage
-AWS_REGION=ap-northeast-1
+# ==============================================
+# AWS S3 Storage - 4-Bucket Architecture (REQUIRED)
+# ==============================================
+AWS_REGION=us-east-2
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
-S3_BUCKET_NAME=funmagic-assets
-CLOUDFRONT_URL=https://cdn.funmagic.ai
 
+# Admin App Buckets
+S3_ADMIN_ASSETS_BUCKET=funmagic-admin-users-assets
+S3_PUBLIC_ASSETS_BUCKET=funmagic-web-public-assets
+
+# Web App Buckets
+S3_WEB_PRIVATE_BUCKET=funmagic-web-users-assets-private
+S3_WEB_SHARED_BUCKET=funmagic-web-users-assets-shared
+
+# ==============================================
+# CloudFront CDN (REQUIRED)
+# ==============================================
+# Public CDN - serves banners, tool images, brand logos
+CLOUDFRONT_PUBLIC_URL=https://d1arbct25l8u2x.cloudfront.net
+CLOUDFRONT_WEB_SHARED_URL=https://shared.funmagic.ai
+
+# Private CDN - serves user assets (requires signed URLs)
+CLOUDFRONT_ADMIN_PRIVATE_URL=https://d2wcxayah4inv3.cloudfront.net
+CLOUDFRONT_WEB_PRIVATE_URL=https://d1jmkr23cr2ayz.cloudfront.net
+
+# CloudFront signed URL configuration
+CLOUDFRONT_KEY_PAIR_ID=
+CLOUDFRONT_PRIVATE_KEY=
+
+# ==============================================
+# Client-side Environment Variables
+# ==============================================
+NEXT_PUBLIC_CLOUDFRONT_URL=https://d1arbct25l8u2x.cloudfront.net
+NEXT_PUBLIC_CLOUDFRONT_ADMIN_URL=https://d2wcxayah4inv3.cloudfront.net
+
+# ==============================================
+# Upload Configuration (OPTIONAL)
+# ==============================================
+UPLOAD_MAX_SIZE_MB=20
+NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB=20
+
+# ==============================================
 # AI APIs
-AI_API_KEY=
-AI_API_URL=
+# ==============================================
+OPENAI_API_KEY=
+GOOGLE_GENERATIVE_AI_API_KEY=
+FAL_API_KEY=
 
-# Inngest (Job Queue)
+# ==============================================
+# Job Queue (Inngest)
+# ==============================================
 INNGEST_EVENT_KEY=
 INNGEST_SIGNING_KEY=
 
+# ==============================================
 # Authentication (Logto)
-# LOGTO_ENDPOINT=
-# LOGTO_APP_ID=
-# LOGTO_APP_SECRET=
+# ==============================================
+# Web App (port 3000)
+LOGTO_ENDPOINT=
+LOGTO_APP_ID=
+LOGTO_APP_SECRET=
+LOGTO_BASE_URL=http://localhost:3000
+LOGTO_COOKIE_SECRET=
+
+# Admin App (port 3001)
+LOGTO_ADMIN_ENDPOINT=
+LOGTO_ADMIN_APP_ID=
+LOGTO_ADMIN_APP_SECRET=
+LOGTO_ADMIN_BASE_URL=http://localhost:3001
+LOGTO_ADMIN_COOKIE_SECRET=
 ```
 
 ---
@@ -1013,10 +1117,54 @@ The admin app uses **Vercel AI SDK** for all AI-powered features. Multiple provi
 
 | Tool | Model | Capability |
 |------|-------|------------|
-| Background Remove | `fal-ai/bria/background/remove` | Remove image backgrounds |
-| Image Generate | Various Fal models | Generate images from prompts |
+| Background Remove | `fal-ai/bria/background/remove` | Remove image backgrounds using BRIA RMBG 2.0 |
+| Image Generate | `fal-ai/flux/schnell` | Generate images from prompts (supports aspect ratios: 1:1, 16:9, 9:16, 4:3, 3:4) |
 | Image Upscale | Fal upscaling models | Enhance image resolution |
 | Image Rerender | Fal rendering models | Restyle images |
+
+#### Admin App AI Tools (lib/ai/tools/)
+
+The admin app includes specialized AI tools located in `apps/admin/lib/ai/tools/`:
+
+```
+lib/ai/tools/
+├── index.ts              # Tool registry and exports
+├── background-remove.ts  # BRIA RMBG 2.0 integration
+├── image-generate.ts     # Flux Schnell image generation
+├── image-upscale.ts      # Image upscaling
+├── image-rerender.ts     # Image re-rendering
+└── nanobanana-pro.ts     # NanoBanana Pro integration
+```
+
+**Background Remove Tool:**
+```typescript
+// Uses Fal.ai BRIA RMBG 2.0
+import { fal } from '@fal-ai/client';
+
+const result = await fal.subscribe('fal-ai/bria/background/remove', {
+  input: { image_url: signedUrl },
+});
+```
+
+**Image Generate Tool:**
+```typescript
+// Uses Fal.ai Flux Schnell with aspect ratio support
+const aspectRatios = {
+  '1:1': 'square',
+  '16:9': 'landscape_16_9',
+  '9:16': 'portrait_16_9',
+  '4:3': 'landscape_4_3',
+  '3:4': 'portrait_4_3',
+};
+
+const result = await fal.subscribe('fal-ai/flux/schnell', {
+  input: {
+    prompt,
+    image_size: aspectRatios[ratio],
+    num_inference_steps: 4,
+  },
+});
+```
 
 ### Implementation
 
@@ -1271,8 +1419,38 @@ The web app includes specialized AI tools with custom interfaces. Each tool is r
 
 | Tool Slug | Component | Description |
 |-----------|-----------|-------------|
-| `background-remove` | `BackgroundRemoveInterface` | AI-powered background removal using Fal.ai |
+| `background-remove` | `BackgroundRemoveInterface` | AI-powered background removal using Fal.ai BRIA RMBG 2.0 |
 | `3d-crystal` | `Crystal3DInterface` | 3D crystal engraving preview with image cropping |
+
+### Background Remove Tool
+
+The Background Remove tool (`background-remove`) uses Fal.ai's BRIA RMBG 2.0 model for high-quality background removal.
+
+#### Features
+
+- **Image Upload**: Drag-and-drop or click to upload images
+- **Real-time Processing**: Shows processing status with loading indicator
+- **Result Preview**: Side-by-side comparison of original and processed images
+- **Download**: Download the processed image with transparent background
+
+#### Component Structure
+
+```
+apps/web/components/tools/background-remove/
+├── index.tsx          # Main BackgroundRemoveInterface component
+├── image-uploader.tsx # Upload area with drag-and-drop
+└── result-preview.tsx # Before/after comparison view
+```
+
+#### API Integration
+
+```typescript
+// Calls admin API which proxies to Fal.ai
+const response = await fetch('/api/ai/background-remove', {
+  method: 'POST',
+  body: JSON.stringify({ imageUrl }),
+});
+```
 
 ### 3D Crystal Tool
 
@@ -1371,6 +1549,469 @@ apps/web/components/tools/3d-crystal/
 
 ---
 
+## 21. Shared Utilities (Admin App)
+
+### Overview
+
+The admin app includes centralized utility functions for common operations like file validation, image dimension detection, and upload configuration. These utilities ensure consistency and reduce code duplication across components.
+
+### 21.1 Upload Configuration
+
+Upload size limits are centralized via environment variables, allowing easy configuration without code changes.
+
+#### Environment Variables
+
+```bash
+# Server-side limit (API routes)
+UPLOAD_MAX_SIZE_MB=20
+
+# Client-side limit (form validation) - must match server-side
+NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB=20
+```
+
+#### Usage
+
+```typescript
+// lib/env.ts - Server-side
+import { getUploadMaxSize, getUploadMaxSizeMB } from '@/lib/env';
+
+const maxBytes = getUploadMaxSize();      // e.g., 20971520 (20MB in bytes)
+const maxMB = getUploadMaxSizeMB();       // e.g., 20
+
+// lib/utils/file.ts - Client-side (reads from NEXT_PUBLIC_*)
+import { MAX_FILE_SIZE, MAX_FILE_SIZE_MB } from '@/lib/utils/file';
+
+if (file.size > MAX_FILE_SIZE) {
+  throw new Error(`File too large. Max: ${MAX_FILE_SIZE_MB}MB`);
+}
+```
+
+### 21.2 File Validation Utilities
+
+Located at `lib/utils/file.ts`, provides file type and size validation.
+
+```typescript
+import {
+  isValidImageType,
+  isValidFileSize,
+  validateFile,
+  getFileExtension,
+  MAX_FILE_SIZE,
+  MAX_FILE_SIZE_MB
+} from '@/lib/utils/file';
+
+// Validate file type (image only)
+const isImage = isValidImageType(file);  // true for jpg, png, gif, webp
+
+// Validate file size
+const isSizeOk = isValidFileSize(file);  // true if under MAX_FILE_SIZE
+
+// Combined validation with error messages
+const result = validateFile(file);
+if (!result.valid) {
+  console.error(result.error);  // "File type not allowed" or "File too large"
+}
+```
+
+### 21.3 Image Dimension Utilities
+
+Located at `lib/utils/image.ts`, provides image dimension detection and aspect ratio validation.
+
+#### Core Functions
+
+```typescript
+import {
+  getImageDimensions,
+  getImageDimensionsFromUrl,
+  calculateAspectRatio,
+  validateAspectRatio,
+  isSquare,
+  validateMinDimensions,
+  ASPECT_RATIOS,
+  DEFAULT_RATIO_TOLERANCE,
+} from '@/lib/utils/image';
+
+// Get dimensions from File object
+const { width, height } = await getImageDimensions(file);
+
+// Get dimensions from URL
+const dims = await getImageDimensionsFromUrl('https://example.com/image.jpg');
+
+// Calculate aspect ratio
+const ratio = calculateAspectRatio({ width: 1920, height: 1080 });  // 1.777...
+
+// Validate aspect ratio with tolerance
+const result = validateAspectRatio(
+  { width: 1920, height: 1080 },  // dimensions
+  16 / 9,                          // expected ratio
+  '16:9',                          // label for display
+  0.05                             // tolerance (5%)
+);
+// result: { isMatch: true, actualRatio: 1.777, actualRatioFormatted: '16:9', ... }
+
+// Check if image is square
+const square = isSquare({ width: 500, height: 500 });  // true
+
+// Validate minimum dimensions
+const minCheck = validateMinDimensions({ width: 800, height: 600 }, 1024, 768);
+// { isValid: false, error: 'Image must be at least 1024x768 pixels' }
+```
+
+#### Predefined Aspect Ratios
+
+```typescript
+export const ASPECT_RATIOS = {
+  '1:1':   { ratio: 1,      label: '1:1 (Square)' },
+  '4:3':   { ratio: 4/3,    label: '4:3 (Standard)' },
+  '16:9':  { ratio: 16/9,   label: '16:9 (Widescreen)' },
+  '21:9':  { ratio: 21/9,   label: '21:9 (Ultra-wide)' },
+  '3:4':   { ratio: 3/4,    label: '3:4 (Portrait)' },
+  '9:16':  { ratio: 9/16,   label: '9:16 (Mobile)' },
+};
+```
+
+#### React Hook
+
+The `useImageDimensions` hook automatically extracts dimensions and creates preview URLs for uploaded files.
+
+```typescript
+import { useImageDimensions } from '@/lib/utils/image';
+
+function ImageUploader() {
+  const [file, setFile] = useState<File | null>(null);
+  const { dimensions, previewUrl, loading, error } = useImageDimensions(file);
+
+  return (
+    <div>
+      <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+
+      {loading && <p>Loading dimensions...</p>}
+      {error && <p>Error: {error}</p>}
+
+      {dimensions && (
+        <p>Size: {dimensions.width} x {dimensions.height}</p>
+      )}
+
+      {previewUrl && (
+        <img src={previewUrl} alt="Preview" />
+      )}
+    </div>
+  );
+}
+```
+
+#### Hook Return Type
+
+```typescript
+interface UseImageDimensionsResult {
+  dimensions: ImageDimensions | null;  // { width, height }
+  previewUrl: string | null;           // Object URL for preview
+  loading: boolean;                    // True while processing
+  error: string | null;                // Error message if failed
+}
+```
+
+### 21.4 Usage in Form Components
+
+The utilities are used in form components for image validation:
+
+#### Banner Form (banner-form.tsx)
+
+```typescript
+const { dimensions: imageDimensions, previewUrl } = useImageDimensions(pendingFile);
+
+const getRatioStatus = () => {
+  if (!imageDimensions) return null;
+  const expected = EXPECTED_RATIOS[bannerType];  // 16:9 for main, 4:3 for side
+  return validateAspectRatio(imageDimensions, expected.ratio, expected.label);
+};
+```
+
+#### Tool Form (tool-form.tsx)
+
+```typescript
+const { dimensions: imageDimensions, previewUrl } = useImageDimensions(pendingFile);
+
+// Validate 1:1 aspect ratio for tool thumbnails
+const ratioResult = imageDimensions
+  ? validateAspectRatio(imageDimensions, ASPECT_RATIOS['1:1'].ratio, '1:1')
+  : null;
+```
+
+#### OEM Brand Form (oem-brand-form.tsx)
+
+```typescript
+const { dimensions: logoDimensions, previewUrl } = useImageDimensions(pendingFile);
+
+// Validate square logo and minimum dimensions
+const isLogoSquare = logoDimensions ? isSquare(logoDimensions) : false;
+const minDimResult = logoDimensions
+  ? validateMinDimensions(logoDimensions, 200, 200)
+  : null;
+```
+
+---
+
+## 22. OEM/White-Label System
+
+### Overview
+
+Magiworld supports white-label deployments for OEM partners (desktop software vendors). Each OEM brand can have custom theming, branding, and restricted tool access.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        OEM White-Label Flow                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│   Desktop Software (Partner A)                                               │
+│          │                                                                   │
+│          │ Opens browser with ?software_id=PARTNER_A_2024                   │
+│          ▼                                                                   │
+│   ┌─────────────────────┐                                                   │
+│   │   Web App (3000)    │                                                   │
+│   │   /api/brand/validate │◀───── Validates software_id                     │
+│   └──────────┬──────────┘                                                   │
+│              │                                                               │
+│              ▼                                                               │
+│   ┌─────────────────────┐     ┌─────────────────────┐                       │
+│   │  Set Brand Cookie   │────▶│   oem_software_brands│                      │
+│   │  (httpOnly, secure) │     │   (database lookup)  │                      │
+│   └──────────┬──────────┘     └─────────────────────┘                       │
+│              │                                                               │
+│              ▼                                                               │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │   Themed Experience                                                   │   │
+│   │   - Custom logo & brand name                                          │   │
+│   │   - Theme palette (primaryColor, etc.)                                │   │
+│   │   - Filtered tool types (allowedToolTypeIds)                          │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Database Schema
+
+```typescript
+export const oemSoftwareBrands = pgTable('oem_software_brands', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  slug: text('slug').notNull().unique(),           // URL-friendly identifier
+  name: text('name').notNull(),                    // Display name for admin
+  softwareId: text('software_id').notNull().unique(), // Unique ID from desktop software
+  themeConfig: jsonb('theme_config'),              // { primaryColor, logo, brandName }
+  allowedToolTypeIds: jsonb('allowed_tool_type_ids').$type<string[]>().default([]),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+```
+
+### Theme Configuration
+
+```typescript
+interface ThemeConfig {
+  primaryColor?: string;    // e.g., '#FF5722'
+  logo?: string;            // URL to brand logo
+  brandName?: string;       // Display name in UI
+  palette?: 'neutral' | 'green' | 'blue' | 'purple' | 'orange';
+}
+```
+
+### Brand Context (Web App)
+
+```typescript
+// lib/brand.ts
+export function getCurrentBrand(): OemSoftwareBrand | null;
+export function setBrandCookie(brand: OemSoftwareBrand): void;
+export function clearBrandCookie(): void;
+export function getCurrentBrandPalette(): string;
+export function isToolTypeAllowed(toolTypeId: string): boolean;
+```
+
+### Admin Management
+
+OEM brands are managed via the admin app at `/oem-brands`:
+- Create/Edit brand configurations
+- Set theme palette and logo
+- Configure allowed tool types (empty = all allowed)
+- Enable/Disable brands
+
+---
+
+## 23. Attribution Tracking
+
+### Overview
+
+The platform implements comprehensive attribution tracking for marketing analytics:
+- **First-Touch Attribution**: UTM parameters captured at user registration
+- **Session Attribution**: Brand and channel tracked per login session
+- **Last-Touch Payment Attribution**: UTM and brand at payment time
+
+### First-Touch Attribution (user_attributions)
+
+Captured once when user registers:
+
+```typescript
+export const userAttributions = pgTable('user_attributions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().unique().references(() => users.id),
+  utmSource: text('utm_source'),      // e.g., 'google', 'facebook'
+  utmMedium: text('utm_medium'),      // e.g., 'cpc', 'email', 'social'
+  utmCampaign: text('utm_campaign'),  // Campaign name
+  utmTerm: text('utm_term'),          // Paid search keywords
+  utmContent: text('utm_content'),    // A/B test variant
+  referrerUrl: text('referrer_url'),  // Full referrer URL
+  landingPage: text('landing_page'),  // First page visited
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+```
+
+### Session Attribution (user_logins)
+
+Tracked per login session:
+
+```typescript
+export const userLogins = pgTable('user_logins', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  brandId: uuid('brand_id').references(() => oemSoftwareBrands.id), // OEM brand if applicable
+  channel: text('channel').notNull().default('web'),  // 'web' | 'desktop' | 'mobile'
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+```
+
+### Payment Attribution (payment_attributions)
+
+Last-touch data captured at payment:
+
+```typescript
+export const paymentAttributions = pgTable('payment_attributions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  paymentId: text('payment_id').notNull(),  // External payment ID (e.g., Stripe)
+  brandId: uuid('brand_id').references(() => oemSoftwareBrands.id),
+  channel: text('channel').notNull().default('web'),
+  utmSource: text('utm_source'),
+  utmMedium: text('utm_medium'),
+  utmCampaign: text('utm_campaign'),
+  amount: integer('amount').notNull(),      // Amount in cents
+  currency: text('currency').notNull().default('usd'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+```
+
+### Analytics Queries
+
+```sql
+-- Users by registration source
+SELECT utm_source, COUNT(*) as users
+FROM user_attributions
+GROUP BY utm_source;
+
+-- Revenue by OEM brand
+SELECT b.name, SUM(p.amount) as revenue
+FROM payment_attributions p
+LEFT JOIN oem_software_brands b ON p.brand_id = b.id
+GROUP BY b.name;
+
+-- Daily active users by channel
+SELECT DATE(created_at), channel, COUNT(DISTINCT user_id)
+FROM user_logins
+GROUP BY DATE(created_at), channel;
+```
+
+---
+
+## 24. Admin User Management
+
+### Overview
+
+Admin users are stored in a separate table from web users for security isolation. They can be disabled without deletion using the `isActive` flag.
+
+### Database Schema
+
+```typescript
+export const adminUsers = pgTable('admin_users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  logtoId: text('logto_id').notNull().unique(),  // Logto user ID
+  email: text('email').notNull(),                 // Required for admins
+  name: text('name'),
+  avatarUrl: text('avatar_url'),
+  isActive: boolean('is_active').default(true),   // Soft disable
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  lastLoginAt: timestamp('last_login_at'),
+});
+```
+
+### Lazy Sync Pattern
+
+Admin users are synced from Logto on each login (not via webhooks):
+
+```typescript
+// lib/admin-user.ts
+export async function syncAdminUserFromLogto(logtoUser: LogtoUser): Promise<AdminUser> {
+  const existing = await db.query.adminUsers.findFirst({
+    where: eq(adminUsers.logtoId, logtoUser.sub),
+  });
+
+  if (existing) {
+    // Update profile and lastLoginAt
+    return await db.update(adminUsers)
+      .set({
+        email: logtoUser.email,
+        name: logtoUser.name,
+        avatarUrl: logtoUser.picture,
+        lastLoginAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(adminUsers.id, existing.id))
+      .returning();
+  }
+
+  // Create new admin user
+  return await db.insert(adminUsers)
+    .values({
+      logtoId: logtoUser.sub,
+      email: logtoUser.email!,
+      name: logtoUser.name,
+      avatarUrl: logtoUser.picture,
+      lastLoginAt: new Date(),
+    })
+    .returning();
+}
+```
+
+### Disable vs Delete
+
+```typescript
+// Disable admin (reversible)
+await db.update(adminUsers)
+  .set({ isActive: false })
+  .where(eq(adminUsers.id, userId));
+
+// Re-enable admin
+await db.update(adminUsers)
+  .set({ isActive: true })
+  .where(eq(adminUsers.id, userId));
+```
+
+### Access Control
+
+The admin app checks `isActive` status on each request:
+
+```typescript
+// middleware or layout
+const adminUser = await getAdminUser();
+if (!adminUser || !adminUser.isActive) {
+  redirect('/login?error=access_denied');
+}
+```
+
+---
+
 ## Document History
 
 | Version | Date | Changes |
@@ -1382,3 +2023,5 @@ apps/web/components/tools/3d-crystal/
 | 4.0 | 2025-01-06 | Added AI SDK Integration, CloudFront Signed URLs, Magi AI Assistant |
 | 5.0 | 2025-01-12 | Added Web App Tools section, 3D Crystal Tool documentation |
 | 5.1 | 2025-01-12 | Updated File Storage Strategy to 4-bucket architecture |
+| 5.2 | 2025-01-14 | Added Shared Utilities section (upload config, image dimension utilities) |
+| 6.0 | 2025-01-14 | Major update: Updated database schema with new tables (users, admin_users, oem_software_brands, attribution tables), added OEM/White-Label System, Attribution Tracking, Admin User Management sections, updated environment variables documentation, expanded AI tools documentation with Fal.ai integration, added Background Remove tool documentation |

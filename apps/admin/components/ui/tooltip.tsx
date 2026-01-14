@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Tooltip UI Component
+ * @fileoverview 工具提示UI组件
+ *
+ * Informational popup on hover or focus.
+ * Based on Base UI Tooltip primitive.
+ * 悬停或聚焦时显示的信息弹出框。
+ * 基于Base UI Tooltip原语构建。
+ *
+ * @module components/ui/tooltip
+ */
+
 "use client"
 
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"

@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Auth Status Component
+ * @fileoverview 认证状态组件
+ *
+ * Server component that checks authentication status and renders UserButton.
+ * Syncs admin user data from Logto to local database on each page load.
+ * 检查认证状态并渲染UserButton的服务端组件。
+ * 在每次页面加载时将管理员用户数据从Logto同步到本地数据库。
+ *
+ * @module components/auth/auth-status
+ */
+
 import { getLogtoContext, signOut } from '@logto/next/server-actions';
 import { logtoConfig } from '@/lib/logto';
 import { syncAdminUserFromLogto } from '@/lib/admin-user';

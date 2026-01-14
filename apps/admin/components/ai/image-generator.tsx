@@ -1,13 +1,16 @@
-'use client';
-
 /**
  * @fileoverview Image Generator Component
+ * @fileoverview 图像生成组件
  *
  * UI component for generating images from text prompts using AI.
  * Uses PromptEditor with presets and ResultActions for actions.
+ * 使用AI根据文本提示生成图像的UI组件。
+ * 使用带预设的PromptEditor和ResultActions操作栏。
  *
- * @module apps/admin/components/ai/image-generator
+ * @module components/ai/image-generator
  */
+
+'use client';
 
 import { useState, useTransition, useEffect } from 'react';
 import { Button } from '@/components/ui/button';

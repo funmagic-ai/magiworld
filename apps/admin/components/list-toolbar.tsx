@@ -1,3 +1,15 @@
+/**
+ * @fileoverview List Toolbar Component
+ * @fileoverview 列表工具栏组件
+ *
+ * Reusable toolbar with search, filter, sort, and show-deleted toggle.
+ * Updates URL params for server-side filtering/pagination.
+ * 可复用的工具栏，包含搜索、筛选、排序和显示已删除项切换。
+ * 更新URL参数以实现服务端过滤/分页。
+ *
+ * @module components/list-toolbar
+ */
+
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';

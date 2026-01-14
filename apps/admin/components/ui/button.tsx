@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Button UI Component
+ * @fileoverview 按钮UI组件
+ *
+ * Button with multiple variants, sizes, and states.
+ * Uses class-variance-authority for variant management.
+ * 多变体、多尺寸、多状态的按钮组件。
+ * 使用class-variance-authority管理变体。
+ *
+ * @module components/ui/button
+ */
+
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 

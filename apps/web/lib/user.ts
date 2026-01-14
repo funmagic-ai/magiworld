@@ -1,10 +1,13 @@
 /**
  * @fileoverview User Sync Utility
+ * @fileoverview 用户同步工具
  *
  * Provides functions to sync user data from Logto to the local database.
  * Uses a "lazy sync" pattern where user data is synced on each login.
+ * 提供从Logto同步用户数据到本地数据库的函数。
+ * 使用"惰性同步"模式，在每次登录时同步用户数据。
  *
- * @module lib/user
+ * @module apps/web/lib/user
  */
 
 import { db, users, eq, type User } from '@magiworld/db';

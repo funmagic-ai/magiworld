@@ -1,13 +1,16 @@
-'use client';
-
 /**
  * @fileoverview Upload Dropzone Component
+ * @fileoverview 上传拖放区组件
  *
  * Drag-and-drop file upload component using better-upload.
  * Supports images and videos with progress indication.
+ * 使用better-upload的拖放文件上传组件。
+ * 支持图片和视频，带上传进度指示。
  *
- * @module apps/admin/components/upload-dropzone
+ * @module components/upload-dropzone
  */
+
+'use client';
 
 import { useState, useCallback } from 'react';
 import { useUploadFiles, type FileUploadInfo, type UploadStatus } from '@better-upload/client';
