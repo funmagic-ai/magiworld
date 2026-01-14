@@ -15,6 +15,10 @@ import { getLogtoContext, signIn } from '@logto/next/server-actions';
 import { logtoConfig } from '@/lib/logto';
 import { SignInButton } from '@/components/auth/sign-in-button';
 
+// Prevent static prerendering - this page requires Logto authentication check
+// 防止静态预渲染 - 此页面需要Logto认证检查
+export const dynamic = 'force-dynamic';
+
 export default async function LoginPage() {
   const { isAuthenticated } = await getLogtoContext(logtoConfig);
 

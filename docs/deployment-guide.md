@@ -17,9 +17,10 @@ This guide walks you through deploying the Magiworld platform including AWS S3, 
 11. [Step 9: Deploy to AWS EC2 with Docker](#step-9-deploy-to-aws-ec2-with-docker)
 12. [Step 10: Set Up AWS RDS PostgreSQL](#step-10-set-up-aws-rds-postgresql)
 13. [Step 11: Configure Environment Variables](#step-11-configure-environment-variables)
-14. [Step 12: Test the Configuration](#step-12-test-the-configuration)
-15. [Quick Checklist](#quick-checklist)
-16. [Troubleshooting](#troubleshooting)
+14. [Step 12: Deploy Code and Run](#step-12-deploy-code-and-run)
+15. [Step 13: Test the Configuration](#step-13-test-the-configuration)
+16. [Quick Checklist](#quick-checklist)
+17. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -1050,10 +1051,13 @@ RUN corepack enable pnpm && pnpm install --frozen-lockfile
 FROM base AS builder
 WORKDIR /app
 
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
+# Copy installed dependencies from deps stage
+# IMPORTANT: Copy entire /app, not just node_modules!
+# pnpm creates symlinks in workspace packages (apps/web/node_modules)
+# that point back to root node_modules/.pnpm - we need the full structure
+COPY --from=deps /app ./
 
-# Copy all source code
+# Copy all source code (overwrites package.json files, but node_modules remain)
 COPY . .
 
 # Build only the web app (monorepo filter)
@@ -1145,7 +1149,9 @@ RUN corepack enable pnpm && pnpm install --frozen-lockfile
 # -----------------------------------------------------------------------------
 FROM base AS builder
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+
+# Copy entire /app from deps (includes workspace node_modules symlinks)
+COPY --from=deps /app ./
 COPY . .
 
 # Build only the admin app (monorepo filter)
@@ -1587,78 +1593,7 @@ Point your domains to the EC2 Elastic IP:
 
 > **Note**: Using A records (not CNAME) because we have a static Elastic IP.
 
-### 9.11 Clone Your Code and Build
-
-**Option A: Clone from Git**
-
-```bash
-cd ~/funmagic
-
-# Clone your repository
-git clone https://github.com/your-org/magiworld.git .
-
-# Copy your Dockerfiles and configs (if not in repo)
-# ... copy files created above ...
-
-# Build and start
-docker-compose up -d --build
-```
-
-**Option B: Upload from Local**
-
-```bash
-# From your local machine
-cd /path/to/magiworld
-rsync -avz --exclude='node_modules' --exclude='.next' --exclude='.git' \
-  -e "ssh -i your-key.pem" \
-  . ec2-user@YOUR_ELASTIC_IP:~/funmagic/
-```
-
-### 9.12 Useful Docker Commands
-
-```bash
-# View running containers
-docker-compose ps
-
-# View logs
-docker-compose logs -f web
-docker-compose logs -f admin
-docker-compose logs -f nginx
-
-# Restart services
-docker-compose restart web
-docker-compose restart admin
-
-# Rebuild and restart (after code changes)
-docker-compose up -d --build
-
-# Stop everything
-docker-compose down
-
-# Clean up unused images
-docker system prune -a
-```
-
-### 9.13 Deploy Updates
-
-When you need to deploy code changes:
-
-```bash
-# SSH into server
-ssh -i your-key.pem ec2-user@YOUR_ELASTIC_IP
-cd ~/funmagic
-
-# Pull latest code (if using git)
-git pull origin main
-
-# Or rsync from local (if not using git)
-# rsync -avz --exclude='node_modules' -e "ssh -i your-key.pem" . ec2-user@IP:~/funmagic/
-
-# Rebuild and restart
-docker-compose up -d --build
-```
-
-### 9.14 Cost Estimate
+### 9.11 Cost Estimate
 
 **Minimal EC2 setup**:
 - 1x t3.small EC2 (On-Demand): ~$15/month
@@ -1672,7 +1607,7 @@ docker-compose up -d --build
 - Use Spot instance: 60-90% savings (can be interrupted)
 - Reserved instance (1 year): 30-40% savings
 
-### 9.15 Future Migration to ECS
+### 9.12 Future Migration to ECS
 
 When you're ready to scale, you can migrate to ECS:
 1. Push your Docker images to ECR
@@ -2082,9 +2017,241 @@ Reference in task definition:
 
 ---
 
-## Step 12: Test the Configuration
+## Step 12: Deploy Code and Run
 
-### 12.1 Test Admin Library Upload
+Now that RDS and environment variables are configured, you can deploy your code.
+
+### 12.1 Set Up Git Access for Private Repository
+
+If your repository is private, you need to configure authentication on the EC2 instance.
+
+#### Option A: SSH Deploy Key (Recommended for Production)
+
+Deploy keys are repository-specific and more secure than personal keys.
+
+**Step 1: Generate SSH key on EC2**
+```bash
+# SSH into your EC2 instance
+ssh -i your-key.pem ec2-user@YOUR_ELASTIC_IP
+
+# Generate a new SSH key (no passphrase for automation)
+ssh-keygen -t ed25519 -C "deploy@funmagic-ec2" -f ~/.ssh/github_deploy -N ""
+
+# Display the public key
+cat ~/.ssh/github_deploy.pub
+```
+
+**Step 2: Add deploy key to GitHub**
+1. Go to your GitHub repo → **Settings** → **Deploy keys** → **Add deploy key**
+2. Title: `funmagic-ec2-deploy`
+3. Key: Paste the public key from above
+4. ✅ Check "Allow write access" (if you need to push from server)
+5. Click **Add key**
+
+**Step 3: Configure SSH to use the deploy key**
+```bash
+# Create or edit SSH config
+cat >> ~/.ssh/config << 'EOF'
+Host github.com
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/github_deploy
+  IdentitiesOnly yes
+EOF
+
+# Set correct permissions
+chmod 600 ~/.ssh/config
+chmod 600 ~/.ssh/github_deploy
+
+# Test the connection
+ssh -T git@github.com
+# Should see: "Hi your-org/magiworld! You've successfully authenticated..."
+```
+
+#### Option B: Personal Access Token (Quick Setup)
+
+Use this for quick testing or small teams.
+
+**Step 1: Create a Personal Access Token**
+1. Go to GitHub → **Settings** → **Developer settings** → **Personal access tokens** → **Tokens (classic)**
+2. Click **Generate new token (classic)**
+3. Note: `funmagic-ec2-deploy`
+4. Expiration: 90 days (or custom)
+5. Scopes: ✅ `repo` (full control of private repositories)
+6. Click **Generate token** and copy it immediately!
+
+**Step 2: Clone using the token**
+```bash
+# Clone with token embedded in URL
+git clone https://YOUR_TOKEN@github.com/your-org/magiworld.git ~/funmagic
+
+# Or configure git credential helper to store it
+git config --global credential.helper store
+git clone https://github.com/your-org/magiworld.git ~/funmagic
+# Enter username: your-github-username
+# Enter password: YOUR_TOKEN (not your password!)
+```
+
+> **Security Note**: Tokens stored in `.git-credentials` are in plain text. For production, prefer SSH deploy keys.
+
+#### Option C: Upload Without Git (rsync)
+
+If you don't want to use Git on the server:
+
+```bash
+# From your LOCAL machine, sync code to EC2
+cd /path/to/magiworld
+
+rsync -avz --progress \
+  --exclude='node_modules' \
+  --exclude='.next' \
+  --exclude='.git' \
+  --exclude='*.log' \
+  -e "ssh -i your-key.pem" \
+  . ec2-user@YOUR_ELASTIC_IP:~/funmagic/
+```
+
+### 12.2 Clone Repository and Prepare Files
+
+```bash
+# SSH into your EC2 instance
+ssh -i your-key.pem ec2-user@YOUR_ELASTIC_IP
+
+# Clone repository (adjust URL based on your auth method)
+# For SSH:
+git clone git@github.com:funmagic-ai/magiworld.git ~/funmagic
+
+# For HTTPS with token:
+# git clone https://github.com/your-org/magiworld.git ~/funmagic
+
+cd ~/funmagic
+
+# Verify the files are there
+ls -la
+```
+
+### 12.3 Create Environment Files
+
+Create the production environment files on the server:
+
+```bash
+cd ~/funmagic
+
+# Create .env.web (copy from your local .env.local and update values)
+nano .env.web
+
+# Create .env.admin (copy from your local .env.local and update values)
+nano .env.admin
+```
+
+**Important**: Update these values for production:
+- `DATABASE_URL` → Your RDS endpoint
+- `LOGTO_BASE_URL` → `https://funmagic.ai` or `https://admin.funmagic.ai`
+- All other secrets should match your production configuration
+
+### 12.4 Build and Start Containers
+
+```bash
+cd ~/funmagic
+
+# Build and start all services in detached mode
+docker-compose up -d --build
+
+# This will:
+# 1. Build web image from Dockerfile.web
+# 2. Build admin image from Dockerfile.admin
+# 3. Pull nginx:alpine image
+# 4. Start all 3 containers
+
+# Watch the build progress
+docker-compose logs -f
+
+# Press Ctrl+C to exit logs (containers keep running)
+```
+
+### 12.5 Verify Deployment
+
+```bash
+# Check all containers are running
+docker-compose ps
+
+# Should show:
+# NAME              STATUS
+# funmagic-web      Up
+# funmagic-admin    Up
+# funmagic-nginx    Up
+
+# Check individual service logs
+docker-compose logs web      # Next.js web app
+docker-compose logs admin    # Next.js admin app
+docker-compose logs nginx    # Nginx reverse proxy
+
+# Test locally on EC2
+curl -I http://localhost:3000   # Web app
+curl -I http://localhost:3001   # Admin app
+```
+
+### 12.6 Useful Docker Commands
+
+```bash
+# View running containers
+docker-compose ps
+
+# View real-time logs
+docker-compose logs -f web
+docker-compose logs -f admin
+docker-compose logs -f nginx
+
+# Restart a specific service
+docker-compose restart web
+docker-compose restart admin
+
+# Rebuild and restart (after code changes)
+docker-compose up -d --build
+
+# Stop all services
+docker-compose stop
+
+# Stop and remove containers
+docker-compose down
+
+# Clean up unused images (reclaim disk space)
+docker system prune -a
+```
+
+### 12.7 Deploy Updates
+
+When you push new code to your repository:
+
+```bash
+# SSH into server
+ssh -i your-key.pem ec2-user@YOUR_ELASTIC_IP
+cd ~/funmagic
+
+# Pull latest code
+git pull origin main
+
+# Rebuild and restart containers
+docker-compose up -d --build
+
+# Watch logs for any errors
+docker-compose logs -f
+```
+
+**Zero-downtime deployment tip**: Build new images before stopping:
+```bash
+# Build new images first (doesn't affect running containers)
+docker-compose build
+
+# Then quickly swap to new images
+docker-compose up -d
+```
+
+---
+
+## Step 13: Test the Configuration
+
+### 13.1 Test Admin Library Upload
 
 ```bash
 # Start admin app
@@ -2095,14 +2262,14 @@ pnpm dev:admin
 2. Create a folder and upload an image
 3. Check AWS Console → S3 → `funmagic-admin-users-assets` → Verify file exists
 
-### 12.2 Test Public Banner Upload
+### 13.2 Test Public Banner Upload
 
 1. Go to Admin → Banners → Add Banner
 2. Upload a banner image
 3. Check AWS Console → S3 → `funmagic-web-public-assets/banners/main/` → Verify file exists
 4. Test public URL: `https://cdn.funmagic.ai/banners/main/your-file.jpg`
 
-### 12.3 Test Web User Upload
+### 13.3 Test Web User Upload
 
 ```bash
 # Start web app
@@ -2113,7 +2280,7 @@ pnpm dev:web
 2. Use a tool (e.g., background-remove) to upload an image
 3. Check AWS Console → S3 → `funmagic-web-users-assets-private` → Verify file exists
 
-### 12.4 Test Signed URLs
+### 13.4 Test Signed URLs
 
 Private bucket URLs without signature should return **403 Forbidden**:
 ```
@@ -2125,7 +2292,7 @@ Signed URLs should work:
 https://d1234admin.cloudfront.net/path/to/file.jpg?Expires=...&Signature=...&Key-Pair-Id=...  → 200 OK
 ```
 
-### 12.5 Test EC2 Deployment
+### 13.5 Test EC2 Deployment
 
 ```bash
 # SSH into your server
@@ -2183,21 +2350,25 @@ docker-compose logs -f admin
 | 9.3 | Allocate Elastic IP | ⬜ |
 | 9.4 | Install Docker on EC2 | ⬜ |
 | 9.5 | Create Docker Compose and Dockerfiles | ⬜ |
-| 9.6 | Clone code and build containers | ⬜ |
-| 9.7 | Set up SSL (Cloudflare Origin Cert or Let's Encrypt) | ⬜ |
-| 9.8 | Update Cloudflare DNS to EC2 IP | ⬜ |
+| 9.6 | Set up SSL (Cloudflare Origin Cert or Let's Encrypt) | ⬜ |
+| 9.7 | Update Cloudflare DNS to EC2 IP | ⬜ |
 | 10.1 | Create RDS security group (`funmagic-rds-sg`) | ⬜ |
 | 10.2 | Create RDS PostgreSQL instance (`funmagic-db`) | ⬜ |
 | 10.3 | Get RDS endpoint and build connection string | ⬜ |
 | 10.4 | Test database connection | ⬜ |
 | 10.5 | Run Drizzle migrations to initialize schema (`pnpm db:push`) | ⬜ |
 | 11 | Configure `.env.local` files for both apps | ⬜ |
-| 12.1 | Test admin library upload | ⬜ |
-| 12.2 | Test public banner upload | ⬜ |
-| 12.3 | Test web user upload | ⬜ |
-| 12.4 | Test signed URLs work correctly | ⬜ |
-| 12.5 | Test EC2 deployment | ⬜ |
-| 12.6 | Test database connection from apps | ⬜ |
+| 12.1 | Set up Git access for private repo (SSH deploy key) | ⬜ |
+| 12.2 | Clone repository to EC2 | ⬜ |
+| 12.3 | Create production environment files (.env.web, .env.admin) | ⬜ |
+| 12.4 | Build and start Docker containers | ⬜ |
+| 12.5 | Verify all containers running | ⬜ |
+| 13.1 | Test admin library upload | ⬜ |
+| 13.2 | Test public banner upload | ⬜ |
+| 13.3 | Test web user upload | ⬜ |
+| 13.4 | Test signed URLs work correctly | ⬜ |
+| 13.5 | Test production deployment via HTTPS | ⬜ |
+| 13.6 | Test database connection from apps | ⬜ |
 
 ---
 

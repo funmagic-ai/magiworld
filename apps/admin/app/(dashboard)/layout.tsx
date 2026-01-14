@@ -17,6 +17,10 @@ import { AppSidebar } from '@/components/app-sidebar';
 import { AuthStatus } from '@/components/auth/auth-status';
 import { logtoConfig } from '@/lib/logto';
 
+// Prevent static prerendering - dashboard requires authentication
+// 防止静态预渲染 - 仪表板需要认证
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardLayout({
   children,
 }: {

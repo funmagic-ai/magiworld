@@ -7,6 +7,10 @@ import { AccountInfoCard } from '@/components/profile/account-info-card';
 import { PreferencesCard } from '@/components/profile/preferences-card';
 import { AccountActionsCard } from '@/components/profile/account-actions-card';
 
+// Prevent static prerendering - this page requires authentication
+// 防止静态预渲染 - 此页面需要身份验证
+export const dynamic = 'force-dynamic';
+
 export default async function ProfilePage() {
   const { isAuthenticated, claims, userInfo } = await getLogtoContext(logtoConfig);
   const t = await getTranslations('profile');
