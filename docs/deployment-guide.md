@@ -1330,18 +1330,53 @@ http {
 **`apps/web/next.config.ts`**:
 ```typescript
 const nextConfig: NextConfig = {
-  output: 'standalone',  // Required for Docker deployment
-  // ... other config
+  // Required for Docker deployment - creates standalone server.js
+  output: 'standalone',
+  // Exclude pino from bundling - it uses worker threads that don't bundle correctly
+  serverExternalPackages: ['pino', 'pino-pretty'],
+  // Force include pino's worker thread dependencies in standalone output
+  // These are dynamically required by pino and not traced by Next.js
+  // Path is relative to project root (where pnpm puts shared node_modules)
+  outputFileTracingIncludes: {
+    '/*': [
+      '../../node_modules/pino/**/*',
+      '../../node_modules/pino-abstract-transport/**/*',
+      '../../node_modules/pino-pretty/**/*',
+      '../../node_modules/thread-stream/**/*',
+      '../../node_modules/sonic-boom/**/*',
+    ],
+  },
+  // ... other config (images, etc.)
 };
 ```
 
 **`apps/admin/next.config.ts`**:
 ```typescript
 const nextConfig: NextConfig = {
-  output: 'standalone',  // Required for Docker deployment
+  // Required for Docker deployment - creates standalone server.js
+  output: 'standalone',
+  transpilePackages: ['@magiworld/db', '@magiworld/types', '@magiworld/utils'],
+  // Exclude pino from bundling - it uses worker threads that don't bundle correctly
+  serverExternalPackages: ['pino', 'pino-pretty'],
+  // Force include pino's worker thread dependencies in standalone output
+  outputFileTracingIncludes: {
+    '/*': [
+      '../../node_modules/pino/**/*',
+      '../../node_modules/pino-abstract-transport/**/*',
+      '../../node_modules/pino-pretty/**/*',
+      '../../node_modules/thread-stream/**/*',
+      '../../node_modules/sonic-boom/**/*',
+    ],
+  },
   // ... other config
 };
 ```
+
+**Why the pino configuration?**
+- `pino` uses worker threads for async logging (better performance)
+- Worker threads use dynamic `require()` which Next.js can't trace
+- `serverExternalPackages` tells Next.js not to bundle pino
+- `outputFileTracingIncludes` forces the missing dependencies into standalone
 
 This setting makes Next.js:
 - Bundle all dependencies into `.next/standalone/`
