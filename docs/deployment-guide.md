@@ -928,13 +928,20 @@ nano docker-compose.yml
 
 version: '3.8'  # Docker Compose file format version
 
+# 定义统一的日志管理模板，防止磁盘被日志塞满
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # ---------------------------------------------------------------------------
   # Web App Service (User-facing Next.js application)
   # ---------------------------------------------------------------------------
   web:
     build:
-      context: .                    # Build context is current directory (repo root)
+      context: .                    # Build context is current directory (repo root),CHECK THE PATH OF Package and env,etc
       dockerfile: Dockerfile.web    # Use web-specific Dockerfile
     container_name: funmagic-web    # Fixed container name for easy reference
     restart: unless-stopped         # Auto-restart on crash, but not on manual stop
@@ -945,13 +952,18 @@ services:
     env_file:
       - .env.web                    # Load environment variables from file
     # Note: No healthcheck needed for simple setup; add if using load balancer
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 1G  # 限制内存，防止单个服务耗尽内存导致系统 OOM
 
   # ---------------------------------------------------------------------------
   # Admin App Service (Admin dashboard Next.js application)
   # ---------------------------------------------------------------------------
   admin:
     build:
-      context: .                    # Same build context as web
+      context: .                    # Same build context as web,,CHECK THE PATH OF Package and env,etc
       dockerfile: Dockerfile.admin  # Use admin-specific Dockerfile
     container_name: funmagic-admin
     restart: unless-stopped
@@ -961,7 +973,11 @@ services:
       - NODE_ENV=production
     env_file:
       - .env.admin                  # Separate env file with admin-specific configs
-
+   logging: *default-logging
+      deploy:
+         resources:
+         limits:
+            memory: 1G  # 限制内存，防止单个服务耗尽内存导致系统 OOM
   # ---------------------------------------------------------------------------
   # Nginx Reverse Proxy Service
   # ---------------------------------------------------------------------------
@@ -984,6 +1000,11 @@ services:
     depends_on:
       - web                         # Wait for web to start before nginx
       - admin                       # Wait for admin to start before nginx
+   logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M  # 限制内存，防止单个服务耗尽内存导致系统 OOM
     # Note: depends_on only waits for container start, not app readiness
 ```
 
