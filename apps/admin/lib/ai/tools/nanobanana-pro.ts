@@ -102,10 +102,11 @@ export async function generateNanobanana(
   const startTime = Date.now();
 
   // Log request / 记录请求
-  logger.info(
-    { prompt, options, inputImageCount: inputImages?.length ?? 0 },
-    'Nanobanana request'
-  );
+  logger.info('Nanobanana request', {
+    prompt,
+    options,
+    inputImageCount: inputImages?.length ?? 0,
+  });
 
   // Build message content / 构建消息内容
   type ContentPart =
@@ -142,26 +143,23 @@ export async function generateNanobanana(
   const durationMs = Date.now() - startTime;
 
   // Log full response for observation / 记录完整响应以便观察
-  logger.info(
-    {
-      durationMs,
-      text: result.text,
-      filesCount: result.files?.length ?? 0,
-      finishReason: result.finishReason,
-      rawFinishReason: result.rawFinishReason,
-      usage: result.usage,
-      providerMetadata: result.providerMetadata,
-      response: {
-        id: result.response?.id,
-        modelId: result.response?.modelId,
-        timestamp: result.response?.timestamp,
-      },
-      reasoning: result.reasoning,
-      reasoningText: result.reasoningText,
-      warnings: result.warnings,
+  logger.info('Nanobanana response', {
+    durationMs,
+    text: result.text,
+    filesCount: result.files?.length ?? 0,
+    finishReason: result.finishReason,
+    rawFinishReason: result.rawFinishReason,
+    usage: result.usage,
+    providerMetadata: result.providerMetadata,
+    response: {
+      id: result.response?.id,
+      modelId: result.response?.modelId,
+      timestamp: result.response?.timestamp,
     },
-    'Nanobanana response'
-  );
+    reasoning: result.reasoning,
+    reasoningText: result.reasoningText,
+    warnings: result.warnings,
+  });
 
   // Extract images / 提取图像
   const images: NanobananaImage[] = [];
@@ -171,10 +169,10 @@ export async function generateNanobanana(
         base64: file.base64,
         mediaType: file.mediaType,
       });
-      logger.info(
-        { mediaType: file.mediaType, base64Length: file.base64.length },
-        'Generated image'
-      );
+      logger.info('Generated image', {
+        mediaType: file.mediaType,
+        base64Length: file.base64.length,
+      });
     }
   }
 

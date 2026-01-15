@@ -1,77 +1,54 @@
 /**
- * @fileoverview Pino Logger Utility
+ * @fileoverview Winston Logger Utility
  *
- * Provides a configured pino logger that writes to both console and file.
- * Log files are stored in the `logs/` directory at the project root.
+ * Provides a configured winston logger that writes to console (stdout).
+ * Docker captures stdout automatically, making this ideal for containerized apps.
  *
  * @module @magiworld/utils/logger
  */
 
-import pino from 'pino';
-import fs from 'fs';
-import path from 'path';
+import winston from 'winston';
 
-// Ensure logs directory exists
-const logDir = path.join(process.cwd(), 'logs');
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir, { recursive: true });
-}
-
-// Generate log filename with date
-const getLogFileName = () => {
-  const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-  return path.join(logDir, `app-${date}.log`);
-};
+const { combine, timestamp, printf, colorize, errors } = winston.format;
 
 /**
- * Logger instance configured to write to file and console.
+ * Custom log format for console output
+ * Format: [TIMESTAMP] LEVEL: message {metadata}
+ */
+const consoleFormat = printf(({ level, message, timestamp, module, ...metadata }) => {
+  const modulePrefix = module ? `[${module}] ` : '';
+  const metaStr = Object.keys(metadata).length ? ` ${JSON.stringify(metadata)}` : '';
+  return `[${timestamp}] ${level}: ${modulePrefix}${message}${metaStr}`;
+});
+
+/**
+ * Logger instance configured to write to console (stdout).
  *
- * Log levels: trace, debug, info, warn, error, fatal
+ * Log levels: error, warn, info, http, verbose, debug, silly
  *
  * @example
  * ```typescript
  * import { logger } from '@magiworld/utils';
  *
  * logger.info('Server started');
- * logger.error({ err }, 'Failed to process request');
- * logger.debug({ userId, action }, 'User action');
+ * logger.error('Failed to process request', { err: error.message });
+ * logger.debug('User action', { userId, action });
  * ```
  */
-export const logger = pino({
+export const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
-  transport: {
-    targets: [
-      // Write to file
-      {
-        target: 'pino/file',
-        options: {
-          destination: getLogFileName(),
-          mkdir: true,
-        },
-        level: 'info',
-      },
-      // Pretty print to console in development
-      ...(process.env.NODE_ENV !== 'production'
-        ? [
-            {
-              target: 'pino-pretty',
-              options: {
-                colorize: true,
-                translateTime: 'SYS:standard',
-                ignore: 'pid,hostname',
-              },
-              level: 'debug',
-            },
-          ]
-        : [
-            {
-              target: 'pino/file',
-              options: { destination: 1 }, // stdout
-              level: 'info',
-            },
-          ]),
-    ],
-  },
+  format: combine(
+    errors({ stack: true }),
+    timestamp({ format: 'YYYY-MM-DD HH:mm:ss' })
+  ),
+  transports: [
+    new winston.transports.Console({
+      format: combine(
+        colorize({ all: process.env.NODE_ENV !== 'production' }),
+        consoleFormat
+      ),
+    }),
+  ],
 });
 
 /**
@@ -84,7 +61,7 @@ export const logger = pino({
  * ```typescript
  * const log = createLogger('chat-api');
  * log.info('Processing message');
- * // Output: {"module":"chat-api","msg":"Processing message",...}
+ * // Output: [2024-01-15 12:00:00] info: [chat-api] Processing message
  * ```
  */
 export function createLogger(name: string) {
