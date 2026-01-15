@@ -949,6 +949,8 @@ services:
       - "3000:3000"                 # Map host:container ports (internal only, Nginx proxies)
     environment:
       - NODE_ENV=production         # Enable Next.js production optimizations
+      - HOSTNAME=0.0.0.0  # 核心：允许外部访问容器
+      - PORT=3000         # 核心：明确端口
     env_file:
       - .env.web                    # Load environment variables from file
     # Note: No healthcheck needed for simple setup; add if using load balancer
@@ -971,6 +973,8 @@ services:
       - "3001:3001"                 # Different port to avoid conflict with web
     environment:
       - NODE_ENV=production
+      - HOSTNAME=0.0.0.0  # 核心：允许外部访问容器
+      - PORT=3001         # 核心：明确端口
     env_file:
       - .env.admin                  # Separate env file with admin-specific configs
    logging: *default-logging
