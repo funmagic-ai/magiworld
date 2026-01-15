@@ -436,13 +436,14 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
                   </div>
                 )}
                 <div className="flex items-center gap-3">
-                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground">
+                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
                     <input
                       type="file"
                       accept="image/*"
                       onChange={handleFileSelect}
-                      className="hidden"
+                      className="sr-only"
                       disabled={isPending}
+                      aria-label={displayUrl ? 'Change thumbnail image' : 'Select thumbnail image'}
                     />
                     {displayUrl ? 'Change Image' : 'Select Image'}
                   </label>
@@ -472,8 +473,10 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
               <Input
                 id="aiEndpoint"
                 name="aiEndpoint"
+                type="url"
                 defaultValue={initialData?.aiEndpoint || ''}
                 placeholder="/api/ai/process"
+                autoComplete="url"
               />
               <FieldDescription>API endpoint for AI processing</FieldDescription>
             </Field>

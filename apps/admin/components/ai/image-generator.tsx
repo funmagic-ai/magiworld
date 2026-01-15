@@ -111,10 +111,11 @@ export function ImageGenerator({ onComplete }: ImageGeneratorProps) {
       {/* Aspect Ratio & Generate Button */}
       <div className="flex gap-4 items-end">
         <div className="flex-1 max-w-xs">
-          <label className="text-sm text-muted-foreground mb-2 block">
+          <label id="aspect-ratio-label" className="text-sm text-muted-foreground mb-2 block">
             Aspect Ratio
           </label>
           <Select
+            aria-labelledby="aspect-ratio-label"
             value={aspectRatio}
             onValueChange={(value) => setAspectRatio(value as typeof aspectRatio)}
             disabled={isPending}

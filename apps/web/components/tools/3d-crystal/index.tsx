@@ -238,9 +238,19 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
         <TabsContent value="image" className="mt-0 border rounded-lg p-4 sm:p-6">
           {imageState === 'upload' && (
             <div
-              className="w-full min-h-[300px] lg:min-h-[450px] border-2 border-dashed rounded-xl flex items-center justify-center text-center hover:border-primary/50 hover:bg-muted/30 transition-colors cursor-pointer"
+              role="button"
+              tabIndex={0}
+              className="w-full min-h-[300px] lg:min-h-[450px] border-2 border-dashed rounded-xl flex items-center justify-center text-center hover:border-primary/50 hover:bg-muted/30 motion-safe:transition-colors cursor-pointer"
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  document.getElementById('image-upload')?.click();
+                }
+              }}
+              onClick={() => document.getElementById('image-upload')?.click()}
+              aria-label="Upload image area. Press Enter or click to select a file, or drag and drop an image."
             >
               <input
                 type="file"
@@ -248,8 +258,9 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
                 onChange={handleFileSelect}
                 className="hidden"
                 id="image-upload"
+                aria-hidden="true"
               />
-              <label htmlFor="image-upload" className="cursor-pointer block w-full h-full p-8 sm:p-12">
+              <div className="p-8 sm:p-12">
                 <div className="space-y-4">
                   <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-full bg-muted flex items-center justify-center">
                     <svg className="w-8 h-8 sm:w-10 sm:h-10 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -263,7 +274,7 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
                     </p>
                   </div>
                 </div>
-              </label>
+              </div>
             </div>
           )}
 
@@ -296,10 +307,11 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
               {/* Controls */}
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                 {/* Toggle Original/Cropped */}
-                <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+                <div role="group" aria-label="Image view toggle" className="flex items-center gap-1 bg-muted rounded-lg p-1">
                   <button
                     onClick={() => setShowOriginal(false)}
-                    className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                    aria-pressed={!showOriginal}
+                    className={`px-3 py-1.5 rounded text-sm font-medium motion-safe:transition-colors ${
                       !showOriginal ? 'bg-background shadow' : 'hover:bg-background/50'
                     }`}
                   >
@@ -307,7 +319,8 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
                   </button>
                   <button
                     onClick={() => setShowOriginal(true)}
-                    className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                    aria-pressed={showOriginal}
+                    className={`px-3 py-1.5 rounded text-sm font-medium motion-safe:transition-colors ${
                       showOriginal ? 'bg-background shadow' : 'hover:bg-background/50'
                     }`}
                   >
@@ -481,12 +494,21 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
                       </div>
 
                       {labels.length > 0 && (
-                        <div className="space-y-2">
+                        <div className="space-y-2" role="listbox" aria-label="Text labels">
                           {labels.map((label) => (
                             <div
                               key={label.id}
+                              role="option"
+                              tabIndex={0}
+                              aria-selected={selectedLabelId === label.id}
                               onClick={() => setSelectedLabelId(label.id)}
-                              className={`p-2 rounded text-sm cursor-pointer transition-colors ${
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setSelectedLabelId(label.id);
+                                }
+                              }}
+                              className={`p-2 rounded text-sm cursor-pointer motion-safe:transition-colors ${
                                 selectedLabelId === label.id
                                   ? 'bg-primary/20 border border-primary'
                                   : 'bg-muted hover:bg-muted/80'
@@ -502,8 +524,9 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
                                     handleRemoveLabel(label.id);
                                   }}
                                   className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                                  aria-label={`Remove label: ${label.text}`}
                                 >
-                                  ×
+                                  <span aria-hidden="true">×</span>
                                 </Button>
                               </div>
                               {/* Size controls */}
@@ -517,8 +540,9 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
                                     handleScaleLabel(label.id, 0.9);
                                   }}
                                   className="h-6 w-6 p-0"
+                                  aria-label="Decrease font size"
                                 >
-                                  −
+                                  <span aria-hidden="true">−</span>
                                 </Button>
                                 <Input
                                   type="number"
@@ -540,8 +564,9 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
                                     handleScaleLabel(label.id, 1.1);
                                   }}
                                   className="h-6 w-6 p-0"
+                                  aria-label="Increase font size"
                                 >
-                                  +
+                                  <span aria-hidden="true">+</span>
                                 </Button>
                               </div>
                             </div>

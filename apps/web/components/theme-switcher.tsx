@@ -61,7 +61,7 @@ export function ThemeSwitcher() {
           <button
             key={t.id}
             onClick={() => handleColorChange(t.id)}
-            className={`h-5 w-5 rounded-full transition-all hover:scale-125 ${
+            className={`h-5 w-5 rounded-full transition-all motion-safe:hover:scale-125 ${
               currentColorTheme === t.id
                 ? 'ring-2 ring-offset-2 ring-primary'
                 : 'opacity-50 hover:opacity-100'
@@ -69,6 +69,7 @@ export function ThemeSwitcher() {
             style={{ background: t.color }}
             title={t.label}
             aria-label={`Switch to ${t.label} theme`}
+            aria-pressed={currentColorTheme === t.id}
           />
         ))}
       </div>

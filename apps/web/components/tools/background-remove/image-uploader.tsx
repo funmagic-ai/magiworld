@@ -65,9 +65,19 @@ export function ImageUploader({ onImageSelect, previewUrl, disabled }: ImageUplo
 
   return (
     <div
+      role="button"
+      tabIndex={disabled ? -1 : 0}
       onClick={handleClick}
+      onKeyDown={(e) => {
+        if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          handleClick();
+        }
+      }}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
+      aria-label={previewUrl ? t('changeImage') : t('dragDrop')}
+      aria-disabled={disabled}
       className={`
         relative aspect-square w-full rounded-lg border-2 border-dashed
         transition-colors cursor-pointer
@@ -82,6 +92,7 @@ export function ImageUploader({ onImageSelect, previewUrl, disabled }: ImageUplo
         onChange={handleInputChange}
         disabled={disabled}
         className="hidden"
+        aria-hidden="true"
       />
 
       {previewUrl ? (
@@ -100,7 +111,7 @@ export function ImageUploader({ onImageSelect, previewUrl, disabled }: ImageUplo
             {t('or')} <span className="text-primary underline">{t('browse')}</span>
           </p>
           <p className="text-xs text-muted-foreground/70">
-            (max {MAX_FILE_SIZE_MB}MB)
+            (max {MAX_FILE_SIZE_MB}&nbsp;MB)
           </p>
         </div>
       )}

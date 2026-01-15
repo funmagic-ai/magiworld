@@ -342,13 +342,14 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
                   </div>
                 )}
                 <div className="flex items-center gap-3">
-                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground">
+                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
                     <input
                       type="file"
                       accept="image/*"
                       onChange={handleFileSelect}
-                      className="hidden"
+                      className="sr-only"
                       disabled={isPending}
+                      aria-label={displayUrl ? 'Change banner image' : 'Select banner image'}
                     />
                     {displayUrl ? 'Change Image' : 'Select Image'}
                   </label>
@@ -378,9 +379,11 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
               <Input
                 id="link"
                 name="link"
+                type="url"
                 defaultValue={initialData?.link || ''}
                 placeholder="https://example.com or /studio/edit"
                 aria-invalid={!!errors.link}
+                autoComplete="url"
               />
               <FieldDescription>Where users go when clicking the banner</FieldDescription>
               {errors.link && <FieldError>{errors.link}</FieldError>}

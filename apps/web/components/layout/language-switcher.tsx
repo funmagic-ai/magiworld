@@ -35,10 +35,13 @@ export function LanguageSwitcher() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 rounded-md px-3">
-        <span>{localeFlags[locale]}</span>
+      <DropdownMenuTrigger
+        className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 rounded-md px-3"
+        aria-label={`Change language, current: ${localeNames[locale]}`}
+      >
+        <span aria-hidden="true">{localeFlags[locale]}</span>
         <span className="hidden sm:inline">{localeNames[locale]}</span>
-        <ChevronDownIcon className="h-4 w-4" />
+        <ChevronDownIcon className="h-4 w-4" aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {routing.locales.map((loc) => (

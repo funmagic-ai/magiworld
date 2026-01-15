@@ -129,7 +129,7 @@ export function UploadDropzone({
       {/* Dropzone */}
       <Card
         className={cn(
-          'relative flex flex-col items-center justify-center border-2 border-dashed p-8 transition-colors',
+          'relative flex flex-col items-center justify-center border-2 border-dashed p-8 motion-safe:transition-colors',
           isDragging && 'border-primary bg-primary/5',
           isPending && 'pointer-events-none opacity-60'
         )}
@@ -144,6 +144,7 @@ export function UploadDropzone({
           onChange={handleFileSelect}
           className="absolute inset-0 cursor-pointer opacity-0"
           disabled={isPending}
+          aria-label={`Upload files. Maximum ${maxFiles} files, ${MAX_FILE_SIZE_MB}MB each. Drag and drop or click to browse.`}
         />
         <HugeiconsIcon
           icon={CloudUploadIcon}
@@ -154,7 +155,7 @@ export function UploadDropzone({
           {isDragging ? 'Drop files here' : 'Drag & drop files here'}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          or click to browse (max {maxFiles} files, {MAX_FILE_SIZE_MB}MB each)
+          or click to browse (max {maxFiles} files, {MAX_FILE_SIZE_MB}&nbsp;MB each)
         </p>
       </Card>
 

@@ -88,7 +88,7 @@ function MainCarousel({ banners }: { banners: Banner[] }) {
     >
       {/* Slides Container */}
       <div
-        className="absolute inset-0 flex transition-transform duration-500 ease-out"
+        className="absolute inset-0 flex motion-safe:transition-transform motion-safe:duration-500 motion-safe:ease-out"
         style={{ transform: `translateX(-${currentIndex * 100}%)` }}
       >
         {banners.map((b, index) => (
@@ -140,7 +140,7 @@ function MainCarousel({ banners }: { banners: Banner[] }) {
             <button
               key={index}
               onClick={() => goToSlide(index)}
-              className={`h-2 w-2 rounded-full transition-colors ${
+              className={`h-2 w-2 rounded-full motion-safe:transition-colors ${
                 index === currentIndex ? 'bg-white' : 'bg-white/40 hover:bg-white/60'
               }`}
               aria-label={`Go to slide ${index + 1}`}
@@ -161,12 +161,12 @@ function SideBanner({ banner }: { banner: Banner }) {
           src={banner.image}
           alt={banner.title}
           fill
-          className="object-cover transition-transform group-hover:scale-105"
+          className="object-cover motion-safe:transition-transform motion-safe:group-hover:scale-105"
           sizes="(max-width: 1024px) 50vw, 33vw"
         />
       ) : (
         /* Fallback gradient */
-        <div className="absolute inset-0 bg-gradient-to-br from-secondary via-muted to-background transition-transform group-hover:scale-105" />
+        <div className="absolute inset-0 bg-gradient-to-br from-secondary via-muted to-background motion-safe:transition-transform motion-safe:group-hover:scale-105" />
       )}
 
       {/* Gradient overlay for text readability */}
@@ -178,7 +178,7 @@ function SideBanner({ banner }: { banner: Banner }) {
       </div>
 
       {/* Hover overlay */}
-      <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/10 transition-colors" />
+      <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/10 motion-safe:transition-colors" />
     </div>
   );
 
