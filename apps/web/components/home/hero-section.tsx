@@ -126,7 +126,7 @@ function MainCarousel({ banners }: { banners: Banner[] }) {
         {banner.link && (
           <Link
             href={banner.link}
-            className="inline-flex items-center justify-center rounded-md bg-white/20 backdrop-blur-sm border border-white/30 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-primary hover:border-primary hover:text-primary-foreground"
+            className="inline-flex items-center justify-center rounded-md bg-white/20 backdrop-blur-sm border border-white/30 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary hover:border-primary hover:text-primary-foreground"
           >
             Get Started
           </Link>

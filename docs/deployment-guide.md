@@ -1475,6 +1475,7 @@ AWS_ACCESS_KEY_ID=AKIA...
 AWS_SECRET_ACCESS_KEY=...
 S3_ADMIN_ASSETS_BUCKET=funmagic-admin-users-assets
 S3_PUBLIC_ASSETS_BUCKET=funmagic-web-public-assets
+# S3_ENV_PREFIX auto-detects 'prod' from NODE_ENV=production
 CLOUDFRONT_ADMIN_PRIVATE_URL=https://dXXXX.cloudfront.net
 CLOUDFRONT_PUBLIC_URL=https://cdn.funmagic.ai
 CLOUDFRONT_KEY_PAIR_ID=K2XXXXXX
@@ -1910,6 +1911,18 @@ AWS_SECRET_ACCESS_KEY=...your-admin-secret
 S3_ADMIN_ASSETS_BUCKET=funmagic-admin-users-assets
 # Public assets (banners, tool thumbnails) - publicly accessible
 S3_PUBLIC_ASSETS_BUCKET=funmagic-web-public-assets
+
+# ==============================================
+# S3 Environment Prefix (Optional)
+# ==============================================
+# Separates files by environment in the same bucket.
+# Auto-detects from NODE_ENV if not set:
+#   - NODE_ENV=production → 'prod'
+#   - NODE_ENV=test → 'test'
+#   - Otherwise → 'dev'
+# All uploads will be prefixed: e.g., 'dev/banners/image.jpg'
+# Set explicitly for staging/uat environments:
+# S3_ENV_PREFIX=staging
 
 # ==============================================
 # CloudFront URLs

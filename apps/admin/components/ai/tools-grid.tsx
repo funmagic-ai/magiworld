@@ -84,7 +84,7 @@ function ToolCard({ tool, onClick }: ToolCardProps) {
   return (
     <Card
       className={cn(
-        'cursor-pointer transition-all duration-200',
+        'cursor-pointer transition-[box-shadow,transform] duration-200',
         'hover:ring-2 hover:ring-primary/50 hover:shadow-lg',
         'active:scale-[0.98]'
       )}

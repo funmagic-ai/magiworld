@@ -38,8 +38,20 @@ export default async function LocaleLayout({
   // Providing all messages to the client side
   const messages = await getMessages();
 
+  // Get CDN URL for preconnect hint
+  const cdnUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
+
   return (
     <html lang={locale} className={inter.variable} suppressHydrationWarning>
+      <head>
+        {/* Preconnect to CDN for faster image loading */}
+        {cdnUrl && (
+          <>
+            <link rel="preconnect" href={cdnUrl} />
+            <link rel="dns-prefetch" href={cdnUrl} />
+          </>
+        )}
+      </head>
       <body className="min-h-dvh bg-background font-sans antialiased">
         <ThemeProvider
           attribute="class"

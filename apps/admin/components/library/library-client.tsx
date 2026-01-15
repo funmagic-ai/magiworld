@@ -17,7 +17,6 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogTrigger,
@@ -40,7 +39,6 @@ import {
   Move01Icon,
   CheckmarkSquare02Icon,
   Cancel01Icon,
-  Download04Icon,
 } from '@hugeicons/core-free-icons';
 import {
   createFolder,
@@ -54,6 +52,9 @@ import {
   type MediaItem,
 } from '@/lib/actions/library';
 import { cn } from '@/lib/utils';
+import { MediaCard } from './media-card';
+import { FolderCard } from './folder-card';
+import { FolderPicker } from './folder-picker';
 
 type LibraryClientProps = {
   folders: FolderWithStats[];
@@ -73,38 +74,6 @@ function formatBytes(bytes: number | null): string {
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
-}
-
-/**
- * Calculate and format aspect ratio from dimensions
- */
-function formatAspectRatio(width: number, height: number): string {
-  // Find GCD to simplify ratio
-  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
-  const divisor = gcd(width, height);
-  const ratioW = width / divisor;
-  const ratioH = height / divisor;
-
-  // Common ratios mapping
-  const commonRatios: Record<string, string> = {
-    '16:9': '16:9',
-    '9:16': '9:16',
-    '4:3': '4:3',
-    '3:4': '3:4',
-    '1:1': '1:1',
-    '3:2': '3:2',
-    '2:3': '2:3',
-    '21:9': '21:9',
-  };
-
-  const simplified = `${ratioW}:${ratioH}`;
-  if (commonRatios[simplified]) {
-    return simplified;
-  }
-
-  // For non-standard ratios, show decimal
-  const decimal = width / height;
-  return decimal.toFixed(2);
 }
 
 export function LibraryClient({
@@ -259,6 +228,11 @@ export function LibraryClient({
     router.refresh();
   }, [router]);
 
+  const handleMoveClick = useCallback((item: MediaItem) => {
+    setMediaToMove(item);
+    setMoveTargetId(null);
+  }, []);
+
   return (
     <div className="p-8">
       {/* Page Header */}
@@ -385,31 +359,11 @@ export function LibraryClient({
                 <DialogHeader>
                   <DialogTitle>Move to Folder</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  <button
-                    className={cn(
-                      'w-full flex items-center gap-2 p-2 rounded-md hover:bg-muted text-left',
-                      moveTargetId === null && 'bg-muted'
-                    )}
-                    onClick={() => setMoveTargetId(null)}
-                  >
-                    <HugeiconsIcon icon={Home01Icon} className="h-4 w-4" strokeWidth={2} />
-                    Root
-                  </button>
-                  {allFolders.map((folder) => (
-                    <button
-                      key={folder.id}
-                      className={cn(
-                        'w-full flex items-center gap-2 p-2 rounded-md hover:bg-muted text-left',
-                        moveTargetId === folder.id && 'bg-muted'
-                      )}
-                      onClick={() => setMoveTargetId(folder.id)}
-                    >
-                      <HugeiconsIcon icon={FolderOpenIcon} className="h-4 w-4" strokeWidth={2} />
-                      {folder.name}
-                    </button>
-                  ))}
-                </div>
+                <FolderPicker
+                  folders={allFolders}
+                  selectedId={moveTargetId}
+                  onSelect={setMoveTargetId}
+                />
                 {moveError && (
                   <p className="text-sm text-destructive">{moveError}</p>
                 )}
@@ -463,47 +417,11 @@ export function LibraryClient({
           <h2 className="text-sm font-medium text-muted-foreground mb-3">Folders</h2>
           <div className="grid gap-4 grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
             {folders.map((folder) => (
-              <Card
+              <FolderCard
                 key={folder.id}
-                className="group relative p-4 hover:bg-muted/50 cursor-pointer"
-              >
-                <Link
-                  href={`/library?folder=${folder.id}`}
-                  className="flex flex-col items-center gap-2"
-                >
-                  <HugeiconsIcon
-                    icon={FolderOpenIcon}
-                    className="h-12 w-12 text-muted-foreground"
-                    strokeWidth={1.5}
-                  />
-                  <span className="text-sm font-medium truncate max-w-full">
-                    {folder.name}
-                  </span>
-                  <span className="text-xs text-muted-foreground text-center">
-                    {folder.subfolderCount > 0 && `${folder.subfolderCount} folder${folder.subfolderCount !== 1 ? 's' : ''}`}
-                    {folder.subfolderCount > 0 && folder.fileCount > 0 && ' · '}
-                    {folder.fileCount > 0 && `${folder.fileCount} file${folder.fileCount !== 1 ? 's' : ''}`}
-                    {folder.subfolderCount === 0 && folder.fileCount === 0 && 'Empty'}
-                  </span>
-                  {folder.totalSize > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      {formatBytes(folder.totalSize)}
-                    </span>
-                  )}
-                </Link>
-                {/* Delete Folder Button (on hover) */}
-                <button
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-destructive/10 text-destructive"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setFolderToDelete(folder);
-                  }}
-                  title="Delete folder"
-                >
-                  <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" strokeWidth={2} />
-                </button>
-              </Card>
+                folder={folder}
+                onDelete={setFolderToDelete}
+              />
             ))}
           </div>
         </div>
@@ -516,117 +434,17 @@ export function LibraryClient({
         )}
         <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {media.map((item) => (
-            <div
+            <MediaCard
               key={item.id}
-              className={cn(
-                'group relative rounded-lg border bg-card overflow-hidden shadow-sm',
-                isSelecting && selectedMedia.has(item.id) && 'ring-2 ring-primary'
-              )}
-              onClick={() => isSelecting && toggleSelection(item.id)}
-            >
-              {/* Selection Checkbox */}
-              {isSelecting && (
-                <div className="absolute top-2 left-2 z-10">
-                  <Checkbox
-                    checked={selectedMedia.has(item.id)}
-                    onCheckedChange={() => toggleSelection(item.id)}
-                  />
-                </div>
-              )}
-
-              {/* Thumbnail Area */}
-              <div className="aspect-square bg-muted relative">
-                {item.mimeType?.startsWith('image/') ? (
-                  <img
-                    src={item.url}
-                    alt={item.alt || item.filename}
-                    className="w-full h-full object-cover"
-                    onLoad={(e) => handleImageLoad(item.id, e.currentTarget)}
-                  />
-                ) : item.mimeType?.startsWith('video/') ? (
-                  <video
-                    src={item.url}
-                    className="w-full h-full object-cover"
-                    muted
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-12 w-12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                      <polyline points="14 2 14 8 20 8" />
-                    </svg>
-                  </div>
-                )}
-
-                {/* Hover Actions (when not selecting) */}
-                {!isSelecting && (
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                    {/* Download */}
-                    <a
-                      href={item.url}
-                      download={item.filename}
-                      className="rounded-full bg-white p-2.5 text-gray-700 hover:bg-primary hover:text-white transition-colors"
-                      title="Download"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <HugeiconsIcon icon={Download04Icon} className="h-4 w-4" strokeWidth={2} />
-                    </a>
-                    {/* Move */}
-                    <button
-                      className="rounded-full bg-white p-2.5 text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
-                      title="Move to folder"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMediaToMove(item);
-                        setMoveTargetId(null);
-                      }}
-                    >
-                      <HugeiconsIcon icon={Move01Icon} className="h-4 w-4" strokeWidth={2} />
-                    </button>
-                    {/* Delete */}
-                    <button
-                      className="rounded-full bg-white p-2.5 text-gray-700 hover:bg-destructive hover:text-white transition-colors"
-                      title="Delete"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMediaToDelete(item);
-                      }}
-                    >
-                      <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" strokeWidth={2} />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* File Metadata */}
-              <div className="p-3">
-                <p className="font-medium text-sm truncate" title={item.filename}>
-                  {item.filename}
-                </p>
-                <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{item.mimeType?.split('/')[1]?.toUpperCase() || 'Unknown'}</span>
-                  <span>{formatBytes(item.size)}</span>
-                </div>
-                {/* Show dimensions and ratio - prefer client-calculated, fallback to DB values */}
-                {item.mimeType?.startsWith('image/') && (() => {
-                  const dims = imageDimensions[item.id] || (item.width && item.height ? { width: item.width, height: item.height } : null);
-                  if (!dims) return null;
-                  return (
-                    <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{dims.width} × {dims.height}</span>
-                      <span>{formatAspectRatio(dims.width, dims.height)}</span>
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
+              item={item}
+              isSelecting={isSelecting}
+              isSelected={selectedMedia.has(item.id)}
+              dimensions={imageDimensions[item.id]}
+              onToggleSelection={toggleSelection}
+              onImageLoad={handleImageLoad}
+              onMove={handleMoveClick}
+              onDelete={setMediaToDelete}
+            />
           ))}
 
           {/* Empty State */}
@@ -734,31 +552,11 @@ export function LibraryClient({
           <p className="text-sm text-muted-foreground mb-4">
             Moving <strong>{mediaToMove?.filename}</strong> to:
           </p>
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            <button
-              className={cn(
-                'w-full flex items-center gap-2 p-2 rounded-md hover:bg-muted text-left',
-                moveTargetId === null && 'bg-muted'
-              )}
-              onClick={() => setMoveTargetId(null)}
-            >
-              <HugeiconsIcon icon={Home01Icon} className="h-4 w-4" strokeWidth={2} />
-              Root
-            </button>
-            {allFolders.map((folder) => (
-              <button
-                key={folder.id}
-                className={cn(
-                  'w-full flex items-center gap-2 p-2 rounded-md hover:bg-muted text-left',
-                  moveTargetId === folder.id && 'bg-muted'
-                )}
-                onClick={() => setMoveTargetId(folder.id)}
-              >
-                <HugeiconsIcon icon={FolderOpenIcon} className="h-4 w-4" strokeWidth={2} />
-                {folder.name}
-              </button>
-            ))}
-          </div>
+          <FolderPicker
+            folders={allFolders}
+            selectedId={moveTargetId}
+            onSelect={setMoveTargetId}
+          />
           {moveError && (
             <p className="text-sm text-destructive">{moveError}</p>
           )}

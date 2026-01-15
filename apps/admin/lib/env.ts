@@ -42,6 +42,11 @@ const serverEnvSchema = z.object({
 
   // Upload Configuration / 上传配置
   UPLOAD_MAX_SIZE_MB: z.coerce.number().min(1).max(100).default(20),
+
+  // S3 Environment Prefix (dev, staging, prod) / S3环境前缀
+  // Optional: auto-detects from NODE_ENV if not set
+  // 可选：如果未设置，则从NODE_ENV自动检测
+  S3_ENV_PREFIX: z.string().optional(),
 });
 
 /**
@@ -151,6 +156,55 @@ export function getAdminAssetUrl(key: string): string {
  */
 export function getPublicCdnUrl(key: string): string {
   return `${env.CLOUDFRONT_PUBLIC_URL}/${key}`;
+}
+
+// ============================================
+// S3 Environment Prefix / S3环境前缀
+// ============================================
+
+/**
+ * Get the S3 environment prefix / 获取S3环境前缀
+ *
+ * Uses hybrid approach: explicit S3_ENV_PREFIX takes priority,
+ * otherwise auto-detects from NODE_ENV.
+ * 使用混合方式：显式S3_ENV_PREFIX优先，否则从NODE_ENV自动检测。
+ *
+ * - S3_ENV_PREFIX set → use that value / 如果设置了S3_ENV_PREFIX → 使用该值
+ * - NODE_ENV=production → 'prod' / NODE_ENV=production → 'prod'
+ * - NODE_ENV=test → 'test' / NODE_ENV=test → 'test'
+ * - Otherwise → 'dev' / 其他情况 → 'dev'
+ *
+ * @returns Environment prefix (e.g., 'dev', 'staging', 'prod') / 环境前缀
+ */
+export function getS3EnvPrefix(): string {
+  // Explicit S3_ENV_PREFIX takes priority / 显式S3_ENV_PREFIX优先
+  if (env.S3_ENV_PREFIX) {
+    return env.S3_ENV_PREFIX;
+  }
+  // Auto-detect from NODE_ENV / 从NODE_ENV自动检测
+  const nodeEnv = process.env.NODE_ENV;
+  if (nodeEnv === 'production') return 'prod';
+  if (nodeEnv === 'test') return 'test';
+  return 'dev';
+}
+
+/**
+ * Prefix an S3 object key with environment / 为S3对象键添加环境前缀
+ *
+ * Prepends the environment prefix to the key to separate files by environment.
+ * 将环境前缀添加到键前面，以按环境分隔文件。
+ *
+ * @param key - Object key without prefix / 无前缀的对象键
+ * @returns Prefixed key (e.g., 'dev/banners/image.jpg') / 带前缀的键
+ *
+ * @example
+ * ```ts
+ * prefixS3Key('banners/image.jpg') // Returns 'dev/banners/image.jpg'
+ * ```
+ */
+export function prefixS3Key(key: string): string {
+  const prefix = getS3EnvPrefix();
+  return `${prefix}/${key}`;
 }
 
 // ============================================

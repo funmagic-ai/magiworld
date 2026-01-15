@@ -29,8 +29,27 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Get CDN URLs for preconnect hints
+  const cdnUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
+  const adminCdnUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_ADMIN_URL;
+
   return (
     <html lang="en" className={inter.variable}>
+      <head>
+        {/* Preconnect to CDNs for faster asset loading */}
+        {cdnUrl && (
+          <>
+            <link rel="preconnect" href={cdnUrl} />
+            <link rel="dns-prefetch" href={cdnUrl} />
+          </>
+        )}
+        {adminCdnUrl && adminCdnUrl !== cdnUrl && (
+          <>
+            <link rel="preconnect" href={adminCdnUrl} />
+            <link rel="dns-prefetch" href={adminCdnUrl} />
+          </>
+        )}
+      </head>
       <body className={`${inter.variable} min-h-dvh bg-background font-sans antialiased`}>
         {children}
       </body>

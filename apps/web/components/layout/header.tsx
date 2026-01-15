@@ -34,7 +34,7 @@ export function Header({ authSlot }: HeaderProps) {
             <Link
               href="/"
               className={cn(
-                "text-sm font-medium px-3 py-2 rounded-lg transition-all",
+                "text-sm font-medium px-3 py-2 rounded-lg transition-colors",
                 pathname === "/"
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-primary/10 hover:text-primary"
@@ -45,7 +45,7 @@ export function Header({ authSlot }: HeaderProps) {
             <Link
               href="/studio"
               className={cn(
-                "text-sm font-medium px-3 py-2 rounded-lg transition-all",
+                "text-sm font-medium px-3 py-2 rounded-lg transition-colors",
                 pathname === "/studio" || pathname.startsWith("/studio/")
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-primary/10 hover:text-primary"
@@ -56,7 +56,7 @@ export function Header({ authSlot }: HeaderProps) {
             <Link
               href="/assets"
               className={cn(
-                "text-sm font-medium px-3 py-2 rounded-lg transition-all",
+                "text-sm font-medium px-3 py-2 rounded-lg transition-colors",
                 pathname === "/assets" || pathname.startsWith("/assets/")
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-primary/10 hover:text-primary"

@@ -18,7 +18,7 @@ import { aws } from '@better-upload/server/clients';
 import { db, media } from '@magiworld/db';
 import { revalidatePath } from 'next/cache';
 import { generateUniqueFilename, findOrCreateMagiFolder } from '@/lib/actions/library';
-import { env, getAdminAssetUrl, getPublicCdnUrl, getUploadMaxSize } from '@/lib/env';
+import { env, getAdminAssetUrl, getPublicCdnUrl, getUploadMaxSize, prefixS3Key } from '@/lib/env';
 
 /**
  * Get max file size from environment / 从环境变量获取最大文件大小
@@ -81,6 +81,18 @@ const router: Router = {
       maxFileSize: MAX_FILE_SIZE,
       multipleFiles: true,
       maxFiles: 10,
+      onBeforeUpload: () => {
+        return {
+          generateObjectInfo: ({ file }) => {
+            const timestamp = Date.now();
+            const ext = file.name.split('.').pop() || 'jpg';
+            const name = file.name.replace(`.${ext}`, '').replace(/[^a-zA-Z0-9-_]/g, '-');
+            return {
+              key: prefixS3Key(`library/${name}-${timestamp}.${ext}`),
+            };
+          },
+        };
+      },
       onAfterSignedUrl: async ({ files, clientMetadata }) => {
         const metadata = clientMetadata as { folderId?: string } | undefined;
         const folderId = metadata?.folderId || null;
@@ -108,6 +120,16 @@ const router: Router = {
     magi: route({
       fileTypes: ['image/png', 'image/jpeg', 'image/webp'],
       maxFileSize: MAX_FILE_SIZE,
+      onBeforeUpload: ({ file }) => {
+        const timestamp = Date.now();
+        const ext = file.name.split('.').pop() || 'png';
+        const name = file.name.replace(`.${ext}`, '').replace(/[^a-zA-Z0-9-_]/g, '-');
+        return {
+          objectInfo: {
+            key: prefixS3Key(`magi/${name}-${timestamp}.${ext}`),
+          },
+        };
+      },
       onAfterSignedUrl: async ({ file }) => {
         const folderId = await findOrCreateMagiFolder();
         const uniqueFilename = await generateUniqueFilename(file.name, folderId);
@@ -158,7 +180,7 @@ const cdnRouter: Router = {
             const ext = file.name.split('.').pop() || 'jpg';
             const name = file.name.replace(`.${ext}`, '').replace(/[^a-zA-Z0-9-_]/g, '-');
             return {
-              key: `banners/${name}-${timestamp}.${ext}`,
+              key: prefixS3Key(`banners/${name}-${timestamp}.${ext}`),
               cacheControl: 'public, max-age=31536000, immutable',
             };
           },
@@ -191,7 +213,7 @@ const cdnRouter: Router = {
             const ext = file.name.split('.').pop() || 'jpg';
             const name = file.name.replace(`.${ext}`, '').replace(/[^a-zA-Z0-9-_]/g, '-');
             return {
-              key: `tools/${toolId}/${type}/${name}-${timestamp}.${ext}`,
+              key: prefixS3Key(`tools/${toolId}/${type}/${name}-${timestamp}.${ext}`),
               cacheControl: 'public, max-age=31536000, immutable',
             };
           },
@@ -221,7 +243,7 @@ const cdnRouter: Router = {
             const ext = file.name.split('.').pop() || 'jpg';
             const name = file.name.replace(`.${ext}`, '').replace(/[^a-zA-Z0-9-_]/g, '-');
             return {
-              key: `brands/${name}-${timestamp}.${ext}`,
+              key: prefixS3Key(`brands/${name}-${timestamp}.${ext}`),
               cacheControl: 'public, max-age=31536000, immutable',
             };
           },

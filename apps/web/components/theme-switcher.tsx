@@ -61,7 +61,7 @@ export function ThemeSwitcher() {
           <button
             key={t.id}
             onClick={() => handleColorChange(t.id)}
-            className={`h-5 w-5 rounded-full transition-all motion-safe:hover:scale-125 ${
+            className={`h-5 w-5 rounded-full transition-[transform,opacity] motion-safe:hover:scale-125 ${
               currentColorTheme === t.id
                 ? 'ring-2 ring-offset-2 ring-primary'
                 : 'opacity-50 hover:opacity-100'

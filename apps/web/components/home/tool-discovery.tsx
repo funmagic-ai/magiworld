@@ -49,7 +49,7 @@ function ToolCard({ tool }: { tool: ToolListItem }) {
 
   return (
     <Link href={`/studio/${tool.toolType.slug}/${tool.slug}`}>
-      <Card className="group overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5">
+      <Card className="group overflow-hidden transition-[box-shadow,transform] hover:shadow-md hover:-translate-y-0.5">
         {/* Thumbnail */}
         <div className="aspect-square bg-muted relative overflow-hidden">
           {tool.thumbnail?.url ? (
