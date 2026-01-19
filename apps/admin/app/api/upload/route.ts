@@ -17,8 +17,31 @@ import { toRouteHandler } from '@better-upload/server/adapters/next';
 import { aws } from '@better-upload/server/clients';
 import { db, media } from '@magiworld/db';
 import { revalidatePath } from 'next/cache';
+import { getLogtoContext } from '@logto/next/server-actions';
 import { generateUniqueFilename, findOrCreateMagiFolder } from '@/lib/actions/library';
+import { getAdminUserByLogtoId } from '@/lib/admin-user';
+import { logtoConfig } from '@/lib/logto';
 import { env, getAdminAssetUrl, getPublicCdnUrl, getUploadMaxSize, prefixS3Key } from '@/lib/env';
+
+/**
+ * Get current admin user ID from session / 从会话获取当前管理员用户ID
+ * Returns 'anonymous' if not authenticated (should not happen in admin app).
+ * 如果未认证返回'anonymous'（在管理后台不应发生）。
+ */
+async function getAdminUserId(): Promise<string> {
+  try {
+    const context = await getLogtoContext(logtoConfig);
+    if (context.isAuthenticated && context.claims?.sub) {
+      const adminUser = await getAdminUserByLogtoId(context.claims.sub);
+      if (adminUser) {
+        return adminUser.id;
+      }
+    }
+  } catch {
+    // Fall through to anonymous
+  }
+  return 'anonymous';
+}
 
 /**
  * Get max file size from environment / 从环境变量获取最大文件大小
@@ -75,20 +98,23 @@ const router: Router = {
      * General assets upload / 通用资产上传
      * Used by: UploadDropzone component in Library page
      * 使用者：媒体库页面的UploadDropzone组件
+     *
+     * Path: {env}/admins/{adminId}/library/uploads/{filename}-{ts}.{ext}
      */
     assets: route<true>({
       fileTypes: ['image/*', 'video/*'],
       maxFileSize: MAX_FILE_SIZE,
       multipleFiles: true,
       maxFiles: 10,
-      onBeforeUpload: () => {
+      onBeforeUpload: async () => {
+        const adminId = await getAdminUserId();
         return {
           generateObjectInfo: ({ file }) => {
             const timestamp = Date.now();
             const ext = file.name.split('.').pop() || 'jpg';
             const name = file.name.replace(`.${ext}`, '').replace(/[^a-zA-Z0-9-_]/g, '-');
             return {
-              key: prefixS3Key(`library/${name}-${timestamp}.${ext}`),
+              key: prefixS3Key(`admins/${adminId}/library/uploads/${name}-${timestamp}.${ext}`),
             };
           },
         };
@@ -112,21 +138,24 @@ const router: Router = {
 
     /**
      * Magi AI results upload / Magi AI结果上传
-     * Saves AI-generated images to library under magi/{yyyymmdd}/ folder.
-     * 将AI生成的图片保存到媒体库的magi/{yyyymmdd}/文件夹下。
-     * Used by: ResultActions component
-     * 使用者：ResultActions组件
+     * Saves AI-generated images to library under magi folder.
+     * 将AI生成的图片保存到媒体库的magi文件夹下。
+     * Used by: ResultActions component (Save to Library)
+     * 使用者：ResultActions组件（保存到媒体库）
+     *
+     * Path: {env}/admins/{adminId}/library/magi/{filename}-{ts}.{ext}
      */
     magi: route({
       fileTypes: ['image/png', 'image/jpeg', 'image/webp'],
       maxFileSize: MAX_FILE_SIZE,
-      onBeforeUpload: ({ file }) => {
+      onBeforeUpload: async ({ file }) => {
+        const adminId = await getAdminUserId();
         const timestamp = Date.now();
         const ext = file.name.split('.').pop() || 'png';
         const name = file.name.replace(`.${ext}`, '').replace(/[^a-zA-Z0-9-_]/g, '-');
         return {
           objectInfo: {
-            key: prefixS3Key(`magi/${name}-${timestamp}.${ext}`),
+            key: prefixS3Key(`admins/${adminId}/library/magi/${name}-${timestamp}.${ext}`),
           },
         };
       },
@@ -167,20 +196,23 @@ const cdnRouter: Router = {
      * Banner images upload / 横幅图片上传
      * Used by: BannerForm component
      * 使用者：BannerForm组件
+     *
+     * Path: {env}/public/banners/{adminId}/{filename}-{ts}.{ext}
      */
     banners: route<true>({
       fileTypes: ['image/*'],
       maxFileSize: MAX_FILE_SIZE,
       multipleFiles: true,
       maxFiles: 5,
-      onBeforeUpload: () => {
+      onBeforeUpload: async () => {
+        const adminId = await getAdminUserId();
         return {
           generateObjectInfo: ({ file }) => {
             const timestamp = Date.now();
             const ext = file.name.split('.').pop() || 'jpg';
             const name = file.name.replace(`.${ext}`, '').replace(/[^a-zA-Z0-9-_]/g, '-');
             return {
-              key: prefixS3Key(`banners/${name}-${timestamp}.${ext}`),
+              key: prefixS3Key(`public/banners/${adminId}/${name}-${timestamp}.${ext}`),
               cacheControl: 'public, max-age=31536000, immutable',
             };
           },
@@ -197,13 +229,15 @@ const cdnRouter: Router = {
      * 工具的缩略图和示例图片。
      * Used by: ToolForm component
      * 使用者：ToolForm组件
+     *
+     * Path: {env}/public/tools/{toolId}/{type}/{filename}-{ts}.{ext}
      */
     tools: route<true>({
       fileTypes: ['image/*'],
       maxFileSize: MAX_FILE_SIZE,
       multipleFiles: true,
       maxFiles: 10,
-      onBeforeUpload: ({ clientMetadata }) => {
+      onBeforeUpload: async ({ clientMetadata }) => {
         const metadata = clientMetadata as { toolId?: string; type?: string } | undefined;
         const toolId = metadata?.toolId || 'unknown';
         const type = metadata?.type || 'images';
@@ -213,7 +247,7 @@ const cdnRouter: Router = {
             const ext = file.name.split('.').pop() || 'jpg';
             const name = file.name.replace(`.${ext}`, '').replace(/[^a-zA-Z0-9-_]/g, '-');
             return {
-              key: prefixS3Key(`tools/${toolId}/${type}/${name}-${timestamp}.${ext}`),
+              key: prefixS3Key(`public/tools/${toolId}/${type}/${name}-${timestamp}.${ext}`),
               cacheControl: 'public, max-age=31536000, immutable',
             };
           },
@@ -230,20 +264,24 @@ const cdnRouter: Router = {
      * 白标软件品牌的Logo图片。
      * Used by: OemBrandForm component
      * 使用者：OemBrandForm组件
+     *
+     * Path: {env}/public/brands/{brandSlug}/{filename}-{ts}.{ext}
      */
     brands: route<true>({
       fileTypes: ['image/*'],
       maxFileSize: MAX_FILE_SIZE,
       multipleFiles: true,
       maxFiles: 5,
-      onBeforeUpload: () => {
+      onBeforeUpload: async ({ clientMetadata }) => {
+        const metadata = clientMetadata as { brandSlug?: string } | undefined;
+        const brandSlug = metadata?.brandSlug || 'unknown';
         return {
           generateObjectInfo: ({ file }) => {
             const timestamp = Date.now();
             const ext = file.name.split('.').pop() || 'jpg';
             const name = file.name.replace(`.${ext}`, '').replace(/[^a-zA-Z0-9-_]/g, '-');
             return {
-              key: prefixS3Key(`brands/${name}-${timestamp}.${ext}`),
+              key: prefixS3Key(`public/brands/${brandSlug}/${name}-${timestamp}.${ext}`),
               cacheControl: 'public, max-age=31536000, immutable',
             };
           },

@@ -1,0 +1,51 @@
+# =============================================================================
+# Development Dockerfile for Worker
+# 本地开发用 Dockerfile（Worker）
+# =============================================================================
+#
+# Usage:
+#   docker-compose -f docker-compose.dev.yml up -d worker
+#
+# Features:
+#   - Hot reload with tsx watch
+#   - Volume mounts for source code changes
+#   - Development logging
+#
+# =============================================================================
+
+FROM node:20-alpine
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@9.15.2 --activate
+
+WORKDIR /app
+
+ENV NODE_ENV=development
+ENV SKIP_ENV_VALIDATION=true
+
+# Copy package files for dependency installation
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/queue/package.json ./packages/queue/
+COPY packages/db/package.json ./packages/db/
+COPY packages/utils/package.json ./packages/utils/
+COPY packages/types/package.json ./packages/types/
+COPY packages/config/package.json ./packages/config/
+COPY apps/worker/package.json ./apps/worker/
+
+# Install all dependencies (including devDependencies)
+RUN pnpm install --frozen-lockfile
+
+# Copy all source code (will be overwritten by volume mounts)
+COPY packages/ ./packages/
+COPY apps/worker/ ./apps/worker/
+
+# Build shared packages (these are needed by the worker)
+RUN pnpm --filter @magiworld/types build || true
+RUN pnpm --filter @magiworld/utils build || true
+RUN pnpm --filter @magiworld/db build || true
+RUN pnpm --filter @magiworld/queue build || true
+
+WORKDIR /app/apps/worker
+
+# Start worker in development mode with tsx watch for hot reload
+CMD ["pnpm", "dev"]

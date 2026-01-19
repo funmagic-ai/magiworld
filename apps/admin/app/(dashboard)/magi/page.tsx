@@ -1,27 +1,51 @@
-/**
- * @fileoverview Magi - AI Tools Dashboard
- * @fileoverview Magi - AI工具仪表板
- *
- * Two-view interface for AI-powered tools:
- * - Grid view: Browse all available tools
- * - Tool view: Use a selected tool (full-screen)
- * AI工具的双视图界面：
- * - 网格视图：浏览所有可用工具
- * - 工具视图：使用选定工具（全屏）
- *
- * Deep linking: /magi?tool=chat opens directly to the chat tool.
- * 深度链接：/magi?tool=chat 直接打开聊天工具。
- *
- * @module apps/admin/app/magi/page
- */
-
 import { Suspense } from 'react';
+import { db, adminTasks, adminUsers, desc, eq } from '@magiworld/db';
 import { MagiClient, MagiClientSkeleton } from '@/components/ai/magi-client';
+import type { TaskItem } from '@/components/ai/magi-tasks-list';
+import { MAGI_TOOLS } from '@/lib/magi-tools';
 
-export default function MagiPage() {
+async function getTasks(): Promise<TaskItem[]> {
+  const results = await db
+    .select({
+      id: adminTasks.id,
+      status: adminTasks.status,
+      progress: adminTasks.progress,
+      inputParams: adminTasks.inputParams,
+      outputData: adminTasks.outputData,
+      errorMessage: adminTasks.errorMessage,
+      createdAt: adminTasks.createdAt,
+      completedAt: adminTasks.completedAt,
+      toolSlug: adminTasks.toolSlug,
+      adminName: adminUsers.name,
+      adminEmail: adminUsers.email,
+    })
+    .from(adminTasks)
+    .leftJoin(adminUsers, eq(adminTasks.adminId, adminUsers.id))
+    .orderBy(desc(adminTasks.createdAt))
+    .limit(100);
+
+  return results.map((r) => ({
+    id: r.id,
+    status: r.status as TaskItem['status'],
+    progress: r.progress ?? 0,
+    inputParams: r.inputParams as Record<string, unknown> | null,
+    outputData: r.outputData as Record<string, unknown> | null,
+    errorMessage: r.errorMessage,
+    createdAt: r.createdAt,
+    completedAt: r.completedAt,
+    // Get tool name from MAGI_TOOLS config
+    toolName: MAGI_TOOLS[r.toolSlug]?.name || r.toolSlug,
+    userName: r.adminName || r.adminEmail?.split('@')[0] || 'Unknown',
+    userEmail: r.adminEmail,
+  }));
+}
+
+export default async function MagiPage() {
+  const tasksList = await getTasks();
+
   return (
     <Suspense fallback={<MagiClientSkeleton />}>
-      <MagiClient />
+      <MagiClient tasks={tasksList} />
     </Suspense>
   );
 }

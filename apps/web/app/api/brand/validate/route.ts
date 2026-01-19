@@ -1,16 +1,7 @@
-/**
- * @fileoverview Brand Validation API Route
- *
- * Validates OEM brand by software_id.
- * Called by middleware to verify brand before setting cookie.
- *
- * @module app/api/brand/validate/route
- */
-
 import { NextResponse } from 'next/server';
 import { db, oemSoftwareBrands, eq } from '@magiworld/db';
 
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
   const softwareId = searchParams.get('software_id');
 

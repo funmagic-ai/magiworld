@@ -11,7 +11,6 @@ export async function AuthStatus() {
   const t = await getTranslations('nav');
 
   if (isAuthenticated && claims) {
-    // Sync user data from Logto to local database (lazy sync on each page load)
     await syncUserFromLogto(context);
 
     return (

@@ -5,6 +5,22 @@
     "dev": "turbo dev",
     "dev:web": "turbo dev --filter=web",
     "dev:admin": "turbo dev --filter=admin",
+    "dev:worker": "pnpm --filter @magiworld/worker dev",
+    "dev:all": "concurrently -n redis,web,admin,worker -c blue,green,yellow,magenta \"pnpm redis:up && pnpm redis:wait\" \"pnpm dev:web\" \"pnpm dev:admin\" \"pnpm dev:worker\"",
+    "dev:apps": "concurrently -n web,admin,worker -c green,yellow,magenta \"pnpm dev:web\" \"pnpm dev:admin\" \"pnpm dev:worker\"",
+    "redis:up": "docker-compose -f docker-compose.dev.yml up -d redis redis-commander",
+    "redis:down": "docker-compose -f docker-compose.dev.yml down",
+    "redis:logs": "docker-compose -f docker-compose.dev.yml logs -f redis",
+    "redis:wait": "until docker exec magiworld-redis redis-cli ping 2>/dev/null; do sleep 1; done",
+    "docker:dev": "docker-compose -f docker-compose.dev.yml up -d",
+    "docker:dev:build": "docker-compose -f docker-compose.dev.yml up -d --build",
+    "docker:down": "docker-compose -f docker-compose.dev.yml down",
+    "docker:logs": "docker-compose -f docker-compose.dev.yml logs -f",
+    "docker:logs:web": "docker-compose -f docker-compose.dev.yml logs -f web",
+    "docker:logs:admin": "docker-compose -f docker-compose.dev.yml logs -f admin",
+    "docker:logs:worker": "docker-compose -f docker-compose.dev.yml logs -f worker",
+    "docker:logs:worker-admin": "docker-compose -f docker-compose.dev.yml logs -f worker-admin",
+    "docker:logs:bull-board": "docker-compose -f docker-compose.dev.yml logs -f bull-board",
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
@@ -15,6 +31,7 @@
     "docs:watch": "typedoc --watch"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "turbo": "^2.3.3",
     "typedoc": "^0.28.16",
     "typedoc-plugin-markdown": "^4.9.0",
@@ -26,5 +43,10 @@
   },
   "dependencies": {
     "winston": "^3.17.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "ioredis": "^5.4.2"
+    }
   }
 }

@@ -590,7 +590,7 @@ CLOUDFRONT_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n..."
 
 ### Setup Guide
 
-For detailed step-by-step AWS Console configuration, see **[deployment-guide.md](./deployment-guide.md)**.
+For detailed step-by-step AWS Console configuration, see **[Deployment Guide](./deployment-guide/README.md)**.
 
 ## Development Guide
 

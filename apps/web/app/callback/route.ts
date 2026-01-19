@@ -3,10 +3,8 @@ import { redirect } from 'next/navigation';
 import { NextRequest } from 'next/server';
 import { logtoConfig } from '@/lib/logto';
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<never> {
   const searchParams = request.nextUrl.searchParams;
   await handleSignIn(logtoConfig, searchParams);
-
-  // Redirect to the default locale home page
   redirect('/en');
 }

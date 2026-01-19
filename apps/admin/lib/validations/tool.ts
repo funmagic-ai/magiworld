@@ -17,29 +17,44 @@ import { TOOL_REGISTRY } from '@magiworld/types';
 /**
  * Translation schema for tool content / 工具内容翻译模式
  *
- * Validates title (required), description, and promptTemplate (optional) for each locale.
- * 验证每个语言的标题（必填）、描述和提示词模板（可选）。
+ * Validates title (required) and description (optional) for each locale.
+ * 验证每个语言的标题（必填）和描述（可选）。
  */
 const translationSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
-  promptTemplate: z.string().optional(),
 });
+
+/**
+ * Price configuration schema / 价格配置模式
+ *
+ * Flexible pricing for different billing models.
+ * 灵活的价格配置，支持不同的计费模式。
+ */
+const priceConfigSchema = z.object({
+  type: z.enum(['token', 'request', 'image', 'second']),
+  input_per_1k: z.number().optional(),
+  output_per_1k: z.number().optional(),
+  cost_per_call: z.number().optional(),
+  cost_per_image: z.number().optional(),
+  cost_per_second: z.number().optional(),
+}).optional();
 
 /**
  * Tool form validation schema / 工具表单验证模式
  *
  * Complete schema for tool form data including translations.
  * Slug must match a registered tool component in TOOL_REGISTRY.
+ * Provider/model selection is handled by tool processors in worker code.
  * 工具表单数据的完整模式，包含翻译。
  * Slug必须匹配TOOL_REGISTRY中已注册的工具组件。
+ * Provider/模型选择由worker代码中的工具处理器处理。
  *
  * @property slug - Must match TOOL_REGISTRY / 必须匹配TOOL_REGISTRY
  * @property toolTypeId - Parent tool type UUID / 父工具类型UUID
+ * @property priceConfig - Pricing configuration / 价格配置
  * @property thumbnailUrl - Tool thumbnail CDN URL / 工具缩略图CDN URL
- * @property aiEndpoint - AI service endpoint / AI服务端点
- * @property promptTemplate - Default prompt template / 默认提示词模板
- * @property configJson - Tool-specific config / 工具特定配置
+ * @property configJson - Tool-specific config (UI options, processing hints) / 工具特定配置
  * @property order - Display order (0+) / 显示顺序
  * @property isActive - Whether tool is enabled / 是否启用
  * @property isFeatured - Whether tool is featured / 是否推荐
@@ -57,9 +72,8 @@ export const toolSchema = z.object({
       }
     ),
   toolTypeId: z.string().uuid('Tool type is required'),
+  priceConfig: priceConfigSchema,
   thumbnailUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
-  aiEndpoint: z.string().optional(),
-  promptTemplate: z.string().optional(),
   configJson: z.record(z.string(), z.unknown()).optional(),
   order: z.number().int().min(0, 'Order must be 0 or greater'),
   isActive: z.boolean(),

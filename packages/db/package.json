@@ -13,6 +13,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:reset": "./scripts/reset.sh",
+    "db:cleanup-tasks": "tsx scripts/cleanup-tasks.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@types/node": "^20",
+    "dotenv": "^17.2.3",
     "drizzle-kit": "^0.31.4",
     "tsx": "^4.21.0",
     "typescript": "^5"

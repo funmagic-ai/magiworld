@@ -43,6 +43,20 @@
       "when": 1768386923542,
       "tag": "0005_silent_cargill",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1768554187381,
+      "tag": "0006_numerous_moonstone",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1768562968122,
+      "tag": "0007_overrated_xavin",
+      "breakpoints": true
     }
   ]
 }

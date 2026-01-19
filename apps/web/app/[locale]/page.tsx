@@ -11,13 +11,11 @@ export default async function HomePage({ params }: HomePageProps) {
   const { locale } = await params;
   setRequestLocale(locale);
 
-  // Fetch data from database
   const [tools, homeConfig] = await Promise.all([
     getTools(locale as Locale, 12).catch(() => []),
     getHomeConfig(locale as Locale).catch(() => ({ mainBanners: [], sideBanners: [] })),
   ]);
 
-  // Transform banners for HeroSection
   const mainBanners = homeConfig.mainBanners?.map((banner) => ({
     id: banner.id,
     image: banner.image,
@@ -35,10 +33,7 @@ export default async function HomePage({ params }: HomePageProps) {
 
   return (
     <div className="flex flex-col">
-      {/* Hero Section with Banners */}
       <HeroSection mainBanners={mainBanners} sideBanners={sideBanners} />
-
-      {/* Tool Discovery Section */}
       <ToolDiscovery tools={tools} />
     </div>
   );

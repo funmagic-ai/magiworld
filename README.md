@@ -357,7 +357,7 @@ funmagic-web-users-assets-shared/
 └── {userid}/{share-id}/
 ```
 
-For detailed folder structure and AWS setup instructions, see **[docs/deployment-guide.md](./docs/deployment-guide.md)**.
+For detailed folder structure and AWS setup instructions, see **[Deployment Guide](./docs/deployment-guide/README.md)**.
 
 ## Development Guide
 
@@ -535,7 +535,7 @@ pnpm build
 
 ## Documentation
 
-- [Deployment Guide](./docs/deployment-guide.md) - AWS S3/CloudFront setup
+- [Deployment Guide](./docs/deployment-guide/README.md) - AWS S3/CloudFront setup
 - [Design Specification](./docs/design.md) - Full architecture documentation
 
 ## License

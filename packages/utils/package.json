@@ -12,6 +12,10 @@
     "./logger": {
       "types": "./src/logger.ts",
       "default": "./src/logger.ts"
+    },
+    "./ai": {
+      "types": "./src/ai.ts",
+      "default": "./src/ai.ts"
     }
   },
   "scripts": {

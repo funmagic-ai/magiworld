@@ -105,6 +105,9 @@ export function MediaPicker({
           <img
             src={selectedMedia.url}
             alt={selectedMedia.filename}
+            width={400}
+            height={128}
+            loading="lazy"
             className="w-full h-32 object-cover"
           />
           <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
@@ -229,6 +232,9 @@ function MediaPickerDialog({
                 <img
                   src={media.url}
                   alt={media.filename}
+                  width={150}
+                  height={150}
+                  loading="lazy"
                   className="w-full h-full object-cover"
                 />
               ) : (

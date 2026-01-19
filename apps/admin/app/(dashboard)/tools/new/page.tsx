@@ -4,8 +4,10 @@
  *
  * Form page for creating new AI tools.
  * Loads tool types for category selection.
+ * Provider/model selection is handled by tool processors in worker code.
  * 创建新AI工具的表单页面。
  * 加载工具类型用于分类选择。
+ * Provider/模型选择由worker代码中的工具处理器处理。
  *
  * @module app/(dashboard)/tools/new/page
  */

@@ -22,6 +22,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Upload04Icon,
@@ -30,9 +31,11 @@ import {
   Home01Icon,
   ArrowRight01Icon,
   Folder01Icon,
+  Loading03Icon,
 } from '@hugeicons/core-free-icons';
-import { getFolderContents, type Folder, type MediaItem } from '@/lib/actions/library';
+import { getFolderContents, signUrl, type Folder, type MediaItem } from '@/lib/actions/library';
 import { validateFileSize, MAX_FILE_SIZE_MB } from '@/lib/utils/file';
+import { useUpload } from './hooks/use-upload';
 
 export interface SelectedImage {
   url: string;
@@ -50,8 +53,9 @@ interface ImageSourcePickerProps {
 export function ImageSourcePicker({ value, onChange, disabled }: ImageSourcePickerProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
+  const { upload, isUploading, progress, error, reset: resetUpload } = useUpload();
 
-  const handleFile = useCallback((file: File) => {
+  const handleFile = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) {
       alert('Please upload an image file');
       return;
@@ -64,17 +68,18 @@ export function ImageSourcePicker({ value, onChange, disabled }: ImageSourcePick
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
+    // Upload to S3 and get CloudFront URL
+    const uploadedUrl = await upload(file);
+    if (uploadedUrl) {
+      // Sign the URL for display (private CloudFront requires signed URLs)
+      const signedUrl = await signUrl(uploadedUrl);
       onChange({
-        url: dataUrl,
+        url: signedUrl,
         filename: file.name,
         source: 'upload',
       });
-    };
-    reader.readAsDataURL(file);
-  }, [onChange]);
+    }
+  }, [onChange, upload]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -110,6 +115,7 @@ export function ImageSourcePicker({ value, onChange, disabled }: ImageSourcePick
 
   const handleClear = () => {
     onChange(null);
+    resetUpload();
   };
 
   // If image is selected, show preview
@@ -147,10 +153,37 @@ export function ImageSourcePicker({ value, onChange, disabled }: ImageSourcePick
     );
   }
 
-  // No image selected - show picker
+  // No image selected - show picker (or uploading state)
   return (
     <Card>
       <CardContent className="p-4">
+        {/* Show upload progress or error */}
+        {(isUploading || error) && (
+          <div className="mb-4 p-4 rounded-lg border bg-muted/50">
+            {isUploading && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <HugeiconsIcon
+                    icon={Loading03Icon}
+                    className="h-4 w-4 animate-spin text-primary"
+                    strokeWidth={2}
+                  />
+                  <span className="text-sm font-medium">Uploading...</span>
+                  <span className="text-sm text-muted-foreground ml-auto">
+                    {Math.round(progress)}%
+                  </span>
+                </div>
+                <Progress value={progress} className="h-2" />
+              </div>
+            )}
+            {error && (
+              <div className="text-sm text-destructive">
+                Upload failed: {error}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Upload Option */}
           <div
@@ -160,7 +193,7 @@ export function ImageSourcePicker({ value, onChange, disabled }: ImageSourcePick
             className={`
               relative border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer
               ${isDragging ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50'}
-              ${disabled ? 'opacity-50 pointer-events-none' : ''}
+              ${disabled || isUploading ? 'opacity-50 pointer-events-none' : ''}
             `}
           >
             <input
@@ -168,7 +201,7 @@ export function ImageSourcePicker({ value, onChange, disabled }: ImageSourcePick
               accept="image/*"
               onChange={handleFileInput}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              disabled={disabled}
+              disabled={disabled || isUploading}
             />
             <HugeiconsIcon
               icon={Upload04Icon}
@@ -184,14 +217,14 @@ export function ImageSourcePicker({ value, onChange, disabled }: ImageSourcePick
           {/* Library Option */}
           <Dialog open={showLibrary} onOpenChange={setShowLibrary}>
             <DialogTrigger
-              disabled={disabled}
+              disabled={disabled || isUploading}
               render={
                 <button
                   type="button"
                   className={`
                     border-2 border-dashed rounded-lg p-6 text-center transition-colors
                     border-muted-foreground/25 hover:border-primary/50
-                    ${disabled ? 'opacity-50 pointer-events-none' : ''}
+                    ${disabled || isUploading ? 'opacity-50 pointer-events-none' : ''}
                   `}
                 />
               }

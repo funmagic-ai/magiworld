@@ -39,10 +39,11 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Home01Icon,
   Image01Icon,
-  FolderLibraryIcon,
-  AiGenerativeIcon,
+  Wrench01Icon,
   ArrowDown01Icon,
   Building03Icon,
+  Settings02Icon,
+  IdeaIcon,
 } from '@hugeicons/core-free-icons';
 
 type MenuItem = {
@@ -59,34 +60,43 @@ const menuItems: MenuItem[] = [
     icon: Home01Icon,
   },
   {
-    title: 'Banners',
+    title: 'Tools',
+    icon: Wrench01Icon,
+    children: [
+      { title: 'Tools', url: '/tools' },
+      { title: 'Tool Types', url: '/tool-types' },
+    ],
+  },
+  {
+    title: 'Content',
     icon: Image01Icon,
     children: [
-      { title: 'Homepage', url: '/banners' },
-    ],
-  },
-  {
-    title: 'AI Tools',
-    icon: AiGenerativeIcon,
-    children: [
-      { title: 'Tool Types', url: '/tool-types' },
-      { title: 'Tools', url: '/tools' },
-    ],
-  },
-  {
-    title: 'Assets',
-    icon: FolderLibraryIcon,
-    children: [
+      { title: 'Banners', url: '/banners' },
       { title: 'Library', url: '/library' },
-      { title: 'Ideas', url: '/ideas' },
-      { title: 'Magi', url: '/magi' },
     ],
   },
   {
-    title: 'OEM',
+    title: 'Partners',
     icon: Building03Icon,
     children: [
-      { title: 'Brands', url: '/oem-brands' },
+      { title: 'OEM Brands', url: '/oem-brands' },
+    ],
+  },
+  {
+    title: 'System',
+    icon: Settings02Icon,
+    children: [
+      { title: 'Providers', url: '/providers' },
+      { title: 'Admin Providers', url: '/admin-providers' },
+      { title: 'Dead Letters', url: '/dead-letters' },
+    ],
+  },
+  {
+    title: 'Lab',
+    icon: IdeaIcon,
+    children: [
+      { title: 'Magi', url: '/magi' },
+      { title: 'Ideas', url: '/ideas' },
     ],
   },
 ];

@@ -22,4 +22,8 @@ export interface MagiTool {
   icon: typeof Wrench01Icon;
   /** Tool category */
   category: 'image' | 'video' | 'audio' | 'chat';
+  /** AI provider (e.g., fal_ai, google, openai) */
+  provider: string;
+  /** Model identifier */
+  model: string;
 }

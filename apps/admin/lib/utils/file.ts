@@ -21,16 +21,16 @@ const DEFAULT_MAX_SIZE_MB = 20;
  * Get maximum file size in MB from environment / 从环境变量获取最大文件大小（MB）
  *
  * Reads NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB, defaults to 20MB.
+ * NEXT_PUBLIC_ vars are inlined at build time by Next.js, so this works on both server and client.
  * 读取NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB，默认20MB。
+ * NEXT_PUBLIC_ 变量在构建时由 Next.js 内联，因此在服务器和客户端都有效。
  */
 function getMaxSizeMB(): number {
-  if (typeof window !== 'undefined') {
-    // Client-side: read from NEXT_PUBLIC env var
-    const envValue = process.env.NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB;
-    if (envValue) {
-      const parsed = parseInt(envValue, 10);
-      if (!isNaN(parsed) && parsed > 0) return parsed;
-    }
+  // NEXT_PUBLIC_ variables are inlined at build time, so they're available on both server and client
+  const envValue = process.env.NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB;
+  if (envValue) {
+    const parsed = parseInt(envValue, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
   }
   return DEFAULT_MAX_SIZE_MB;
 }

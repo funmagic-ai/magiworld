@@ -9,7 +9,9 @@
   },
   "nav": {
     "home": "Home",
-    "studio": "Studio",
+    "aiLab": "AI Lab",
+    "myTasks": "My Tasks",
+    "allTools": "All Tools",
     "assets": "My Assets",
     "login": "Login",
     "signup": "Sign up",
@@ -42,10 +44,34 @@
   "assets": {
     "title": "My Assets",
     "empty": "No assets yet",
-    "emptyDescription": "Your created assets will appear here",
+    "emptyDescription": "Save your AI-generated outputs to see them here",
+    "savedFrom": "Saved from",
     "recreate": "Recreate",
     "download": "Download",
-    "delete": "Delete"
+    "delete": "Delete",
+    "confirmDelete": "Are you sure you want to delete this asset?",
+    "saveToAssets": "Save to My Assets",
+    "saved": "Saved!"
+  },
+  "tasks": {
+    "title": "My Tasks",
+    "empty": "No tasks yet",
+    "emptyDescription": "Your AI processing tasks will appear here",
+    "status": {
+      "pending": "Pending",
+      "processing": "Processing",
+      "success": "Completed",
+      "failed": "Failed"
+    },
+    "filters": {
+      "all": "All",
+      "pending": "Pending",
+      "processing": "Processing",
+      "success": "Completed",
+      "failed": "Failed"
+    },
+    "viewResult": "View Result",
+    "createdAt": "Created"
   },
   "footer": {
     "rights": "All rights reserved",

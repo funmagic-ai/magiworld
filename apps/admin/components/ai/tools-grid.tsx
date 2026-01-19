@@ -15,12 +15,32 @@
 import { useRouter } from 'next/navigation';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Wrench01Icon } from '@hugeicons/core-free-icons';
-import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { MagiTool } from './types';
 
 interface ToolsGridProps {
   tools: MagiTool[];
+}
+
+/** Format provider slug for display */
+function formatProvider(provider: string): string {
+  const providerNames: Record<string, string> = {
+    fal_ai: 'Fal.ai',
+    google: 'Google',
+    openai: 'OpenAI',
+  };
+  return providerNames[provider] || provider;
+}
+
+/** Get provider badge classes */
+function getProviderClasses(provider: string): string {
+  const classes: Record<string, string> = {
+    fal_ai: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+    google: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+    openai: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+  };
+  return classes[provider] || 'bg-secondary text-secondary-foreground';
 }
 
 /**
@@ -90,7 +110,7 @@ function ToolCard({ tool, onClick }: ToolCardProps) {
       )}
       onClick={onClick}
     >
-      <CardHeader className="text-center">
+      <CardHeader className="text-center pb-2">
         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
           <HugeiconsIcon
             icon={tool.icon}
@@ -103,6 +123,19 @@ function ToolCard({ tool, onClick }: ToolCardProps) {
           {tool.description}
         </CardDescription>
       </CardHeader>
+      <CardContent className="pt-0 pb-4">
+        <div className="flex flex-col items-center gap-1">
+          <span className={cn(
+            'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
+            getProviderClasses(tool.provider)
+          )}>
+            {formatProvider(tool.provider)}
+          </span>
+          <span className="text-[10px] text-muted-foreground truncate max-w-full">
+            {tool.model}
+          </span>
+        </div>
+      </CardContent>
     </Card>
   );
 }

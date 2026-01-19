@@ -1,0 +1,241 @@
+# =============================================================================
+# Docker Compose for Local Development
+# 本地开发用 Docker Compose
+# =============================================================================
+#
+# Usage:
+#   docker-compose -f docker-compose.dev.yml up -d              # Start all services
+#   docker-compose -f docker-compose.dev.yml up -d redis        # Start Redis only
+#   docker-compose -f docker-compose.dev.yml logs -f            # View all logs
+#   docker-compose -f docker-compose.dev.yml down               # Stop all services
+#
+# Prerequisites:
+#   - magi-db container must be running and connected to magiworld-network:
+#     docker network connect magiworld_magiworld-network magi-db
+#
+# Services:
+#   - redis:           Redis 7 for task queue and pub/sub
+#   - redis-commander: Web UI for Redis at http://localhost:8081
+#   - web:             Next.js web app at http://localhost:3000
+#   - admin:           Next.js admin app at http://localhost:3002
+#   - worker:          BullMQ worker for web tasks (no prefix)
+#   - worker-admin:    BullMQ worker for admin tasks (prefix: admin)
+#   - bull-board:      Queue monitoring dashboard at http://localhost:8082
+#
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Redis - Task Queue and Pub/Sub
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: magiworld-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - magiworld-network
+
+  # ---------------------------------------------------------------------------
+  # Redis Commander - Web UI for Redis
+  # ---------------------------------------------------------------------------
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: magiworld-redis-ui
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - magiworld-network
+
+  # ---------------------------------------------------------------------------
+  # Web App - Next.js Frontend (Development Mode)
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        - APP_NAME=web
+        - APP_PORT=3000
+    container_name: magiworld-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount source code for hot reload
+      - ./apps/web:/app/apps/web:cached
+      - ./packages:/app/packages:cached
+      # Exclude node_modules (use container's)
+      - /app/apps/web/node_modules
+      - /app/apps/web/.next
+    environment:
+      - NODE_ENV=development
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+      - WATCHPACK_POLLING=true
+      # Database - use container network (magi-db must be connected to this network)
+      - DATABASE_URL=postgresql://postgres:88665575@magi-db:5432/magi-db
+      # Redis - use container network
+      - REDIS_URL=redis://redis:6379
+      - REDIS_TLS=false
+    env_file:
+      - ./apps/web/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - magiworld-network
+
+  # ---------------------------------------------------------------------------
+  # Admin App - Next.js Dashboard (Development Mode)
+  # ---------------------------------------------------------------------------
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        - APP_NAME=admin
+        - APP_PORT=3002
+    container_name: magiworld-admin
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    volumes:
+      # Mount source code for hot reload
+      - ./apps/admin:/app/apps/admin:cached
+      - ./packages:/app/packages:cached
+      # Exclude node_modules (use container's)
+      - /app/apps/admin/node_modules
+      - /app/apps/admin/.next
+    environment:
+      - NODE_ENV=development
+      - HOSTNAME=0.0.0.0
+      - PORT=3002
+      - WATCHPACK_POLLING=true
+      # Database - use container network (magi-db must be connected to this network)
+      - DATABASE_URL=postgresql://postgres:88665575@magi-db:5432/magi-db
+      # Redis - use container network
+      - REDIS_URL=redis://redis:6379
+      - REDIS_TLS=false
+      - QUEUE_PREFIX=admin
+    env_file:
+      - ./apps/admin/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - magiworld-network
+
+  # ---------------------------------------------------------------------------
+  # Worker - BullMQ Task Processor (Development Mode)
+  # ---------------------------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev.worker
+    container_name: magiworld-worker
+    restart: unless-stopped
+    volumes:
+      # Mount source code for hot reload
+      - ./apps/worker:/app/apps/worker:cached
+      - ./packages:/app/packages:cached
+      # Exclude node_modules
+      - /app/apps/worker/node_modules
+    environment:
+      - NODE_ENV=development
+      - SKIP_ENV_VALIDATION=false
+      # Database - use container network (magi-db must be connected to this network)
+      - DATABASE_URL=postgresql://postgres:88665575@magi-db:5432/magi-db
+      # Redis - use container network
+      - REDIS_URL=redis://redis:6379
+      - REDIS_TLS=false
+      - QUEUE_PREFIX=
+      # Worker settings
+      - WORKER_CONCURRENCY=5
+      - WORKER_SHUTDOWN_TIMEOUT_MS=30000
+    env_file:
+      - ./apps/worker/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - magiworld-network
+
+  # ---------------------------------------------------------------------------
+  # Worker Admin - BullMQ Task Processor for Admin Tasks
+  # ---------------------------------------------------------------------------
+  worker-admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev.worker
+    container_name: magiworld-worker-admin
+    restart: unless-stopped
+    volumes:
+      # Mount source code for hot reload
+      - ./apps/worker:/app/apps/worker:cached
+      - ./packages:/app/packages:cached
+      # Exclude node_modules
+      - /app/apps/worker/node_modules
+    environment:
+      - NODE_ENV=development
+      - SKIP_ENV_VALIDATION=false
+      # Database - use container network (magi-db must be connected to this network)
+      - DATABASE_URL=postgresql://postgres:88665575@magi-db:5432/magi-db
+      # Redis - use container network
+      - REDIS_URL=redis://redis:6379
+      - REDIS_TLS=false
+      - QUEUE_PREFIX=admin
+      # Worker settings
+      - WORKER_CONCURRENCY=3
+      - WORKER_SHUTDOWN_TIMEOUT_MS=30000
+    env_file:
+      - ./apps/worker/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - magiworld-network
+
+  # ---------------------------------------------------------------------------
+  # Bull Board - Queue Monitoring Dashboard
+  # ---------------------------------------------------------------------------
+  bull-board:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev.bull-board
+    container_name: magiworld-bull-board
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      - NODE_ENV=development
+      - PORT=8082
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - magiworld-network
+
+networks:
+  magiworld-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local

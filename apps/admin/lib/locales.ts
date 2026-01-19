@@ -55,10 +55,10 @@ export const DEFAULT_BANNER_TRANSLATIONS = {
  * 用作JSON文本框中的占位符/示例。
  */
 export const DEFAULT_TOOL_TRANSLATIONS = {
-  en: { title: '', description: '', promptTemplate: '' },
-  zh: { title: '', description: '', promptTemplate: '' },
-  ja: { title: '', description: '', promptTemplate: '' },
-  pt: { title: '', description: '', promptTemplate: '' },
+  en: { title: '', description: '' },
+  zh: { title: '', description: '' },
+  ja: { title: '', description: '' },
+  pt: { title: '', description: '' },
 };
 
 /**

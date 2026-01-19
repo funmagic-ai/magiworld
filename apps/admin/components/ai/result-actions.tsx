@@ -25,6 +25,8 @@ import {
 interface ResultActionsProps {
   /** Base64 encoded image data */
   base64?: string;
+  /** URL of the result image */
+  url?: string;
   /** Suggested filename for download/save */
   filename?: string;
   /** Callback when reset is clicked */
@@ -49,6 +51,7 @@ function base64ToFile(base64: string, filename: string): File {
 
 export function ResultActions({
   base64,
+  url,
   filename = 'ai-result.png',
   onReset,
   disabled,
@@ -67,25 +70,54 @@ export function ResultActions({
     },
   });
 
-  const handleDownload = useCallback(() => {
-    if (!base64) return;
+  const handleDownload = useCallback(async () => {
+    if (base64) {
+      const link = document.createElement('a');
+      link.href = `data:image/png;base64,${base64}`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else if (url) {
+      // For URL, fetch and download
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+      } catch (error) {
+        console.error('Download failed:', error);
+        // Fallback: open in new tab
+        window.open(url, '_blank');
+      }
+    }
+  }, [base64, url, filename]);
 
-    const link = document.createElement('a');
-    link.href = `data:image/png;base64,${base64}`;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }, [base64, filename]);
+  const handleSaveToLibrary = useCallback(async () => {
+    if (base64) {
+      const file = base64ToFile(base64, filename);
+      upload([file]);
+    } else if (url) {
+      // For URL, fetch and convert to file
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const file = new File([blob], filename, { type: 'image/png' });
+        upload([file]);
+      } catch (error) {
+        console.error('Save to library failed:', error);
+        alert('Failed to save to library');
+      }
+    }
+  }, [base64, url, filename, upload]);
 
-  const handleSaveToLibrary = useCallback(() => {
-    if (!base64) return;
-
-    const file = base64ToFile(base64, filename);
-    upload([file]);
-  }, [base64, filename, upload]);
-
-  if (!base64) return null;
+  if (!base64 && !url) return null;
 
   return (
     <div className="flex gap-2 justify-end">

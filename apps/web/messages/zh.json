@@ -9,7 +9,9 @@
   },
   "nav": {
     "home": "首页",
-    "studio": "工作室",
+    "aiLab": "AI工作室",
+    "myTasks": "我的任务",
+    "allTools": "全部工具",
     "assets": "我的作品",
     "login": "登录",
     "signup": "注册",
@@ -42,10 +44,34 @@
   "assets": {
     "title": "我的作品",
     "empty": "暂无作品",
-    "emptyDescription": "您创建的作品将显示在这里",
+    "emptyDescription": "保存您的AI生成结果到这里",
+    "savedFrom": "来自",
     "recreate": "重新创建",
     "download": "下载",
-    "delete": "删除"
+    "delete": "删除",
+    "confirmDelete": "确定要删除这个作品吗？",
+    "saveToAssets": "保存到我的作品",
+    "saved": "已保存！"
+  },
+  "tasks": {
+    "title": "我的任务",
+    "empty": "暂无任务",
+    "emptyDescription": "您的AI处理任务将显示在这里",
+    "status": {
+      "pending": "等待中",
+      "processing": "处理中",
+      "success": "已完成",
+      "failed": "失败"
+    },
+    "filters": {
+      "all": "全部",
+      "pending": "等待中",
+      "processing": "处理中",
+      "success": "已完成",
+      "failed": "失败"
+    },
+    "viewResult": "查看结果",
+    "createdAt": "创建时间"
   },
   "footer": {
     "rights": "版权所有",

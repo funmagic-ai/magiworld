@@ -9,9 +9,7 @@ type ToolData = {
   slug: string;
   title: string;
   description?: string | null;
-  promptTemplate?: string | null;
   configJson?: unknown;
-  aiEndpoint?: string | null;
   thumbnail?: { id: string; url: string };
   toolType: {
     slug: string;
@@ -25,15 +23,6 @@ interface ToolRouterProps {
   tool: ToolData;
 }
 
-/**
- * Map of registered tool slugs to their UI components.
- * This must stay in sync with TOOL_REGISTRY in @magiworld/types.
- *
- * When adding a new tool:
- * 1. Add the slug to TOOL_REGISTRY in packages/types/src/index.ts
- * 2. Create the component in apps/web/components/tools/{slug}/
- * 3. Import and register the component here
- */
 const TOOL_COMPONENTS: Record<string, React.ComponentType<{ tool: ToolData }>> = {
   'background-remove': BackgroundRemoveInterface,
   '3d-crystal': Crystal3DInterface,
@@ -49,7 +38,6 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 export function ToolRouter({ tool }: ToolRouterProps) {
-  // Route by tool slug - each tool can have its own specific component
   const Component = TOOL_COMPONENTS[tool.slug];
 
   if (!Component) {

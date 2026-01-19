@@ -2,14 +2,14 @@
 
 import { Button } from '@/components/ui/button';
 
-type SignOutButtonProps = {
+interface SignOutButtonProps {
   onSignOut: () => Promise<void>;
   children: React.ReactNode;
-};
+}
 
 export function SignOutButton({ onSignOut, children }: SignOutButtonProps) {
   return (
-    <Button variant="ghost" size="sm" onClick={() => onSignOut()}>
+    <Button variant="ghost" size="sm" onClick={onSignOut}>
       {children}
     </Button>
   );

@@ -12,10 +12,13 @@
   "dependencies": {
     "@aws-sdk/cloudfront-signer": "^3.957.0",
     "@base-ui/react": "^1.0.0",
+    "@better-upload/client": "^3.0.12",
+    "@better-upload/server": "^3.0.12",
     "@hugeicons/core-free-icons": "^3.1.1",
     "@hugeicons/react": "^1.1.4",
     "@logto/next": "^4.2.8",
     "@magiworld/db": "workspace:*",
+    "@magiworld/queue": "workspace:*",
     "@magiworld/types": "workspace:*",
     "@magiworld/utils": "workspace:*",
     "@react-three/drei": "^10.7.7",

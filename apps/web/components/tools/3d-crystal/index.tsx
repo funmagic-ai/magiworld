@@ -72,11 +72,8 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
   const [newLabelFontSize, setNewLabelFontSize] = useState(8);
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
 
-  // Handle file selection
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  // Shared file loading logic
+  const loadImageFile = useCallback((file: File): void => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
@@ -85,21 +82,23 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
     };
     reader.readAsDataURL(file);
   }, []);
+
+  // Handle file selection
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      loadImageFile(file);
+    }
+  }, [loadImageFile]);
 
   // Handle drop
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
-    if (!file || !file.type.startsWith('image/')) return;
-
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string;
-      setRawImage(dataUrl);
-      setImageState('cropping');
-    };
-    reader.readAsDataURL(file);
-  }, []);
+    if (file?.type.startsWith('image/')) {
+      loadImageFile(file);
+    }
+  }, [loadImageFile]);
 
   // Handle crop completion
   const handleCrop = useCallback((croppedUrl: string) => {
@@ -109,12 +108,8 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
 
   // Handle cropper cancel
   const handleCropperClose = useCallback(() => {
-    if (croppedImage) {
-      // User was re-cropping, go back to preview with existing crop
-      setImageState('preview');
-    } else {
-      // First time cropping, go back to upload
-      setImageState('upload');
+    setImageState(croppedImage ? 'preview' : 'upload');
+    if (!croppedImage) {
       setRawImage(null);
     }
   }, [croppedImage]);
@@ -155,7 +150,7 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
 
   // Remove text label
   const handleRemoveLabel = useCallback((id: string) => {
-    setLabels((prev) => prev.filter((l) => l.id !== id));
+    setLabels((prev) => prev.filter((label) => label.id !== id));
     if (selectedLabelId === id) {
       setSelectedLabelId(null);
     }
@@ -195,7 +190,7 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
   // Update cube size
   const handleSizeChange = useCallback((key: keyof CubeSize, value: string) => {
     const numValue = parseInt(value, 10);
-    if (!isNaN(numValue) && numValue > 0) {
+    if (numValue > 0) {
       setCubeSize((prev) => ({ ...prev, [key]: numValue }));
     }
   }, []);
@@ -240,7 +235,7 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
             <div
               role="button"
               tabIndex={0}
-              className="w-full min-h-[300px] lg:min-h-[450px] border-2 border-dashed rounded-xl flex items-center justify-center text-center hover:border-primary/50 hover:bg-muted/30 motion-safe:transition-colors cursor-pointer"
+              className="w-full min-h-[300px] lg:min-h-[450px] border-2 border-dashed rounded-xl flex items-center justify-center text-center hover:border-primary/50 hover:bg-muted/30 motion-safe:transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
               onKeyDown={(e) => {
@@ -250,7 +245,7 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
                 }
               }}
               onClick={() => document.getElementById('image-upload')?.click()}
-              aria-label="Upload image area. Press Enter or click to select a file, or drag and drop an image."
+              aria-label="Upload image"
             >
               <input
                 type="file"
@@ -295,6 +290,8 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
                 <img
                   src={showOriginal ? rawImage! : croppedImage}
                   alt="Preview"
+                  width={400}
+                  height={400}
                   className="w-full h-full object-contain"
                 />
                 {showOriginal && (
@@ -381,6 +378,8 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
                           <img
                             src={croppedImage}
                             alt="Current"
+                            width={200}
+                            height={200}
                             className="w-full h-full object-cover"
                           />
                         </div>
@@ -420,8 +419,10 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
                     <div className="space-y-3 px-1">
                       <div className="grid grid-cols-3 gap-2">
                         <div className="space-y-1">
-                          <label className="text-xs text-muted-foreground">Width</label>
+                          <label htmlFor="cube-width" className="text-xs text-muted-foreground">Width</label>
                           <Input
+                            id="cube-width"
+                            name="width"
                             type="number"
                             value={cubeSize.width}
                             onChange={(e) => handleSizeChange('width', e.target.value)}
@@ -431,8 +432,10 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-xs text-muted-foreground">Height</label>
+                          <label htmlFor="cube-height" className="text-xs text-muted-foreground">Height</label>
                           <Input
+                            id="cube-height"
+                            name="height"
                             type="number"
                             value={cubeSize.height}
                             onChange={(e) => handleSizeChange('height', e.target.value)}
@@ -442,8 +445,10 @@ export function Crystal3DInterface({ tool }: Crystal3DInterfaceProps) {
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-xs text-muted-foreground">Depth</label>
+                          <label htmlFor="cube-depth" className="text-xs text-muted-foreground">Depth</label>
                           <Input
+                            id="cube-depth"
+                            name="depth"
                             type="number"
                             value={cubeSize.depth}
                             onChange={(e) => handleSizeChange('depth', e.target.value)}

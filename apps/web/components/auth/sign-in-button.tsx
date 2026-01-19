@@ -2,14 +2,14 @@
 
 import { Button } from '@/components/ui/button';
 
-type SignInButtonProps = {
+interface SignInButtonProps {
   onSignIn: () => Promise<void>;
   children: React.ReactNode;
-};
+}
 
 export function SignInButton({ onSignIn, children }: SignInButtonProps) {
   return (
-    <Button size="sm" onClick={() => onSignIn()}>
+    <Button size="sm" onClick={onSignIn}>
       {children}
     </Button>
   );

@@ -10,22 +10,38 @@
 
 'use server';
 
-import { db, tools, toolTranslations, toolTypes, toolTypeTranslations, media, eq, asc, and, isNull } from '@magiworld/db';
+import { db, tools, toolTranslations, toolTypes, toolTypeTranslations, media, providers, eq, asc, and, isNull } from '@magiworld/db';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+
+/**
+ * Price configuration structure / 价格配置结构
+ *
+ * Flexible pricing for different billing models.
+ * 灵活的价格配置，支持不同的计费模式。
+ */
+export type PriceConfig = {
+  type: 'token' | 'request' | 'image' | 'second';
+  input_per_1k?: number;      // For token billing
+  output_per_1k?: number;     // For token billing
+  cost_per_call?: number;     // For request billing
+  cost_per_image?: number;    // For image billing
+  cost_per_second?: number;   // For second billing
+};
 
 /**
  * Tool form data structure / 工具表单数据结构
  *
  * Contains tool configuration and multi-locale translations.
+ * Provider/model selection is handled by tool processors in worker code.
  * 包含工具配置和多语言翻译。
+ * Provider/模型选择由worker代码中的工具处理器处理。
  *
  * @property slug - URL-friendly identifier / URL友好的标识符
  * @property toolTypeId - Parent tool type ID / 父工具类型ID
+ * @property priceConfig - Pricing configuration / 价格配置
  * @property thumbnailUrl - Tool thumbnail image URL / 工具缩略图URL
- * @property promptTemplate - Default AI prompt template / 默认AI提示词模板
- * @property configJson - Tool-specific configuration / 工具特定配置
- * @property aiEndpoint - AI service endpoint / AI服务端点
+ * @property configJson - Tool-specific configuration (UI options, processing hints) / 工具特定配置
  * @property isActive - Whether tool is enabled / 工具是否启用
  * @property isFeatured - Whether tool is featured / 工具是否推荐
  * @property order - Display order / 显示顺序
@@ -34,18 +50,17 @@ import { redirect } from 'next/navigation';
 export type ToolFormData = {
   slug: string;
   toolTypeId: string;
+  priceConfig?: PriceConfig;
   thumbnailUrl?: string;
-  promptTemplate?: string;
   configJson?: Record<string, unknown>;
-  aiEndpoint?: string;
   isActive: boolean;
   isFeatured: boolean;
   order: number;
   translations: {
-    en: { title: string; description?: string; promptTemplate?: string };
-    zh: { title: string; description?: string; promptTemplate?: string };
-    ja: { title: string; description?: string; promptTemplate?: string };
-    pt: { title: string; description?: string; promptTemplate?: string };
+    en: { title: string; description?: string };
+    zh: { title: string; description?: string };
+    ja: { title: string; description?: string };
+    pt: { title: string; description?: string };
   };
 };
 
@@ -64,10 +79,9 @@ export async function createTool(data: ToolFormData) {
     .values({
       slug: data.slug,
       toolTypeId: data.toolTypeId,
+      priceConfig: data.priceConfig || null,
       thumbnailUrl: data.thumbnailUrl || null,
-      promptTemplate: data.promptTemplate || null,
       configJson: data.configJson || null,
-      aiEndpoint: data.aiEndpoint || null,
       isActive: data.isActive,
       isFeatured: data.isFeatured,
       order: data.order,
@@ -83,7 +97,6 @@ export async function createTool(data: ToolFormData) {
       locale,
       title: translation.title,
       description: translation.description || null,
-      promptTemplate: translation.promptTemplate || null,
     });
   }
 
@@ -106,10 +119,9 @@ export async function updateTool(id: string, data: ToolFormData) {
     .set({
       slug: data.slug,
       toolTypeId: data.toolTypeId,
+      priceConfig: data.priceConfig || null,
       thumbnailUrl: data.thumbnailUrl || null,
-      promptTemplate: data.promptTemplate || null,
       configJson: data.configJson || null,
-      aiEndpoint: data.aiEndpoint || null,
       isActive: data.isActive,
       isFeatured: data.isFeatured,
       order: data.order,
@@ -138,7 +150,6 @@ export async function updateTool(id: string, data: ToolFormData) {
         .set({
           title: translation.title,
           description: translation.description || null,
-          promptTemplate: translation.promptTemplate || null,
         })
         .where(and(
           eq(toolTranslations.toolId, id),
@@ -150,7 +161,6 @@ export async function updateTool(id: string, data: ToolFormData) {
         locale,
         title: translation.title,
         description: translation.description || null,
-        promptTemplate: translation.promptTemplate || null,
       });
     }
   }
@@ -233,12 +243,11 @@ export async function getToolById(id: string) {
     .from(toolTranslations)
     .where(eq(toolTranslations.toolId, id));
 
-  const translationsMap: Record<string, { title: string; description?: string; promptTemplate?: string }> = {};
+  const translationsMap: Record<string, { title: string; description?: string }> = {};
   for (const t of translations) {
     translationsMap[t.locale] = {
       title: t.title,
       description: t.description || undefined,
-      promptTemplate: t.promptTemplate || undefined,
     };
   }
 
@@ -295,6 +304,28 @@ export async function getMediaForSelect() {
     .from(media)
     .where(isNull(media.deletedAt))
     .orderBy(asc(media.filename));
+
+  return result;
+}
+
+/**
+ * Get providers for select dropdown / 获取提供商下拉选项
+ *
+ * Returns active providers for form select components.
+ * 返回活跃的提供商，用于表单选择组件。
+ *
+ * @returns Array of {id, slug, name} / {id, slug, name}数组
+ */
+export async function getProvidersForSelect() {
+  const result = await db
+    .select({
+      id: providers.id,
+      slug: providers.slug,
+      name: providers.name,
+    })
+    .from(providers)
+    .where(eq(providers.isActive, true))
+    .orderBy(asc(providers.name));
 
   return result;
 }

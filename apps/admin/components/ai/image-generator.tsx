@@ -3,16 +3,16 @@
  * @fileoverview 图像生成组件
  *
  * UI component for generating images from text prompts using AI.
- * Uses PromptEditor with presets and ResultActions for actions.
+ * Uses task-based async processing with real-time progress updates.
  * 使用AI根据文本提示生成图像的UI组件。
- * 使用带预设的PromptEditor和ResultActions操作栏。
+ * 使用基于任务的异步处理和实时进度更新。
  *
  * @module components/ai/image-generator
  */
 
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -22,9 +22,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { generateImage } from '@/lib/actions/ai';
 import { PromptEditor, type PromptPreset } from './prompt-editor';
 import { ResultActions } from './result-actions';
+import { useTask } from './hooks/use-task';
 
 const ASPECT_RATIOS = [
   { value: '1:1', label: 'Square (1:1)' },
@@ -58,42 +58,40 @@ const PROMPT_PRESETS: PromptPreset[] = [
 ];
 
 interface ImageGeneratorProps {
-  onComplete?: (result: { base64?: string; url?: string }) => void;
+  onComplete?: (result: { url?: string }) => void;
 }
 
 export function ImageGenerator({ onComplete }: ImageGeneratorProps) {
   const [prompt, setPrompt] = useState(PROMPT_PRESETS[0].prompt);
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '16:9' | '9:16' | '4:3' | '3:4'>('1:1');
-  const [resultBase64, setResultBase64] = useState<string>('');
-  const [error, setError] = useState<string>('');
-  const [isPending, startTransition] = useTransition();
+  const task = useTask();
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!prompt.trim()) {
-      setError('Please enter a prompt');
       return;
     }
 
-    setError('');
-    setResultBase64('');
-
-    startTransition(async () => {
-      const result = await generateImage({ prompt, aspectRatio });
-
-      if (result.success && result.base64) {
-        setResultBase64(result.base64);
-        onComplete?.({ base64: result.base64, url: result.url });
-      } else {
-        setError(result.error || 'Failed to generate image');
-      }
+    await task.createTask({
+      toolSlug: 'image-generate',
+      inputParams: { prompt, aspectRatio },
     });
   };
 
   const handleReset = () => {
     setPrompt(PROMPT_PRESETS[0].prompt);
-    setResultBase64('');
-    setError('');
+    task.reset();
   };
+
+  // Call onComplete when task succeeds
+  useEffect(() => {
+    if (task.status === 'success' && task.outputData?.resultUrl) {
+      onComplete?.({ url: task.outputData.resultUrl });
+    }
+  }, [task.status, task.outputData, onComplete]);
+
+  const resultUrl = task.outputData?.resultUrl as string | undefined;
+  const isProcessing = task.isLoading;
+  const showResult = isProcessing || resultUrl;
 
   return (
     <div className="space-y-6">
@@ -105,67 +103,82 @@ export function ImageGenerator({ onComplete }: ImageGeneratorProps) {
         label="Generation Prompt"
         description="Describe the image you want to generate. Use a preset as a starting point or write your own."
         placeholder="Describe the image you want to generate..."
-        disabled={isPending}
+        disabled={isProcessing}
       />
 
       {/* Aspect Ratio & Generate Button */}
-      <div className="flex gap-4 items-end">
-        <div className="flex-1 max-w-xs">
-          <label id="aspect-ratio-label" className="text-sm text-muted-foreground mb-2 block">
-            Aspect Ratio
-          </label>
-          <Select
-            aria-labelledby="aspect-ratio-label"
-            value={aspectRatio}
-            onValueChange={(value) => setAspectRatio(value as typeof aspectRatio)}
-            disabled={isPending}
+      {!resultUrl && !isProcessing && (
+        <div className="flex gap-4 items-end">
+          <div className="flex-1 max-w-xs">
+            <label id="aspect-ratio-label" className="text-sm text-muted-foreground mb-2 block">
+              Aspect Ratio
+            </label>
+            <Select
+              aria-labelledby="aspect-ratio-label"
+              value={aspectRatio}
+              onValueChange={(value) => setAspectRatio(value as typeof aspectRatio)}
+              disabled={isProcessing}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ASPECT_RATIOS.map((ratio) => (
+                  <SelectItem key={ratio.value} value={ratio.value}>
+                    {ratio.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Button
+            onClick={handleGenerate}
+            disabled={!prompt.trim() || isProcessing}
+            size="lg"
           >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ASPECT_RATIOS.map((ratio) => (
-                <SelectItem key={ratio.value} value={ratio.value}>
-                  {ratio.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            Generate Image
+          </Button>
         </div>
+      )}
 
-        <Button
-          onClick={handleGenerate}
-          disabled={!prompt.trim() || isPending}
-          size="lg"
-        >
-          {isPending ? 'Generating...' : 'Generate Image'}
-        </Button>
-      </div>
+      {/* Cancel Button during processing */}
+      {isProcessing && (
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            onClick={task.cancel}
+            size="lg"
+          >
+            Cancel
+          </Button>
+        </div>
+      )}
 
-      {error && (
-        <p className="text-sm text-destructive">{error}</p>
+      {task.error && (
+        <p className="text-sm text-destructive">{task.error}</p>
       )}
 
       {/* Result */}
-      {(isPending || resultBase64) && (
+      {showResult && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Result
+              Result {isProcessing && `(${task.progress}%)`}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div
               className="aspect-square max-w-md mx-auto rounded-lg overflow-hidden flex items-center justify-center bg-muted"
             >
-              {isPending ? (
+              {isProcessing ? (
                 <div className="flex flex-col items-center gap-2 text-muted-foreground">
                   <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                  <span className="text-sm">Generating...</span>
+                  <span className="text-sm">Generating... {task.progress}%</span>
                 </div>
-              ) : resultBase64 ? (
+              ) : resultUrl ? (
                 <img
-                  src={`data:image/png;base64,${resultBase64}`}
+                  src={resultUrl}
                   alt="Generated"
                   className="max-w-full max-h-full object-contain"
                 />
@@ -176,9 +189,9 @@ export function ImageGenerator({ onComplete }: ImageGeneratorProps) {
       )}
 
       {/* Actions */}
-      {resultBase64 && (
+      {resultUrl && (
         <ResultActions
-          base64={resultBase64}
+          url={resultUrl}
           filename="generated-image.png"
           onReset={handleReset}
         />

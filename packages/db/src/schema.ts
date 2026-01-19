@@ -30,12 +30,28 @@ export const badgeColorEnum = pgEnum('badge_color', ['default', 'secondary', 'ou
 export const taskStatusEnum = pgEnum('task_status', ['pending', 'processing', 'success', 'failed']);
 
 /**
- * Output type categories for AI-generated content.
- * - image: 2D image output (PNG, JPG, etc.)
- * - model_3d: 3D model output (GLB, GLTF, etc.)
- * - fabrication: Physical fabrication parameters (crystal engraving, etc.)
+ * Status values for AI providers.
+ * - active: Provider is operational and accepting requests
+ * - inactive: Provider is disabled (admin action)
+ * - degraded: Provider is experiencing issues but still operational
  */
-export const outputTypeEnum = pgEnum('output_type', ['image', 'model_3d', 'fabrication']);
+export const providerStatusEnum = pgEnum('provider_status', ['active', 'inactive', 'degraded']);
+
+/**
+ * Circuit breaker states for provider health.
+ * - closed: Normal operation, requests flow through
+ * - open: Provider failing, requests blocked
+ * - half_open: Testing if provider recovered
+ */
+export const circuitStateEnum = pgEnum('circuit_state', ['closed', 'open', 'half_open']);
+
+/**
+ * Status values for dead letter queue tasks.
+ * - pending: Failed task awaiting review
+ * - retried: Task has been requeued for retry
+ * - archived: Task has been archived (no further action)
+ */
+export const deadLetterStatusEnum = pgEnum('dead_letter_status', ['pending', 'retried', 'archived']);
 
 /**
  * Supported locales for content translation.
@@ -116,14 +132,22 @@ export const tools = pgTable('tools', {
   slug: text('slug').notNull().unique(),
   /** Reference to tool type (determines UI component) */
   toolTypeId: uuid('tool_type_id').notNull().references(() => toolTypes.id),
+  /**
+   * Price configuration as JSON for flexible billing
+   * @example { "type": "token", "input_per_1k": 0.005, "output_per_1k": 0.015 }
+   * @example { "type": "request", "cost_per_call": 0.003 }
+   * @example { "type": "image", "cost_per_image": 0.02 }
+   */
+  priceConfig: jsonb('price_config'),
   /** URL to tool thumbnail image */
   thumbnailUrl: text('thumbnail_url'),
-  /** Default prompt template for AI generation */
-  promptTemplate: text('prompt_template'),
-  /** Tool-specific configuration as JSON */
+  /**
+   * Tool-specific configuration as JSON
+   * Used to store tool parameters, UI options, and processing hints
+   * @example { "maxFileSize": 10485760, "allowedFormats": ["jpg", "png"] }
+   * @example { "defaultStyle": "anime", "qualityOptions": ["draft", "standard", "hd"] }
+   */
   configJson: jsonb('config_json'),
-  /** API endpoint for AI processing */
-  aiEndpoint: text('ai_endpoint'),
   /** Whether this tool is visible to users */
   isActive: boolean('is_active').notNull().default(true),
   /** Whether this tool is featured on homepage */
@@ -141,8 +165,7 @@ export const tools = pgTable('tools', {
 /**
  * Tool Translations Table
  *
- * Stores localized content for tools including title, description,
- * and locale-specific prompt templates.
+ * Stores localized content for tools including title and description.
  */
 export const toolTranslations = pgTable('tool_translations', {
   /** Unique identifier (UUID v4) */
@@ -155,8 +178,6 @@ export const toolTranslations = pgTable('tool_translations', {
   title: text('title').notNull(),
   /** Localized tool description */
   description: text('description'),
-  /** Localized prompt template (overrides default if provided) */
-  promptTemplate: text('prompt_template'),
 });
 
 /**
@@ -396,6 +417,152 @@ export const adminUsers = pgTable('admin_users', {
   lastLoginAt: timestamp('last_login_at'),
 });
 
+/**
+ * Admin Tasks Table
+ *
+ * Stores tasks created by admin users for internal Magi tools.
+ * Unlike the `tasks` table for web users, this table:
+ * - References adminUsers instead of users
+ * - Uses toolSlug (string) instead of toolId (FK to tools table)
+ * - Is for admin-only internal AI tools
+ *
+ * @example
+ * {
+ *   adminId: '<admin-uuid>',
+ *   toolSlug: 'background-remove',
+ *   inputParams: { imageUrl: 'https://...' },
+ *   status: 'success',
+ *   outputData: { resultUrl: 'https://...' }
+ * }
+ */
+export const adminTasks = pgTable('admin_tasks', {
+  /** Unique identifier (UUID v4) */
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** Reference to the admin user who created this task */
+  adminId: uuid('admin_id').notNull().references(() => adminUsers.id),
+  /** Tool slug identifier (e.g., 'background-remove', 'image-generate') */
+  toolSlug: text('tool_slug').notNull(),
+  /** Reference to the provider processing this task (optional) */
+  providerId: uuid('provider_id').references(() => providers.id),
+  /** Input parameters for AI processing (JSON) */
+  inputParams: jsonb('input_params'),
+  /** Output data including URLs and metadata (JSON) */
+  outputData: jsonb('output_data'),
+  /** Current processing status */
+  status: taskStatusEnum('status').notNull().default('pending'),
+  /** Error message if task failed */
+  errorMessage: text('error_message'),
+  /** Task priority (1-20, lower = higher priority) */
+  priority: integer('priority').default(15),
+  /** Processing progress percentage (0-100) */
+  progress: integer('progress').default(0),
+  /** BullMQ job ID for tracking */
+  bullJobId: text('bull_job_id'),
+  /** Idempotency key to prevent duplicate processing */
+  idempotencyKey: text('idempotency_key').unique(),
+  /** Request ID for tracing */
+  requestId: text('request_id'),
+  /** Number of processing attempts */
+  attemptsMade: integer('attempts_made').default(0),
+  /** When task processing started */
+  startedAt: timestamp('started_at'),
+  /** When task processing completed */
+  completedAt: timestamp('completed_at'),
+  /** Task creation timestamp */
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  /** Task last update timestamp */
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// ============================================
+// Provider Tables
+// ============================================
+
+/**
+ * Providers Table
+ *
+ * Stores AI provider configurations for task processing.
+ * Providers are external AI services (e.g., fal.ai, OpenAI, Google).
+ * Each provider can have rate limits, timeouts, and encrypted API keys.
+ *
+ * @example
+ * {
+ *   slug: 'fal_ai',
+ *   name: 'fal.ai',
+ *   rateLimitMax: 100,
+ *   rateLimitWindow: 60000,
+ *   status: 'active'
+ * }
+ */
+export const providers = pgTable('providers', {
+  /** Unique identifier (UUID v4) */
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** URL-friendly unique identifier (e.g., 'fal_ai', 'openai', 'google') */
+  slug: text('slug').notNull().unique(),
+  /** Display name for the provider */
+  name: text('name').notNull(),
+  /** AES-256 encrypted API key (optional, can use env var instead) */
+  apiKeyEncrypted: text('api_key_encrypted'),
+  /** Maximum requests per rate limit window */
+  rateLimitMax: integer('rate_limit_max').default(100),
+  /** Rate limit window in milliseconds */
+  rateLimitWindow: integer('rate_limit_window').default(60000),
+  /** Default request timeout in milliseconds */
+  defaultTimeout: integer('default_timeout').default(120000),
+  /** Provider operational status */
+  status: providerStatusEnum('status').notNull().default('active'),
+  /** Circuit breaker state */
+  circuitState: circuitStateEnum('circuit_state').notNull().default('closed'),
+  /** Timestamp when circuit was opened (for half-open transition) */
+  circuitOpenedAt: timestamp('circuit_opened_at'),
+  /** Number of consecutive failures (for circuit breaker) */
+  failureCount: integer('failure_count').default(0),
+  /** Provider-specific configuration as JSON */
+  configJson: jsonb('config_json'),
+  /** Whether this provider is enabled for use */
+  isActive: boolean('is_active').notNull().default(true),
+  /** Record creation timestamp */
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  /** Record last update timestamp */
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+/**
+ * Admin Providers Table
+ *
+ * Stores AI provider configurations for admin/internal task processing.
+ * Separate from web providers for cost isolation and billing separation.
+ * Admin tasks use these credentials instead of the shared providers table.
+ *
+ * @example
+ * {
+ *   slug: 'fal_ai',
+ *   name: 'fal.ai (Admin)',
+ *   apiKeyEncrypted: '...',
+ *   status: 'active'
+ * }
+ */
+export const adminProviders = pgTable('admin_providers', {
+  /** Unique identifier (UUID v4) */
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** URL-friendly unique identifier (e.g., 'fal_ai', 'openai', 'google') */
+  slug: text('slug').notNull().unique(),
+  /** Display name for the provider */
+  name: text('name').notNull(),
+  /** AES-256 encrypted API key */
+  apiKeyEncrypted: text('api_key_encrypted'),
+  /** Provider operational status */
+  status: providerStatusEnum('status').notNull().default('active'),
+  /** Provider-specific configuration as JSON */
+  configJson: jsonb('config_json'),
+  /** Whether this provider is enabled for use */
+  isActive: boolean('is_active').notNull().default(true),
+  /** Record creation timestamp */
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  /** Record last update timestamp */
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
 // ============================================
 // User Task Tables
 // ============================================
@@ -422,20 +589,132 @@ export const tasks = pgTable('tasks', {
   userId: uuid('user_id').notNull().references(() => users.id),
   /** Reference to the tool used for this task */
   toolId: uuid('tool_id').notNull().references(() => tools.id),
+  /** Reference to the provider processing this task */
+  providerId: uuid('provider_id').references(() => providers.id),
   /** Input parameters for AI processing (JSON) */
   inputParams: jsonb('input_params'),
-  /** Type of output generated */
-  outputType: outputTypeEnum('output_type'),
   /** Output data including URLs and metadata (JSON) */
   outputData: jsonb('output_data'),
   /** Current processing status */
   status: taskStatusEnum('status').notNull().default('pending'),
   /** Error message if task failed */
   errorMessage: text('error_message'),
+  /** Task priority (1-20, higher = more important) */
+  priority: integer('priority').default(5),
+  /** Processing progress percentage (0-100) */
+  progress: integer('progress').default(0),
+  /** BullMQ job ID for tracking */
+  bullJobId: text('bull_job_id'),
+  /** Idempotency key to prevent duplicate processing */
+  idempotencyKey: text('idempotency_key').unique(),
+  /** Request ID for tracing */
+  requestId: text('request_id'),
+  /** Number of processing attempts */
+  attemptsMade: integer('attempts_made').default(0),
+  /** When task processing started */
+  startedAt: timestamp('started_at'),
+  /** When task processing completed */
+  completedAt: timestamp('completed_at'),
   /** Task creation timestamp */
   createdAt: timestamp('created_at').notNull().defaultNow(),
   /** Task last update timestamp */
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+/**
+ * Dead Letter Tasks Table
+ *
+ * Stores tasks that failed all retry attempts.
+ * Used for manual review, debugging, and potential manual retry.
+ *
+ * @example
+ * {
+ *   originalTaskId: '<task-uuid>',
+ *   queue: 'fal_ai',
+ *   errorMessage: 'API rate limit exceeded',
+ *   attemptsMade: 3,
+ *   status: 'pending'
+ * }
+ */
+export const deadLetterTasks = pgTable('dead_letter_tasks', {
+  /** Unique identifier (UUID v4) */
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** Reference to the original failed task */
+  originalTaskId: uuid('original_task_id').references(() => tasks.id),
+  /** Queue name where the task failed */
+  queue: text('queue').notNull(),
+  /** Error message from the final failure */
+  errorMessage: text('error_message').notNull(),
+  /** Full error stack trace */
+  errorStack: text('error_stack'),
+  /** Number of attempts made before failure */
+  attemptsMade: integer('attempts_made').notNull(),
+  /** Original job payload (for replay) */
+  payload: jsonb('payload'),
+  /** DLQ entry status */
+  status: deadLetterStatusEnum('status').notNull().default('pending'),
+  /** Notes added by admin during review */
+  reviewNotes: text('review_notes'),
+  /** When the task was retried (if applicable) */
+  retriedAt: timestamp('retried_at'),
+  /** Record creation timestamp */
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+/**
+ * Task Usage Logs Table
+ *
+ * Records API usage for each task, including model info and cost.
+ * Stores snapshots of pricing config at call time for accurate billing.
+ * This is a high-volume table for usage tracking and cost analysis.
+ *
+ * @example
+ * {
+ *   taskId: '<task-uuid>',
+ *   userId: '<user-uuid>',
+ *   providerId: '<provider-uuid>',
+ *   modelName: 'gpt-4o',
+ *   priceConfig: { type: 'token', input_per_1k: 0.005, output_per_1k: 0.015 },
+ *   usageData: { prompt_tokens: 150, completion_tokens: 520 },
+ *   costUsd: 0.0085
+ * }
+ */
+export const taskUsageLogs = pgTable('task_usage_logs', {
+  /** Unique identifier (UUID v4) */
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** Reference to the task */
+  taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  /** Reference to the user who initiated the task */
+  userId: uuid('user_id').notNull().references(() => users.id),
+  /** Reference to the provider used */
+  providerId: uuid('provider_id').notNull().references(() => providers.id),
+  /** Reference to the tool used */
+  toolId: uuid('tool_id').notNull().references(() => tools.id),
+  /** AI model name (snapshot from tool at call time) */
+  modelName: text('model_name').notNull(),
+  /** AI model version (snapshot from tool at call time) */
+  modelVersion: text('model_version'),
+  /**
+   * Price configuration (snapshot from tool at call time)
+   * @example { "type": "token", "input_per_1k": 0.005, "output_per_1k": 0.015 }
+   */
+  priceConfig: jsonb('price_config').notNull(),
+  /**
+   * Raw usage data from API response (provider-specific)
+   * @example { "prompt_tokens": 150, "completion_tokens": 520 }
+   * @example { "seed": 12345, "inference_time_ms": 2300 }
+   */
+  usageData: jsonb('usage_data'),
+  /** Calculated cost in USD */
+  costUsd: text('cost_usd'),
+  /** Request latency in milliseconds */
+  latencyMs: integer('latency_ms'),
+  /** Request status */
+  status: text('status').notNull().default('success'),
+  /** Error message if failed */
+  errorMessage: text('error_message'),
+  /** Record creation timestamp */
+  createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
 // ============================================
@@ -552,6 +831,51 @@ export const paymentAttributions = pgTable('payment_attributions', {
 });
 
 // ============================================
+// User Assets Tables
+// ============================================
+
+/**
+ * User Assets Table
+ *
+ * Stores user-saved outputs from AI tools.
+ * Users can save their generated results to their personal asset library.
+ *
+ * @example
+ * {
+ *   userId: '<user-uuid>',
+ *   taskId: '<task-uuid>',
+ *   toolId: '<tool-uuid>',
+ *   name: 'My Background Removed Image',
+ *   type: 'image',
+ *   url: 'https://cdn.../result.png'
+ * }
+ */
+export const userAssets = pgTable('user_assets', {
+  /** Unique identifier (UUID v4) */
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** Reference to user who owns this asset */
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  /** Reference to the task that generated this asset (optional) */
+  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'set null' }),
+  /** Reference to the tool used to create this asset */
+  toolId: uuid('tool_id').references(() => tools.id),
+  /** User-friendly name for the asset */
+  name: text('name').notNull(),
+  /** Asset type (image, video, 3d_model) */
+  type: text('type').notNull(),
+  /** URL to the asset file */
+  url: text('url').notNull(),
+  /** URL to thumbnail image (optional) */
+  thumbnailUrl: text('thumbnail_url'),
+  /** Additional metadata (width, height, format, etc.) */
+  metadata: jsonb('metadata'),
+  /** Asset creation timestamp */
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  /** Soft delete timestamp (null = not deleted) */
+  deletedAt: timestamp('deleted_at'),
+});
+
+// ============================================
 // Type Exports
 // ============================================
 
@@ -605,6 +929,26 @@ export type Task = typeof tasks.$inferSelect;
 /** Inferred insert type for tasks table */
 export type TaskInsert = typeof tasks.$inferInsert;
 
+/** Inferred select type for providers table */
+export type Provider = typeof providers.$inferSelect;
+/** Inferred insert type for providers table */
+export type ProviderInsert = typeof providers.$inferInsert;
+
+/** Inferred select type for admin_providers table */
+export type AdminProvider = typeof adminProviders.$inferSelect;
+/** Inferred insert type for admin_providers table */
+export type AdminProviderInsert = typeof adminProviders.$inferInsert;
+
+/** Inferred select type for dead_letter_tasks table */
+export type DeadLetterTask = typeof deadLetterTasks.$inferSelect;
+/** Inferred insert type for dead_letter_tasks table */
+export type DeadLetterTaskInsert = typeof deadLetterTasks.$inferInsert;
+
+/** Inferred select type for task_usage_logs table */
+export type TaskUsageLog = typeof taskUsageLogs.$inferSelect;
+/** Inferred insert type for task_usage_logs table */
+export type TaskUsageLogInsert = typeof taskUsageLogs.$inferInsert;
+
 /** Inferred select type for oem_software_brands table */
 export type OemSoftwareBrand = typeof oemSoftwareBrands.$inferSelect;
 /** Inferred insert type for oem_software_brands table */
@@ -624,4 +968,9 @@ export type UserLoginInsert = typeof userLogins.$inferInsert;
 export type PaymentAttribution = typeof paymentAttributions.$inferSelect;
 /** Inferred insert type for payment_attributions table */
 export type PaymentAttributionInsert = typeof paymentAttributions.$inferInsert;
+
+/** Inferred select type for user_assets table */
+export type UserAsset = typeof userAssets.$inferSelect;
+/** Inferred insert type for user_assets table */
+export type UserAssetInsert = typeof userAssets.$inferInsert;
 

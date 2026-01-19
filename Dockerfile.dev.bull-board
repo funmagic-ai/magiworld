@@ -1,0 +1,35 @@
+# =============================================================================
+# Development Dockerfile for Bull Board
+# Bull Board 开发用 Dockerfile
+# =============================================================================
+#
+# Usage:
+#   docker-compose -f docker-compose.dev.yml up -d bull-board
+#
+# Access:
+#   http://localhost:8082
+#
+# =============================================================================
+
+FROM node:20-alpine
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@9.15.2 --activate
+
+WORKDIR /app
+
+ENV NODE_ENV=development
+
+# Copy package files
+COPY apps/bull-board/package.json ./
+
+# Install dependencies
+RUN pnpm install
+
+# Copy source
+COPY apps/bull-board/ ./
+
+EXPOSE 8082
+
+# Start with tsx for hot reload
+CMD ["pnpm", "dev"]

@@ -10,8 +10,6 @@ import { AuthStatus } from '@/components/auth/auth-status';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
-// Prevent static prerendering - layout uses AuthStatus which requires Logto
-// 防止静态预渲染 - 布局使用需要Logto的AuthStatus组件
 export const dynamic = 'force-dynamic';
 
 export function generateStaticParams() {
@@ -27,24 +25,18 @@ export default async function LocaleLayout({
 }) {
   const { locale } = await params;
 
-  // Ensure that the incoming locale is valid
   if (!routing.locales.includes(locale as any)) {
     notFound();
   }
 
-  // Enable static rendering
   setRequestLocale(locale);
 
-  // Providing all messages to the client side
   const messages = await getMessages();
-
-  // Get CDN URL for preconnect hint
   const cdnUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
 
   return (
     <html lang={locale} className={inter.variable} suppressHydrationWarning>
       <head>
-        {/* Preconnect to CDN for faster image loading */}
         {cdnUrl && (
           <>
             <link rel="preconnect" href={cdnUrl} />

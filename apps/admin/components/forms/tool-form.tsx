@@ -35,7 +35,7 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { createTool, updateTool, deleteTool, type ToolFormData } from '@/lib/actions/tools';
+import { createTool, updateTool, deleteTool, type ToolFormData, type PriceConfig } from '@/lib/actions/tools';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,17 +62,15 @@ import { useImageDimensions, validateAspectRatio, ASPECT_RATIOS, DEFAULT_RATIO_T
 type TranslationData = {
   title: string;
   description?: string;
-  promptTemplate?: string;
 };
 
 type ToolData = {
   id: string;
   slug: string;
   toolTypeId: string;
+  priceConfig: unknown;
   thumbnailUrl: string | null;
-  promptTemplate: string | null;
   configJson: unknown;
-  aiEndpoint: string | null;
   isActive: boolean;
   isFeatured: boolean;
   order: number;
@@ -121,6 +119,14 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
   const [toolTypeId, setToolTypeId] = useState(initialData?.toolTypeId || '');
   const [toolTypeOpen, setToolTypeOpen] = useState(false);
 
+  // Price config state
+  const [priceConfigJson, setPriceConfigJson] = useState<string>(() => {
+    if (initialData?.priceConfig) {
+      return JSON.stringify(initialData.priceConfig, null, 2);
+    }
+    return JSON.stringify({ type: 'request', cost_per_call: 0.003 }, null, 2);
+  });
+
   // Upload hook - used only during form submission
   const { upload } = useUploadFiles({
     route: 'tools',
@@ -146,6 +152,16 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
       translations = JSON.parse(translationsJson);
     } catch {
       return { errors: { translations: 'Invalid JSON format. Please check the syntax.' } };
+    }
+
+    // Parse price config JSON
+    let priceConfig: PriceConfig | undefined;
+    if (priceConfigJson.trim()) {
+      try {
+        priceConfig = JSON.parse(priceConfigJson);
+      } catch {
+        return { errors: { priceConfig: 'Invalid JSON format for price config' } };
+      }
     }
 
     // Determine the final thumbnail URL
@@ -178,10 +194,9 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
     const rawData = {
       slug: formData.get('slug') as string,
       toolTypeId: formData.get('toolTypeId') as string,
+      priceConfig,
       thumbnailUrl: finalThumbnailUrl || undefined,
-      promptTemplate: formData.get('promptTemplate') as string || undefined,
       configJson,
-      aiEndpoint: formData.get('aiEndpoint') as string || undefined,
       isActive: formData.get('isActive') === 'on',
       isFeatured: formData.get('isFeatured') === 'on',
       order: parseInt(formData.get('order') as string) || 0,
@@ -386,6 +401,8 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
                     <img
                       src={displayUrl}
                       alt="Thumbnail preview"
+                      width={448}
+                      height={252}
                       className="h-full w-full object-cover"
                     />
                     <button
@@ -468,30 +485,6 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
               {errors.thumbnailUrl && <FieldError>{errors.thumbnailUrl}</FieldError>}
             </Field>
 
-            <Field>
-              <FieldLabel htmlFor="aiEndpoint">AI Endpoint</FieldLabel>
-              <Input
-                id="aiEndpoint"
-                name="aiEndpoint"
-                type="url"
-                defaultValue={initialData?.aiEndpoint || ''}
-                placeholder="/api/ai/process"
-                autoComplete="url"
-              />
-              <FieldDescription>API endpoint for AI processing</FieldDescription>
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="promptTemplate">Default Prompt Template</FieldLabel>
-              <Textarea
-                id="promptTemplate"
-                name="promptTemplate"
-                defaultValue={initialData?.promptTemplate || ''}
-                placeholder="Enter default prompt template..."
-                rows={3}
-              />
-            </Field>
-
             <Field data-invalid={!!errors.configJson}>
               <FieldLabel htmlFor="configJson">Config JSON</FieldLabel>
               <Textarea
@@ -543,6 +536,36 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
 
       <Card>
         <CardHeader>
+          <CardTitle>Pricing</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FieldGroup>
+            <Field data-invalid={!!errors.priceConfig}>
+              <FieldLabel htmlFor="priceConfig">Price Configuration (JSON)</FieldLabel>
+              <Textarea
+                id="priceConfig"
+                value={priceConfigJson}
+                onChange={(e) => setPriceConfigJson(e.target.value)}
+                placeholder='{"type": "request", "cost_per_call": 0.003}'
+                rows={4}
+                className="font-mono text-sm"
+                aria-invalid={!!errors.priceConfig}
+              />
+              <FieldDescription>
+                Pricing structure. Types: <code className="rounded bg-muted px-1 text-xs">token</code> (input_per_1k, output_per_1k),
+                <code className="rounded bg-muted px-1 text-xs">request</code> (cost_per_call),
+                <code className="rounded bg-muted px-1 text-xs">image</code> (cost_per_image),
+                <code className="rounded bg-muted px-1 text-xs">second</code> (cost_per_second).
+                Provider/model selection is handled in tool processor code.
+              </FieldDescription>
+              {errors.priceConfig && <FieldError>{errors.priceConfig}</FieldError>}
+            </Field>
+          </FieldGroup>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>
               Translations (JSON) <span className="text-destructive">*</span>
@@ -567,7 +590,7 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
             />
             <FieldDescription className="mt-2">
               Required: <code className="rounded bg-muted px-1.5 py-0.5 text-xs">title</code> must be provided for all locales (en, zh, ja, pt).
-              Other fields (description, promptTemplate) are optional.
+              The <code className="rounded bg-muted px-1.5 py-0.5 text-xs">description</code> field is optional.
             </FieldDescription>
             {jsonError && <FieldError>{jsonError}</FieldError>}
             {errors.translations && <FieldError>{errors.translations}</FieldError>}

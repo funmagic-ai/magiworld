@@ -32,13 +32,13 @@ export function ToolBreadcrumb({ toolType, toolTitle }: ToolBreadcrumbProps) {
         </BreadcrumbItem>
         <BreadcrumbSeparator />
         <BreadcrumbItem>
-          <BreadcrumbLink render={<Link href="/studio" />}>
-            {t('studio')}
+          <BreadcrumbLink render={<Link href="/ai-lab" />}>
+            {t('aiLab')}
           </BreadcrumbLink>
         </BreadcrumbItem>
         <BreadcrumbSeparator />
         <BreadcrumbItem>
-          <BreadcrumbLink render={<Link href={`/studio/${toolType.slug}`} />}>
+          <BreadcrumbLink render={<Link href={`/ai-lab/${toolType.slug}`} />}>
             {toolType.name}
           </BreadcrumbLink>
         </BreadcrumbItem>

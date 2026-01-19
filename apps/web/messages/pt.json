@@ -9,7 +9,9 @@
   },
   "nav": {
     "home": "Início",
-    "studio": "Estúdio",
+    "aiLab": "Laboratório IA",
+    "myTasks": "Minhas Tarefas",
+    "allTools": "Todas as Ferramentas",
     "assets": "Meus Arquivos",
     "login": "Entrar",
     "signup": "Cadastrar",
@@ -42,10 +44,34 @@
   "assets": {
     "title": "Meus Arquivos",
     "empty": "Nenhum arquivo ainda",
-    "emptyDescription": "Seus arquivos criados aparecerão aqui",
+    "emptyDescription": "Salve suas saídas geradas por IA aqui",
+    "savedFrom": "Salvo de",
     "recreate": "Recriar",
     "download": "Baixar",
-    "delete": "Excluir"
+    "delete": "Excluir",
+    "confirmDelete": "Tem certeza de que deseja excluir este arquivo?",
+    "saveToAssets": "Salvar em Meus Arquivos",
+    "saved": "Salvo!"
+  },
+  "tasks": {
+    "title": "Minhas Tarefas",
+    "empty": "Nenhuma tarefa ainda",
+    "emptyDescription": "Suas tarefas de processamento de IA aparecerão aqui",
+    "status": {
+      "pending": "Pendente",
+      "processing": "Processando",
+      "success": "Concluído",
+      "failed": "Falhou"
+    },
+    "filters": {
+      "all": "Todas",
+      "pending": "Pendentes",
+      "processing": "Processando",
+      "success": "Concluídas",
+      "failed": "Falharam"
+    },
+    "viewResult": "Ver Resultado",
+    "createdAt": "Criado em"
   },
   "footer": {
     "rights": "Todos os direitos reservados",

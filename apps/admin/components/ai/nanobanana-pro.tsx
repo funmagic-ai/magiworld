@@ -3,9 +3,9 @@
  * @fileoverview Nanobanana Pro组件
  *
  * Chat-like UI for Gemini 3 Pro image generation.
- * Supports multi-round conversations with per-message options.
+ * Uses task-based async processing with real-time progress updates.
  * 类聊天界面的Gemini 3 Pro图像生成工具。
- * 支持多轮对话，每条消息可配置不同选项。
+ * 使用基于任务的异步处理和实时进度更新。
  *
  * @module components/ai/nanobanana-pro
  */
@@ -30,6 +30,7 @@ import {
   Cancel01Icon,
 } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
+import { useTask, type TaskStatus } from './hooks/use-task';
 
 // ============================================
 // Types
@@ -41,8 +42,8 @@ interface NanobananaOptions {
 }
 
 interface GeneratedImage {
-  dataUrl: string;
-  mediaType: string;
+  url: string; // S3 URL from task result
+  mediaType?: string;
 }
 
 interface UploadedImage {
@@ -64,6 +65,10 @@ interface NanobananaMessage {
     error?: string;
   };
   timestamp: Date;
+  // Task tracking for assistant messages
+  taskId?: string;
+  taskStatus?: TaskStatus;
+  taskProgress?: number;
 }
 
 // ============================================
@@ -97,8 +102,10 @@ export function NanobananaPro() {
   const [imageSize, setImageSize] = useState('2K');
   const [isLoading, setIsLoading] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+  const [currentAssistantMessageId, setCurrentAssistantMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -145,6 +152,84 @@ export function NanobananaPro() {
     setUploadedImages((prev) => prev.filter((img) => img.id !== id));
   }, []);
 
+  // Subscribe to task updates
+  const subscribeToTaskUpdates = useCallback((taskId: string, assistantMessageId: string) => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+
+    const eventSource = new EventSource(`/api/tasks/${taskId}/stream`);
+    eventSourceRef.current = eventSource;
+
+    eventSource.onmessage = (event) => {
+      try {
+        const update = JSON.parse(event.data);
+
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.id !== assistantMessageId) return msg;
+
+            const updatedMsg = { ...msg };
+            updatedMsg.taskStatus = update.status;
+            updatedMsg.taskProgress = update.progress;
+
+            if (update.status === 'success' && update.outputData) {
+              // Convert imageUrls to GeneratedImage format
+              const imageUrls = update.outputData.imageUrls || [];
+              if (imageUrls.length === 0 && update.outputData.resultUrl) {
+                imageUrls.push(update.outputData.resultUrl);
+              }
+              updatedMsg.content = {
+                ...updatedMsg.content,
+                text: update.outputData.text || '',
+                images: imageUrls.map((url: string) => ({ url })),
+              };
+            }
+
+            if (update.status === 'failed') {
+              updatedMsg.content = {
+                ...updatedMsg.content,
+                error: update.error || 'Generation failed',
+              };
+            }
+
+            return updatedMsg;
+          })
+        );
+
+        if (update.status === 'success' || update.status === 'failed') {
+          eventSource.close();
+          eventSourceRef.current = null;
+          setIsLoading(false);
+          setCurrentAssistantMessageId(null);
+        }
+      } catch (err) {
+        console.error('[NanobananaPro] Failed to parse SSE message:', err);
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+      eventSourceRef.current = null;
+      setIsLoading(false);
+      setCurrentAssistantMessageId(null);
+
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id !== assistantMessageId) return msg;
+          return {
+            ...msg,
+            taskStatus: 'failed' as TaskStatus,
+            content: {
+              ...msg.content,
+              error: 'Connection lost. Please try again.',
+            },
+          };
+        })
+      );
+    };
+  }, []);
+
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -168,10 +253,23 @@ export function NanobananaPro() {
         },
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, userMessage]);
+
+      // Add placeholder assistant message
+      const assistantMessageId = crypto.randomUUID();
+      const assistantMessage: NanobananaMessage = {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: {},
+        timestamp: new Date(),
+        taskStatus: 'pending',
+        taskProgress: 0,
+      };
+
+      setMessages((prev) => [...prev, userMessage, assistantMessage]);
       setInput('');
       setUploadedImages([]);
       setIsLoading(true);
+      setCurrentAssistantMessageId(assistantMessageId);
 
       // Prepare input images for API
       const inputImages =
@@ -183,45 +281,58 @@ export function NanobananaPro() {
           : undefined;
 
       try {
-        const res = await fetch('/api/ai/nanobanana', {
+        // Create task via API
+        const res = await fetch('/api/tasks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: trimmedInput, options, inputImages }),
+          body: JSON.stringify({
+            toolSlug: 'nanobanana',
+            inputParams: {
+              prompt: trimmedInput,
+              aspectRatio: options.aspectRatio,
+              imageSize: options.imageSize,
+              inputImages,
+            },
+          }),
         });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || `Failed to create task: ${res.status}`);
+        }
 
         const data = await res.json();
 
-        if (!res.ok) {
-          throw new Error(data.message || data.error || 'Generation failed');
-        }
+        // Update message with task ID and subscribe to updates
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessageId
+              ? { ...msg, taskId: data.taskId, taskStatus: 'processing' as TaskStatus }
+              : msg
+          )
+        );
 
-        // Add assistant message
-        const assistantMessage: NanobananaMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: {
-            text: data.text || '',
-            images: data.images || [],
-          },
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, assistantMessage]);
+        subscribeToTaskUpdates(data.taskId, assistantMessageId);
       } catch (err) {
-        // Add error message
-        const errorMessage: NanobananaMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: {
-            error: err instanceof Error ? err.message : 'Unknown error',
-          },
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, errorMessage]);
-      } finally {
+        // Update assistant message with error
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessageId
+              ? {
+                  ...msg,
+                  taskStatus: 'failed' as TaskStatus,
+                  content: {
+                    error: err instanceof Error ? err.message : 'Unknown error',
+                  },
+                }
+              : msg
+          )
+        );
         setIsLoading(false);
+        setCurrentAssistantMessageId(null);
       }
     },
-    [input, aspectRatio, imageSize, isLoading, uploadedImages]
+    [input, aspectRatio, imageSize, isLoading, uploadedImages, subscribeToTaskUpdates]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -245,7 +356,6 @@ export function NanobananaPro() {
               <MessageBubble key={message.id} message={message} />
             ))
           )}
-          {isLoading && <LoadingBubble />}
           <div ref={messagesEndRef} />
         </div>
       </div>
@@ -389,32 +499,13 @@ function EmptyState() {
   );
 }
 
-function LoadingBubble() {
-  return (
-    <div className="flex gap-4 justify-start">
-      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 flex-shrink-0 flex items-center justify-center">
-        <span className="text-white text-xs">🍌</span>
-      </div>
-      <div className="bg-muted/60 backdrop-blur-sm rounded-2xl px-5 py-4 shadow-sm">
-        <div className="flex items-center gap-1.5">
-          <div className="h-2 w-2 bg-primary/60 rounded-full animate-bounce" />
-          <div
-            className="h-2 w-2 bg-primary/60 rounded-full animate-bounce"
-            style={{ animationDelay: '0.15s' }}
-          />
-          <div
-            className="h-2 w-2 bg-primary/60 rounded-full animate-bounce"
-            style={{ animationDelay: '0.3s' }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function MessageBubble({ message }: { message: NanobananaMessage }) {
   const isUser = message.role === 'user';
   const { prompt, options, uploadedImages, text, images, error } = message.content;
+  const { taskStatus, taskProgress } = message;
+
+  // Check if this message is currently loading
+  const isMessageLoading = !isUser && (taskStatus === 'pending' || taskStatus === 'processing');
 
   return (
     <div className={cn('flex gap-4', isUser ? 'justify-end' : 'justify-start')}>
@@ -460,14 +551,36 @@ function MessageBubble({ message }: { message: NanobananaMessage }) {
           </div>
         )}
 
-        {/* Assistant message: show images and text */}
+        {/* Assistant message: show loading, images and text */}
         {!isUser && (
           <>
-            {error && (
+            {/* Loading state */}
+            {isMessageLoading && (
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 bg-primary/60 rounded-full animate-bounce" />
+                  <div
+                    className="h-2 w-2 bg-primary/60 rounded-full animate-bounce"
+                    style={{ animationDelay: '0.15s' }}
+                  />
+                  <div
+                    className="h-2 w-2 bg-primary/60 rounded-full animate-bounce"
+                    style={{ animationDelay: '0.3s' }}
+                  />
+                </div>
+                {typeof taskProgress === 'number' && (
+                  <span className="text-xs text-muted-foreground">{taskProgress}%</span>
+                )}
+              </div>
+            )}
+
+            {/* Error state */}
+            {!isMessageLoading && error && (
               <p className="text-destructive text-sm">{error}</p>
             )}
 
-            {images && images.length > 0 && (
+            {/* Images - using URL instead of dataUrl */}
+            {!isMessageLoading && images && images.length > 0 && (
               <div
                 className={cn(
                   'grid gap-2',
@@ -478,13 +591,13 @@ function MessageBubble({ message }: { message: NanobananaMessage }) {
                 {images.map((img, index) => (
                   <a
                     key={index}
-                    href={img.dataUrl}
+                    href={img.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block overflow-hidden rounded-xl aspect-square"
                   >
                     <img
-                      src={img.dataUrl}
+                      src={img.url}
                       alt={`Generated image ${index + 1}`}
                       className="w-full h-full object-cover cursor-pointer hover:scale-[1.02] transition-transform duration-200"
                       loading="lazy"
@@ -494,13 +607,15 @@ function MessageBubble({ message }: { message: NanobananaMessage }) {
               </div>
             )}
 
-            {text && (
+            {/* Text response */}
+            {!isMessageLoading && text && (
               <p className="text-[15px] text-foreground whitespace-pre-wrap">
                 {text}
               </p>
             )}
 
-            {!error && !images?.length && !text && (
+            {/* No content state */}
+            {!isMessageLoading && !error && !images?.length && !text && taskStatus === 'success' && (
               <p className="text-muted-foreground italic text-sm">
                 No content generated
               </p>

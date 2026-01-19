@@ -18,21 +18,17 @@ interface HeroSectionProps {
 }
 
 export function HeroSection({ mainBanners, sideBanners }: HeroSectionProps) {
-  // Don't render if no banners from database
   if (mainBanners.length === 0 && sideBanners.length === 0) {
     return null;
   }
 
   return (
     <section className="container py-4 lg:py-6">
-      {/* Desktop Layout: 12-column grid */}
       <div className="hidden lg:grid lg:grid-cols-12 lg:gap-3 lg:items-stretch">
-        {/* Main Carousel - 8 columns */}
         <div className="lg:col-span-8">
           {mainBanners.length > 0 && <MainCarousel banners={mainBanners} />}
         </div>
 
-        {/* Side Banners - 4 columns, stacked to match main carousel height */}
         <div className="lg:col-span-4 flex flex-col gap-3 h-full">
           {sideBanners.map((banner) => (
             <SideBanner key={banner.id} banner={banner} />
@@ -40,12 +36,9 @@ export function HeroSection({ mainBanners, sideBanners }: HeroSectionProps) {
         </div>
       </div>
 
-      {/* Mobile Layout: Stacked */}
       <div className="lg:hidden space-y-3">
-        {/* Main Carousel - Full width */}
         {mainBanners.length > 0 && <MainCarousel banners={mainBanners} />}
 
-        {/* Side Banners - 2 column grid */}
         {sideBanners.length > 0 && (
           <div className="grid grid-cols-2 gap-3">
             {sideBanners.map((banner) => (
@@ -70,7 +63,6 @@ function MainCarousel({ banners }: { banners: Banner[] }) {
     setCurrentIndex((prev) => (prev + 1) % banners.length);
   }, [banners.length]);
 
-  // Auto-play effect
   useEffect(() => {
     if (banners.length <= 1 || isPaused) return;
 
@@ -86,14 +78,12 @@ function MainCarousel({ banners }: { banners: Banner[] }) {
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
-      {/* Slides Container */}
       <div
         className="absolute inset-0 flex motion-safe:transition-transform motion-safe:duration-500 motion-safe:ease-out"
         style={{ transform: `translateX(-${currentIndex * 100}%)` }}
       >
         {banners.map((b, index) => (
           <div key={b.id} className="relative w-full h-full flex-shrink-0">
-            {/* Banner Image */}
             {b.image ? (
               <Image
                 src={b.image}
@@ -110,10 +100,8 @@ function MainCarousel({ banners }: { banners: Banner[] }) {
         ))}
       </div>
 
-      {/* Gradient overlay for text readability */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent pointer-events-none" />
 
-      {/* Content overlay - bottom left aligned */}
       <div className="absolute inset-0 flex flex-col items-start justify-end p-4 md:p-6 lg:p-8">
         <h1 className="text-xl md:text-2xl lg:text-3xl font-bold mb-1 text-white drop-shadow-md">
           {banner.title}
@@ -133,7 +121,6 @@ function MainCarousel({ banners }: { banners: Banner[] }) {
         )}
       </div>
 
-      {/* Carousel dots indicator - positioned at bottom right */}
       {banners.length > 1 && (
         <div className="absolute bottom-4 right-4 md:bottom-6 md:right-6 lg:bottom-8 lg:right-8 flex gap-1.5">
           {banners.map((_, index) => (
@@ -155,7 +142,6 @@ function MainCarousel({ banners }: { banners: Banner[] }) {
 function SideBanner({ banner }: { banner: Banner }) {
   const content = (
     <div className="relative aspect-[16/9] lg:aspect-auto lg:flex-1 overflow-hidden rounded-lg bg-muted group cursor-pointer">
-      {/* Banner Image */}
       {banner.image ? (
         <Image
           src={banner.image}
@@ -165,19 +151,15 @@ function SideBanner({ banner }: { banner: Banner }) {
           sizes="(max-width: 1024px) 50vw, 33vw"
         />
       ) : (
-        /* Fallback gradient */
         <div className="absolute inset-0 bg-gradient-to-br from-secondary via-muted to-background motion-safe:transition-transform motion-safe:group-hover:scale-105" />
       )}
 
-      {/* Gradient overlay for text readability */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
 
-      {/* Content */}
       <div className="absolute inset-0 flex items-end p-3">
         <h3 className="text-sm font-semibold text-white drop-shadow">{banner.title}</h3>
       </div>
 
-      {/* Hover overlay */}
       <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/10 motion-safe:transition-colors" />
     </div>
   );

@@ -3,64 +3,61 @@
  * @fileoverview 背景移除组件
  *
  * UI component for removing backgrounds from images using AI.
- * Supports upload and library selection with before/after comparison.
+ * Uses task-based async processing with real-time progress updates.
  * 使用AI从图片中移除背景的UI组件。
- * 支持上传和从媒体库选择，并提供前后对比视图。
+ * 使用基于任务的异步处理和实时进度更新。
  *
  * @module components/ai/background-remover
  */
 
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { removeBackground } from '@/lib/actions/ai';
 import { ImageSourcePicker, type SelectedImage } from './image-source-picker';
 import { ResultActions } from './result-actions';
+import { useTask } from './hooks/use-task';
 
 interface BackgroundRemoverProps {
-  onComplete?: (result: { base64?: string; url?: string }) => void;
+  onComplete?: (result: { url?: string }) => void;
 }
 
 export function BackgroundRemover({ onComplete }: BackgroundRemoverProps) {
   const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
-  const [resultBase64, setResultBase64] = useState<string>('');
-  const [error, setError] = useState<string>('');
-  const [isPending, startTransition] = useTransition();
+  const task = useTask();
 
   const handleImageChange = (image: SelectedImage | null) => {
     setSelectedImage(image);
-    setResultBase64('');
-    setError('');
+    task.reset();
   };
 
-  const handleProcess = () => {
+  const handleProcess = async () => {
     if (!selectedImage) {
-      setError('Please select an image');
       return;
     }
 
-    setError('');
-    setResultBase64('');
-
-    startTransition(async () => {
-      const result = await removeBackground(selectedImage.url);
-
-      if (result.success && result.base64) {
-        setResultBase64(result.base64);
-        onComplete?.({ base64: result.base64, url: result.url });
-      } else {
-        setError(result.error || 'Failed to process image');
-      }
+    await task.createTask({
+      toolSlug: 'background-remove',
+      inputParams: { imageUrl: selectedImage.url },
     });
   };
 
   const handleReset = () => {
     setSelectedImage(null);
-    setResultBase64('');
-    setError('');
+    task.reset();
   };
+
+  // Call onComplete when task succeeds
+  useEffect(() => {
+    if (task.status === 'success' && task.outputData?.resultUrl) {
+      onComplete?.({ url: task.outputData.resultUrl });
+    }
+  }, [task.status, task.outputData, onComplete]);
+
+  const resultUrl = task.outputData?.resultUrl as string | undefined;
+  const isProcessing = task.isLoading;
+  const showResult = isProcessing || resultUrl;
 
   return (
     <div className="space-y-6">
@@ -68,28 +65,41 @@ export function BackgroundRemover({ onComplete }: BackgroundRemoverProps) {
       <ImageSourcePicker
         value={selectedImage}
         onChange={handleImageChange}
-        disabled={isPending}
+        disabled={isProcessing}
       />
 
       {/* Process Button */}
-      {selectedImage && !resultBase64 && (
-        <div className="flex justify-end">
+      {selectedImage && !resultUrl && !isProcessing && (
+        <div className="flex justify-end gap-2">
           <Button
             onClick={handleProcess}
-            disabled={isPending}
+            disabled={isProcessing}
             size="lg"
           >
-            {isPending ? 'Processing...' : 'Remove Background'}
+            Remove Background
           </Button>
         </div>
       )}
 
-      {error && (
-        <p className="text-sm text-destructive">{error}</p>
+      {/* Cancel Button during processing */}
+      {isProcessing && (
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            onClick={task.cancel}
+            size="lg"
+          >
+            Cancel
+          </Button>
+        </div>
+      )}
+
+      {task.error && (
+        <p className="text-sm text-destructive">{task.error}</p>
       )}
 
       {/* Result */}
-      {(isPending || resultBase64) && (
+      {showResult && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Original */}
           {selectedImage && (
@@ -115,7 +125,7 @@ export function BackgroundRemover({ onComplete }: BackgroundRemoverProps) {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Result
+                Result {isProcessing && `(${task.progress}%)`}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -127,14 +137,14 @@ export function BackgroundRemover({ onComplete }: BackgroundRemoverProps) {
                   backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
                 }}
               >
-                {isPending ? (
+                {isProcessing ? (
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                    <span className="text-sm">Processing...</span>
+                    <span className="text-sm">Processing... {task.progress}%</span>
                   </div>
-                ) : resultBase64 ? (
+                ) : resultUrl ? (
                   <img
-                    src={`data:image/png;base64,${resultBase64}`}
+                    src={resultUrl}
                     alt="Result"
                     className="max-w-full max-h-full object-contain"
                   />
@@ -150,9 +160,9 @@ export function BackgroundRemover({ onComplete }: BackgroundRemoverProps) {
       )}
 
       {/* Actions */}
-      {resultBase64 && (
+      {resultUrl && (
         <ResultActions
-          base64={resultBase64}
+          url={resultUrl}
           filename="background-removed.png"
           onReset={handleReset}
         />

@@ -47,6 +47,13 @@ const serverEnvSchema = z.object({
   // Optional: auto-detects from NODE_ENV if not set
   // 可选：如果未设置，则从NODE_ENV自动检测
   S3_ENV_PREFIX: z.string().optional(),
+
+  // Redis Configuration / Redis配置
+  REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
+  REDIS_TLS: z.string().optional().default('false'),
+
+  // Queue Prefix for worker isolation / 队列前缀用于工作进程隔离
+  QUEUE_PREFIX: z.string().optional().default(''),
 });
 
 /**

@@ -4,8 +4,10 @@
  *
  * Form page for editing existing AI tools.
  * Fetches tool data by ID and populates the form.
+ * Provider/model selection is handled by tool processors in worker code.
  * 编辑现有AI工具的表单页面。
  * 通过ID获取工具数据并填充表单。
+ * Provider/模型选择由worker代码中的工具处理器处理。
  *
  * @module app/(dashboard)/tools/[id]/page
  */

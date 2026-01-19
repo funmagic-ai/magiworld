@@ -292,6 +292,8 @@ export function BannerForm({ initialData, mode }: BannerFormProps) {
                     <img
                       src={displayUrl}
                       alt="Banner preview"
+                      width={448}
+                      height={252}
                       className="h-full w-full object-cover"
                     />
                     <button

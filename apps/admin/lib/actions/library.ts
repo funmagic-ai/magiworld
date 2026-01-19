@@ -701,3 +701,18 @@ export async function getAllFolders(): Promise<Folder[]> {
 
   return allFolders;
 }
+
+/**
+ * Sign a CloudFront URL for private asset access / 为私有资产访问签名CloudFront URL
+ *
+ * Use this to sign URLs for uploaded files that need to be displayed
+ * in the browser. Only signs URLs from the admin CloudFront distribution.
+ * 用于签名需要在浏览器中显示的已上传文件的URL。
+ * 仅签名来自管理员CloudFront分发的URL。
+ *
+ * @param url - The CloudFront URL to sign / 要签名的CloudFront URL
+ * @returns Signed URL if applicable, original URL otherwise / 签名后的URL（如适用），否则返回原URL
+ */
+export async function signUrl(url: string): Promise<string> {
+  return maybeSignUrl(url);
+}

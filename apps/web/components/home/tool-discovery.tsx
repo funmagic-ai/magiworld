@@ -13,7 +13,6 @@ interface ToolDiscoveryProps {
 export function ToolDiscovery({ tools }: ToolDiscoveryProps) {
   const t = useTranslations('home.categories');
 
-  // Don't render if no tools from database
   if (tools.length === 0) {
     return null;
   }
@@ -39,7 +38,6 @@ export function ToolDiscovery({ tools }: ToolDiscoveryProps) {
 function ToolCard({ tool }: { tool: ToolListItem }) {
   const t = useTranslations('tools');
 
-  // Use a stable date format to avoid hydration mismatch
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const month = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
@@ -48,7 +46,7 @@ function ToolCard({ tool }: { tool: ToolListItem }) {
   };
 
   return (
-    <Link href={`/studio/${tool.toolType.slug}/${tool.slug}`}>
+    <Link href={`/ai-lab/${tool.toolType.slug}/${tool.slug}`}>
       <Card className="group overflow-hidden transition-[box-shadow,transform] hover:shadow-md hover:-translate-y-0.5">
         {/* Thumbnail */}
         <div className="aspect-square bg-muted relative overflow-hidden">
@@ -56,26 +54,26 @@ function ToolCard({ tool }: { tool: ToolListItem }) {
             <img
               src={tool.thumbnail.url}
               alt={tool.title}
+              width={200}
+              height={200}
+              loading="lazy"
               className="absolute inset-0 w-full h-full object-cover"
             />
           ) : (
             <>
               <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-secondary/20" />
-              {/* Placeholder icon */}
               <div className="absolute inset-0 flex items-center justify-center">
                 <ToolIcon type={tool.toolType.slug} className="h-10 w-10 text-muted-foreground/50" />
               </div>
             </>
           )}
 
-          {/* Tool Type Badge - name is already localized from database */}
           <div className="absolute top-2 left-2">
             <Badge variant={tool.toolType.badgeColor} className="text-xs">
               {tool.toolType.name}
             </Badge>
           </div>
 
-          {/* Hover overlay */}
           <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
             <span className="text-xs font-medium bg-background/90 px-2 py-1 rounded-full">
               {t('tryNow')}

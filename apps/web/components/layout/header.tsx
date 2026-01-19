@@ -6,22 +6,27 @@ import { Button } from '@/components/ui/button';
 import { LanguageSwitcher } from './language-switcher';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { Logo } from '@/components/logo';
+import { SearchIcon, MenuIcon } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
-type HeaderProps = {
+interface HeaderProps {
   authSlot?: React.ReactNode;
-};
+}
 
 export function Header({ authSlot }: HeaderProps) {
   const t = useTranslations('nav');
   const pathname = usePathname();
 
+  const navItems = [
+    { href: '/', label: 'home', match: (p: string) => p === '/' },
+    { href: '/ai-lab', label: 'aiLab', match: (p: string) => p === '/ai-lab' || p.startsWith('/ai-lab/') },
+    { href: '/assets', label: 'assets', match: (p: string) => p === '/assets' || p.startsWith('/assets/') },
+  ];
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
-        {/* Logo and Navigation */}
         <div className="flex items-center gap-8">
-          {/* Logo */}
           <Link href="/" className="flex items-center gap-2">
             <Logo className="h-9 w-9 text-primary" />
             <span className="hidden text-xl font-semibold sm:inline-block">
@@ -29,64 +34,37 @@ export function Header({ authSlot }: HeaderProps) {
             </span>
           </Link>
 
-          {/* Main Navigation */}
           <nav className="hidden md:flex items-center gap-1">
-            <Link
-              href="/"
-              className={cn(
-                "text-sm font-medium px-3 py-2 rounded-lg transition-colors",
-                pathname === "/"
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-primary/10 hover:text-primary"
-              )}
-            >
-              {t('home')}
-            </Link>
-            <Link
-              href="/studio"
-              className={cn(
-                "text-sm font-medium px-3 py-2 rounded-lg transition-colors",
-                pathname === "/studio" || pathname.startsWith("/studio/")
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-primary/10 hover:text-primary"
-              )}
-            >
-              {t('studio')}
-            </Link>
-            <Link
-              href="/assets"
-              className={cn(
-                "text-sm font-medium px-3 py-2 rounded-lg transition-colors",
-                pathname === "/assets" || pathname.startsWith("/assets/")
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-primary/10 hover:text-primary"
-              )}
-            >
-              {t('assets')}
-            </Link>
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "text-sm font-medium px-3 py-2 rounded-lg transition-colors",
+                  item.match(pathname)
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                )}
+              >
+                {t(item.label)}
+              </Link>
+            ))}
           </nav>
         </div>
 
-        {/* Right Side Actions */}
         <div className="flex items-center gap-4">
-          {/* Search Button */}
           <Button variant="ghost" size="icon" className="hidden sm:flex">
             <SearchIcon className="h-5 w-5" />
             <span className="sr-only">Search</span>
           </Button>
 
-          {/* Theme Switcher */}
           <ThemeSwitcher />
-
-          {/* Language Switcher */}
           <LanguageSwitcher />
 
-          {/* Auth */}
           <div className="hidden sm:flex items-center gap-2">
             {authSlot}
           </div>
 
-          {/* Mobile Menu Button */}
           <Button variant="ghost" size="icon" className="md:hidden">
             <MenuIcon className="h-5 w-5" />
             <span className="sr-only">Menu</span>
@@ -94,42 +72,5 @@ export function Header({ authSlot }: HeaderProps) {
         </div>
       </div>
     </header>
-  );
-}
-
-function SearchIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
-  );
-}
-
-function MenuIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <line x1="4" x2="20" y1="12" y2="12" />
-      <line x1="4" x2="20" y1="6" y2="6" />
-      <line x1="4" x2="20" y1="18" y2="18" />
-    </svg>
   );
 }

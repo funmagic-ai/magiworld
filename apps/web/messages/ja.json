@@ -9,7 +9,9 @@
   },
   "nav": {
     "home": "ホーム",
-    "studio": "スタジオ",
+    "aiLab": "AIラボ",
+    "myTasks": "マイタスク",
+    "allTools": "すべてのツール",
     "assets": "マイアセット",
     "login": "ログイン",
     "signup": "新規登録",
@@ -42,10 +44,34 @@
   "assets": {
     "title": "マイアセット",
     "empty": "アセットがありません",
-    "emptyDescription": "作成したアセットがここに表示されます",
+    "emptyDescription": "AI生成した出力をここに保存できます",
+    "savedFrom": "作成元",
     "recreate": "再作成",
     "download": "ダウンロード",
-    "delete": "削除"
+    "delete": "削除",
+    "confirmDelete": "このアセットを削除してもよろしいですか？",
+    "saveToAssets": "マイアセットに保存",
+    "saved": "保存しました！"
+  },
+  "tasks": {
+    "title": "マイタスク",
+    "empty": "タスクがありません",
+    "emptyDescription": "AI処理タスクがここに表示されます",
+    "status": {
+      "pending": "待機中",
+      "processing": "処理中",
+      "success": "完了",
+      "failed": "失敗"
+    },
+    "filters": {
+      "all": "すべて",
+      "pending": "待機中",
+      "processing": "処理中",
+      "success": "完了",
+      "failed": "失敗"
+    },
+    "viewResult": "結果を見る",
+    "createdAt": "作成日時"
   },
   "footer": {
     "rights": "全著作権所有",

@@ -1,22 +1,6 @@
-/**
- * @fileoverview Magi Client Component
- * @fileoverview Magi客户端组件
- *
- * Main client component for the Magi AI Tools page.
- * Handles URL-based routing between grid view and tool view.
- * Magi AI工具页面的主客户端组件。
- * 处理网格视图和工具视图之间的URL路由。
- *
- * URL Pattern / URL模式:
- * - /magi              → Tools grid / 工具网格
- * - /magi?tool=xxx     → Tool view / 工具视图
- *
- * @module components/ai/magi-client
- */
-
 'use client';
 
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import {
   Image01Icon,
   AiGenerativeIcon,
@@ -24,13 +8,12 @@ import {
   PaintBrushIcon,
   SparklesIcon,
 } from '@hugeicons/core-free-icons';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ToolsGrid } from './tools-grid';
 import { ToolView } from './tool-view';
+import { MagiTasksList, type TaskItem } from './magi-tasks-list';
 import type { MagiTool } from './types';
 
-/**
- * Available tools configuration
- */
 const TOOLS: MagiTool[] = [
   {
     id: 'background-remove',
@@ -38,6 +21,8 @@ const TOOLS: MagiTool[] = [
     description: 'Remove backgrounds from images using AI',
     icon: Image01Icon,
     category: 'image',
+    provider: 'fal_ai',
+    model: 'bria/background/remove',
   },
   {
     id: 'image-generate',
@@ -45,6 +30,8 @@ const TOOLS: MagiTool[] = [
     description: 'Create images from text prompts',
     icon: AiGenerativeIcon,
     category: 'image',
+    provider: 'fal_ai',
+    model: 'flux/dev',
   },
   {
     id: 'image-upscale',
@@ -52,6 +39,8 @@ const TOOLS: MagiTool[] = [
     description: 'Enhance image resolution with AI',
     icon: ImageUploadIcon,
     category: 'image',
+    provider: 'fal_ai',
+    model: 'clarity-upscaler',
   },
   {
     id: 'image-rerender',
@@ -59,35 +48,75 @@ const TOOLS: MagiTool[] = [
     description: 'Transform images with AI styles',
     icon: PaintBrushIcon,
     category: 'image',
+    provider: 'fal_ai',
+    model: 'creative-upscaler',
   },
   {
     id: 'nanobanana',
     name: 'Nanobanana Pro',
-    description: 'Generate images with Gemini 3 Pro',
+    description: 'Generate images with Gemini',
     icon: SparklesIcon,
     category: 'image',
+    provider: 'google',
+    model: 'gemini-2.0-flash-exp',
   },
 ];
 
-/**
- * Magi Client Component
- *
- * Routes between grid view and tool view based on URL query param.
- */
-export function MagiClient() {
-  const searchParams = useSearchParams();
-  const toolId = searchParams.get('tool');
+interface MagiClientProps {
+  tasks: TaskItem[];
+}
 
-  // Find the selected tool
+export function MagiClient({ tasks }: MagiClientProps) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const toolId = searchParams.get('tool');
+  const tab = searchParams.get('tab') || 'tools';
+
   const selectedTool = toolId ? TOOLS.find((t) => t.id === toolId) : null;
 
-  // If no tool selected or tool not found, show grid
-  if (!selectedTool) {
-    return <ToolsGrid tools={TOOLS} />;
+  // If a tool is selected, show full-screen tool view
+  if (selectedTool) {
+    return <ToolView tool={selectedTool} />;
   }
 
-  // Show tool view
-  return <ToolView tool={selectedTool} />;
+  const handleTabChange = (value: string | null) => {
+    if (!value) return;
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === 'tools') {
+      params.delete('tab');
+    } else {
+      params.set('tab', value);
+    }
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  return (
+    <div className="min-h-[calc(100vh-3.5rem)] p-6 sm:p-8">
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">Magi</h1>
+          <p className="text-muted-foreground">AI-powered tools and task management</p>
+        </div>
+
+        <Tabs value={tab} onValueChange={handleTabChange}>
+          <TabsList variant="line" className="mb-6">
+            <TabsTrigger value="tools">Tools</TabsTrigger>
+            <TabsTrigger value="tasks">Tasks ({tasks.length})</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="tools">
+            <ToolsGrid tools={TOOLS} />
+          </TabsContent>
+
+          <TabsContent value="tasks">
+            <MagiTasksList tasks={tasks} />
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
 }
 
 /**

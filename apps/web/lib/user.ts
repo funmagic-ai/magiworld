@@ -1,21 +1,6 @@
-/**
- * @fileoverview User Sync Utility
- * @fileoverview 用户同步工具
- *
- * Provides functions to sync user data from Logto to the local database.
- * Uses a "lazy sync" pattern where user data is synced on each login.
- * 提供从Logto同步用户数据到本地数据库的函数。
- * 使用"惰性同步"模式，在每次登录时同步用户数据。
- *
- * @module apps/web/lib/user
- */
-
 import { db, users, eq, type User } from '@magiworld/db';
 import type { LogtoContext } from '@logto/next';
 
-/**
- * User data extracted from Logto context
- */
 type LogtoUserData = {
   sub: string;
   email?: string;
@@ -24,9 +9,6 @@ type LogtoUserData = {
   picture?: string;
 };
 
-/**
- * Extracts user data from Logto context (claims and userInfo)
- */
 function extractUserData(context: LogtoContext): LogtoUserData | null {
   const { claims, userInfo } = context;
 
@@ -43,23 +25,6 @@ function extractUserData(context: LogtoContext): LogtoUserData | null {
   };
 }
 
-/**
- * Syncs user data from Logto to the local database.
- *
- * - On first login: Creates a new user record
- * - On subsequent logins: Updates lastLoginAt and refreshes profile fields
- *
- * @param context - The Logto context from getLogtoContext()
- * @returns The local user record, or null if not authenticated
- *
- * @example
- * ```typescript
- * const { isAuthenticated, ...context } = await getLogtoContext(logtoConfig);
- * if (isAuthenticated) {
- *   const user = await syncUserFromLogto(context);
- * }
- * ```
- */
 export async function syncUserFromLogto(context: LogtoContext): Promise<User | null> {
   const userData = extractUserData(context);
 
@@ -69,7 +34,6 @@ export async function syncUserFromLogto(context: LogtoContext): Promise<User | n
 
   const now = new Date();
 
-  // Try to find existing user
   const existingUser = await db
     .select()
     .from(users)
@@ -77,7 +41,6 @@ export async function syncUserFromLogto(context: LogtoContext): Promise<User | n
     .limit(1);
 
   if (existingUser.length > 0) {
-    // Update existing user with latest Logto data and login timestamp
     const [updatedUser] = await db
       .update(users)
       .set({
@@ -94,7 +57,6 @@ export async function syncUserFromLogto(context: LogtoContext): Promise<User | n
     return updatedUser;
   }
 
-  // Create new user
   const [newUser] = await db
     .insert(users)
     .values({
@@ -110,12 +72,6 @@ export async function syncUserFromLogto(context: LogtoContext): Promise<User | n
   return newUser;
 }
 
-/**
- * Gets a user by their Logto ID without syncing.
- *
- * @param logtoId - The Logto user ID (sub claim)
- * @returns The user record or null if not found
- */
 export async function getUserByLogtoId(logtoId: string): Promise<User | null> {
   const result = await db
     .select()
@@ -126,12 +82,6 @@ export async function getUserByLogtoId(logtoId: string): Promise<User | null> {
   return result[0] ?? null;
 }
 
-/**
- * Gets a user by their local database ID.
- *
- * @param id - The local user UUID
- * @returns The user record or null if not found
- */
 export async function getUserById(id: string): Promise<User | null> {
   const result = await db
     .select()
@@ -142,13 +92,6 @@ export async function getUserById(id: string): Promise<User | null> {
   return result[0] ?? null;
 }
 
-/**
- * Updates user preferences (local fields, not synced from Logto).
- *
- * @param logtoId - The Logto user ID
- * @param preferences - The preferences to update
- * @returns The updated user record or null if not found
- */
 export async function updateUserPreferences(
   logtoId: string,
   preferences: {

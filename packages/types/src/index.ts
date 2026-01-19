@@ -88,12 +88,8 @@ export interface Tool {
   thumbnail?: Media;
   /** Tool type with full details */
   toolType: ToolTypeInfo;
-  /** Localized prompt template (optional) */
-  promptTemplate?: string;
-  /** Tool-specific configuration */
+  /** Tool-specific configuration (UI options, processing hints, etc.) */
   configJson?: Record<string, unknown>;
-  /** AI processing endpoint */
-  aiEndpoint?: string;
   /** Whether the tool is active */
   isActive: boolean;
   /** Whether the tool is featured on homepage */
@@ -154,14 +150,6 @@ export interface ToolListItem {
 export type TaskStatus = 'pending' | 'processing' | 'success' | 'failed';
 
 /**
- * AI output type categories.
- * - image: 2D image output
- * - model_3d: 3D model output
- * - fabrication: Physical fabrication parameters
- */
-export type OutputType = 'image' | 'model_3d' | 'fabrication';
-
-/**
  * Task output data structure.
  * Contains URLs and metadata for generated content.
  *
@@ -210,7 +198,6 @@ export interface TaskOutputData {
  *   userId: 'logto-user-123',
  *   toolSlug: 'anime-style',
  *   inputParams: { prompt: 'anime style', seed: 42 },
- *   outputType: 'image',
  *   outputData: { previewUrl: '...', downloadUrl: '...' },
  *   status: 'success',
  *   createdAt: new Date(),
@@ -227,8 +214,6 @@ export interface Task {
   toolSlug: string;
   /** Input parameters (prompt, seed, etc.) */
   inputParams?: Record<string, unknown>;
-  /** Type of output generated */
-  outputType?: OutputType;
   /** Generated output data */
   outputData?: TaskOutputData;
   /** Current processing status */

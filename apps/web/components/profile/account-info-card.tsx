@@ -2,22 +2,23 @@
 
 import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
+import { UserIcon, ChevronDownIcon } from '@/components/icons';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 
-type User = {
+interface User {
   id: string;
   name?: string;
   email?: string;
   emailVerified?: boolean;
   createdAt?: number;
-};
+}
 
-type AccountInfoCardProps = {
+interface AccountInfoCardProps {
   user: User;
   formattedDate?: string;
-};
+}
 
 export function AccountInfoCard({ user, formattedDate }: AccountInfoCardProps) {
   const t = useTranslations('profile');
@@ -25,7 +26,6 @@ export function AccountInfoCard({ user, formattedDate }: AccountInfoCardProps) {
   const [memberSince, setMemberSince] = useState(formattedDate || t('account.unknown'));
 
   useEffect(() => {
-    // Format date on client side to avoid hydration mismatch
     if (user.createdAt) {
       const date = new Date(user.createdAt * 1000);
       setMemberSince(date.toLocaleDateString(undefined, {
@@ -46,7 +46,7 @@ export function AccountInfoCard({ user, formattedDate }: AccountInfoCardProps) {
                 <UserIcon className="h-5 w-5" />
                 {t('account.title')}
               </CardTitle>
-              <ChevronIcon className={cn('h-5 w-5 transition-transform', isOpen && 'rotate-180')} />
+              <ChevronDownIcon className={cn('h-5 w-5 transition-transform', isOpen && 'rotate-180')} />
             </div>
           </CardHeader>
         </CollapsibleTrigger>
@@ -68,19 +68,15 @@ export function AccountInfoCard({ user, formattedDate }: AccountInfoCardProps) {
   );
 }
 
-function InfoRow({
-  label,
-  value,
-  mono,
-  badge,
-  badgeVariant,
-}: {
+interface InfoRowProps {
   label: string;
   value: string;
   mono?: boolean;
   badge?: string;
   badgeVariant?: 'success' | 'warning';
-}) {
+}
+
+function InfoRow({ label, value, mono, badge, badgeVariant }: InfoRowProps) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 py-2 border-b last:border-0">
       <span className="text-sm text-muted-foreground sm:w-32 shrink-0">{label}</span>
@@ -96,40 +92,5 @@ function InfoRow({
         )}
       </div>
     </div>
-  );
-}
-
-function UserIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  );
-}
-
-function ChevronIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="m6 9 6 6 6-6" />
-    </svg>
   );
 }

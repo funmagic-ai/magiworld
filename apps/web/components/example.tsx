@@ -1,13 +1,12 @@
 import { cn } from "@/lib/utils"
 
-function ExampleWrapper({ className, ...props }: React.ComponentProps<"div">) {
+export function ExampleWrapper({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div className="bg-background w-full">
       <div
         data-slot="example-wrapper"
         className={cn(
           "mx-auto grid min-h-dvh w-full max-w-5xl min-w-0 content-center items-start gap-8 p-4 pt-2 sm:gap-12 sm:p-6 md:grid-cols-2 md:gap-8 lg:p-12 2xl:max-w-6xl",
-
           className
         )}
         {...props}
@@ -16,16 +15,18 @@ function ExampleWrapper({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function Example({
+interface ExampleProps extends React.ComponentProps<"div"> {
+  title: string
+  containerClassName?: string
+}
+
+export function Example({
   title,
   children,
   className,
   containerClassName,
   ...props
-}: React.ComponentProps<"div"> & {
-  title: string
-  containerClassName?: string
-}) {
+}: ExampleProps) {
   return (
     <div
       data-slot="example"
@@ -50,5 +51,3 @@ function Example({
     </div>
   )
 }
-
-export { ExampleWrapper, Example }

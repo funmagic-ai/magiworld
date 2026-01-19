@@ -17,7 +17,7 @@
 14. [Environment Configuration](#14-environment-configuration)
 15. [Development Workflow](#15-development-workflow)
 16. [Open Questions](#16-open-questions)
-17. [AI SDK Integration](#17-ai-sdk-integration)
+17. [AI Provider Integration](#17-ai-provider-integration)
 18. [CloudFront Signed URLs](#18-cloudfront-signed-urls)
 19. [Magi AI Assistant](#19-magi-ai-assistant)
 20. [Web App Tools](#20-web-app-tools)
@@ -25,6 +25,7 @@
 22. [OEM/White-Label System](#22-oemwhite-label-system)
 23. [Attribution Tracking](#23-attribution-tracking)
 24. [Admin User Management](#24-admin-user-management)
+25. [Future Scaling: Separate Workers and Redis](#25-future-scaling-separate-workers-and-redis)
 
 ---
 
@@ -38,6 +39,119 @@ Magiworld is an AI-powered creative platform that provides various AI tools for 
 - **Performance**: Fast loading with aggressive code splitting
 - **Maintainability**: Clean separation between admin configuration and frontend rendering
 
+### 1.1 User Roles & Tool Lifecycle
+
+The platform has three distinct user roles that work together to deliver AI tools to end users:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           Tool Lifecycle Overview                                │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐   │
+│  │  Developer   │───▶│  Admin User  │───▶│   Web User   │───▶│    Worker    │   │
+│  │              │    │              │    │              │    │              │   │
+│  │ Build & Ship │    │  Configure   │    │  Use Tools   │    │Process Tasks │   │
+│  └──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘   │
+│         │                   │                   │                   │           │
+│         ▼                   ▼                   ▼                   ▼           │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐   │
+│  │ • UI Component│    │ • Add tool   │    │ • Upload     │    │ • Call AI    │   │
+│  │ • Processor   │    │ • Set config │    │   image      │    │   provider   │   │
+│  │ • Tool handler│    │ • Banners    │    │ • Create task│    │ • Upload S3  │   │
+│  │ • Deploy      │    │ • Thumbnails │    │ • Get result │    │ • Notify user│   │
+│  └──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘   │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Developer Responsibilities
+
+Developers build new AI tools and deploy them to production. The development process involves:
+
+| Step | Location | Description |
+|------|----------|-------------|
+| 1. Create UI Component | `apps/web/components/tools/` | Build React component for tool interface (upload, parameters, preview) |
+| 2. Register Component | `apps/web/lib/tool-registry.ts` | Map tool slug to component in TOOL_COMPONENTS registry |
+| 3. Create Processor | `apps/worker/src/processors/` | Implement job processor for AI provider (Fal.ai, Google, OpenAI) |
+| 4. Create Tool Handler | `apps/worker/src/tools/` | Implement tool-specific logic that calls the processor |
+| 5. Update Schema | `packages/db/src/schema.ts` | Add any new database fields if needed |
+| 6. Deploy | CI/CD | Ship to production (web, admin, worker containers) |
+
+**Example: Adding a new "Image Upscale" tool:**
+```
+1. Create apps/web/components/tools/UpscaleInterface.tsx
+2. Add to TOOL_COMPONENTS: { 'image-upscale': UpscaleInterface }
+3. Create apps/worker/src/tools/image-upscale.ts
+4. Deploy all apps to production
+5. → Tool is now available for Admin to configure
+```
+
+#### Admin User Responsibilities
+
+Admin users configure and publish tools that developers have built. They use `apps/admin` to:
+
+| Action | Description |
+|--------|-------------|
+| **Add New Tool** | Create tool entry with slug matching developer's registered component |
+| **Set Tool Config** | Configure `toolConfig` JSON with parameters, options, and defaults |
+| **Upload Thumbnails** | Add tool icons, preview images for display in tool catalog |
+| **Create Banners** | Design promotional banners for homepage and marketing |
+| **Manage Providers** | Configure AI provider credentials and monitor health |
+| **Monitor Tasks** | View dead letter queue, retry failed tasks |
+
+**Tool Configuration Flow:**
+```
+Admin Panel → Tools → Add New Tool
+├── Basic Info: name, slug (must match registered component), description
+├── Pricing: credits required, subscription tier
+├── Tool Config (JSON): AI model, parameters, validation rules
+├── Thumbnails: icon, preview images
+└── Publish: isActive = true → Tool appears on web app
+```
+
+#### Web User Capabilities
+
+Web users (end users) interact with published tools through `apps/web`:
+
+| Action | Flow |
+|--------|------|
+| **Discover Tools** | Browse tool catalog, filter by category/type |
+| **Use Tool** | Upload image → Adjust parameters → Submit task |
+| **Track Progress** | Real-time progress updates via SSE |
+| **Get Results** | Download AI-generated output, view in library |
+| **Share Results** | Generate public share links |
+
+#### Worker Processing
+
+The `apps/worker` processes tasks asynchronously via BullMQ:
+
+| Step | Description |
+|------|-------------|
+| 1. Receive Job | Pick up job from Redis queue |
+| 2. Load Tool Config | Get tool settings from database |
+| 3. Call AI Provider | Send request to Fal.ai/Google/OpenAI |
+| 4. Upload Result | Store output in S3 private bucket |
+| 5. Update Task | Mark as completed, store result URL |
+| 6. Notify User | Publish update via Redis pub/sub → SSE |
+
+**Complete Flow Example:**
+```
+Developer ships "background-remove" tool
+       ↓
+Admin adds tool with slug="background-remove", configures BRIA RMBG model
+       ↓
+User uploads image, clicks "Remove Background"
+       ↓
+Web API creates task (status: pending), enqueues to BullMQ
+       ↓
+Worker picks up job, calls Fal.ai BRIA RMBG API
+       ↓
+Worker uploads result to S3, updates task (status: completed)
+       ↓
+User sees result via SSE, downloads transparent PNG
+```
+
 ---
 
 ## 2. Tech Stack
@@ -47,6 +161,7 @@ Magiworld is an AI-powered creative platform that provides various AI tools for 
 | Framework | Next.js (App Router) | 16.1.1 |
 | Database ORM | Drizzle ORM | latest |
 | Database | PostgreSQL | 15+ |
+| Cache/Queue | Redis + BullMQ | 7+ / latest |
 | Styling | Tailwind CSS | v4 |
 | UI Components | shadcn/ui | latest |
 | Monorepo | Turborepo + pnpm | latest |
@@ -91,16 +206,27 @@ magiworld/
 │   │       ├── pt.json
 │   │       └── zh.json
 │   │
-│   └── admin/                  # Admin dashboard application
-│       ├── app/
-│       │   ├── page.tsx            # Dashboard
-│       │   ├── tools/              # Tools CRUD
-│       │   ├── tool-types/         # Tool Types CRUD
-│       │   ├── categories/         # Categories CRUD
-│       │   ├── banners/            # Banners CRUD
-│       │   └── media/              # Media management
-│       └── lib/
-│           └── utils.ts
+│   ├── admin/                  # Admin dashboard application
+│   │   ├── app/
+│   │   │   ├── page.tsx            # Dashboard
+│   │   │   ├── tools/              # Tools CRUD
+│   │   │   ├── tool-types/         # Tool Types CRUD
+│   │   │   ├── banners/            # Banners CRUD
+│   │   │   └── media/              # Media management
+│   │   └── lib/
+│   │       └── utils.ts
+│   │
+│   └── worker/                 # BullMQ task worker
+│       └── src/
+│           ├── index.ts            # Worker entry point
+│           ├── config.ts           # Environment configuration
+│           ├── s3.ts               # S3 upload utilities
+│           ├── processors/         # Job processors
+│           │   ├── base.ts         # Base processor class
+│           │   ├── fal-ai.ts       # Fal.ai processor
+│           │   └── google.ts       # Google AI processor
+│           └── tools/              # Tool-specific handlers
+│               └── background-remove.ts
 │
 ├── packages/
 │   ├── db/                    # @magiworld/db - Shared database
@@ -108,6 +234,15 @@ magiworld/
 │   │       ├── schema.ts      # Drizzle schema
 │   │       ├── index.ts       # Database client
 │   │       └── seed.ts        # Seed script
+│   ├── queue/                 # @magiworld/queue - BullMQ utilities
+│   │   └── src/
+│   │       ├── index.ts       # Queue exports
+│   │       ├── connection.ts  # Redis connection
+│   │       ├── queues.ts      # Queue factory
+│   │       ├── pubsub.ts      # Redis pub/sub
+│   │       ├── ratelimit.ts   # User rate limiting
+│   │       ├── idempotency.ts # Duplicate prevention
+│   │       └── circuit-breaker.ts # Circuit breaker
 │   ├── types/                 # @magiworld/types
 │   │   └── src/
 │   │       └── index.ts
@@ -126,10 +261,19 @@ magiworld/
 | Package | Purpose |
 |---------|---------|
 | `@magiworld/db` | Shared Drizzle schema and database client |
+| `@magiworld/queue` | BullMQ queue factory, Redis connection, pub/sub, rate limiting, circuit breaker |
 | `@magiworld/types` | Shared TypeScript interfaces (Tool, Task, User, etc.) |
-| `@magiworld/utils` | Common utilities (date formatting, slug generation, etc.) |
+| `@magiworld/utils` | Common utilities (date formatting, slug generation, logging, etc.) |
 
-> **Note**: Both apps (`web`, `admin`) share the same database via `@magiworld/db` package.
+### Application Responsibilities
+
+| App | Purpose |
+|-----|---------|
+| `apps/web` | User-facing Next.js application |
+| `apps/admin` | Admin dashboard for managing tools, banners, providers |
+| `apps/worker` | BullMQ worker for processing AI tasks asynchronously |
+
+> **Note**: All apps (`web`, `admin`, `worker`) share the same database via `@magiworld/db` package.
 
 ---
 
@@ -209,7 +353,6 @@ Both web and admin apps connect to the same PostgreSQL database via the shared `
 │  ┌──────────────────────────────────────────────────┐  │
 │  │                 Shared Tables                      │  │
 │  │  - tool_types / tool_type_translations            │  │
-│  │  - categories / category_translations              │  │
 │  │  - tools / tool_translations                       │  │
 │  │  - home_banners / home_banner_translations         │  │
 │  │  - media                                           │  │
@@ -258,13 +401,15 @@ All tables are defined in `packages/db/src/schema.ts`:
 ```typescript
 export const badgeColorEnum = pgEnum('badge_color', ['default', 'secondary', 'outline']);
 export const taskStatusEnum = pgEnum('task_status', ['pending', 'processing', 'success', 'failed']);
-export const outputTypeEnum = pgEnum('output_type', ['image', 'model_3d', 'fabrication']);
 export const localeEnum = pgEnum('locale', ['en', 'ja', 'pt', 'zh']);
+export const providerStatusEnum = pgEnum('provider_status', ['active', 'inactive', 'degraded']);
+export const circuitStateEnum = pgEnum('circuit_state', ['closed', 'open', 'half_open']);
+export const deadLetterStatusEnum = pgEnum('dead_letter_status', ['pending', 'retried', 'archived']);
 ```
 
 #### Content Management Tables
 - `tool_types` + `tool_type_translations` - Tool classifications (slug, badgeColor, order, isActive)
-- `tools` + `tool_translations` - Individual AI tools (aiEndpoint, promptTemplate, thumbnailUrl, configJson)
+- `tools` + `tool_translations` - Individual AI tools (thumbnailUrl, configJson, priceConfig)
 - `home_banners` + `home_banner_translations` - Homepage banners (type: 'main' | 'side')
 - `folders` - Hierarchical media organization (self-referencing parentId)
 - `media` - Uploaded media files (url, mimeType, dimensions, size)
@@ -276,15 +421,105 @@ export const localeEnum = pgEnum('locale', ['en', 'ja', 'pt', 'zh']);
 #### OEM & White-Label Tables
 - `oem_software_brands` - White-label brand configurations (softwareId, themeConfig, allowedToolTypeIds)
 
+#### Provider Tables
+- `providers` - AI provider configurations (apiKeyEncrypted, rateLimits, circuitState, status)
+
 #### Task Tables
-- `tasks` - User-generated AI tasks (userId, toolId, inputParams, outputType, outputData, status)
+- `tasks` - User-generated AI tasks with full queue metadata
+- `dead_letter_tasks` - Failed jobs for manual review and retry
+- `task_usage_logs` - Provider usage tracking for billing
 
 #### Attribution Tables
 - `user_attributions` - First-touch UTM tracking at registration
 - `user_logins` - Per-session login tracking (brandId, channel, ipAddress, userAgent)
 - `payment_attributions` - Last-touch payment attribution (paymentId, amount, currency, UTM params)
 
-### 5.2 Entity Relationship
+### 5.2 Task Orchestrator Schema
+
+#### providers
+```typescript
+providers = pgTable('providers', {
+  id: uuid().primaryKey().defaultRandom(),
+  slug: text().notNull().unique(),           // 'fal_ai' | 'google' | 'openai'
+  name: text().notNull(),
+  apiKeyEncrypted: text(),                   // Encrypted API key
+  baseUrl: text(),                           // Optional custom endpoint
+  rateLimitMax: integer().default(100),      // Max requests per window
+  rateLimitWindow: integer().default(60000), // Window in ms
+  defaultTimeout: integer().default(120000), // Timeout in ms
+  status: providerStatusEnum().default('active'),
+  circuitState: circuitStateEnum().default('closed'),
+  circuitOpenedAt: timestamp(),
+  failureCount: integer().default(0),
+  configJson: jsonb(),                       // Provider-specific config
+  isActive: boolean().default(true),
+  createdAt: timestamp().defaultNow(),
+  updatedAt: timestamp().defaultNow(),
+});
+```
+
+#### tasks (extended)
+```typescript
+tasks = pgTable('tasks', {
+  id: uuid().primaryKey().defaultRandom(),
+  userId: uuid().references(() => users.id),
+  toolId: uuid().references(() => tools.id),
+  providerId: uuid().references(() => providers.id),
+  inputParams: jsonb(),
+  outputData: jsonb(),
+  status: taskStatusEnum().default('pending'),
+  errorMessage: text(),
+  progress: integer().default(0),
+  priority: integer().default(5),            // 1-20, higher = more urgent
+  bullJobId: text(),                         // BullMQ job reference
+  idempotencyKey: text().unique(),
+  requestId: text(),
+  attemptsMade: integer(),
+  startedAt: timestamp(),
+  completedAt: timestamp(),
+  createdAt: timestamp().defaultNow(),
+  updatedAt: timestamp().defaultNow(),
+});
+```
+
+#### dead_letter_tasks
+```typescript
+deadLetterTasks = pgTable('dead_letter_tasks', {
+  id: uuid().primaryKey().defaultRandom(),
+  originalTaskId: uuid().references(() => tasks.id),
+  queue: text().notNull(),                   // Queue name where job failed
+  errorMessage: text().notNull(),
+  errorStack: text(),
+  attemptsMade: integer().notNull(),
+  payload: jsonb().notNull(),                // Full job data for replay
+  status: deadLetterStatusEnum().default('pending'),
+  reviewNotes: text(),
+  retriedAt: timestamp(),
+  createdAt: timestamp().defaultNow(),
+});
+```
+
+#### task_usage_logs
+```typescript
+taskUsageLogs = pgTable('task_usage_logs', {
+  id: uuid().primaryKey().defaultRandom(),
+  taskId: uuid().references(() => tasks.id),
+  userId: uuid().references(() => users.id),
+  providerId: uuid().references(() => providers.id),
+  toolId: uuid().references(() => tools.id),
+  modelName: text(),
+  modelVersion: text(),
+  priceConfig: jsonb(),                      // Snapshot of pricing at execution
+  usageData: jsonb(),                        // Provider-specific usage metrics
+  costUsd: text(),                           // Calculated cost
+  latencyMs: integer(),
+  status: text(),                            // 'success' | 'failed'
+  errorMessage: text(),
+  createdAt: timestamp().defaultNow(),
+});
+```
+
+### 5.3 Entity Relationship
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -377,7 +612,7 @@ export const localeEnum = pgEnum('locale', ['en', 'ja', 'pt', 'zh']);
 ```
 
 #### Tool Discovery Section
-- Display tools grouped by category
+- Display tools grouped by tool type
 - Each tool card shows: thumbnail, title, last updated time
 - Support infinite scroll or pagination
 
@@ -412,15 +647,18 @@ export default async function ToolPage({ params }) {
 #### Polymorphic Viewer
 
 ```typescript
+// Determine viewer based on file extension from output URL
 function AssetViewer({ task }: { task: Task }) {
-  switch (task.outputType) {
-    case 'image':
-      return <ImageViewer src={task.outputData.previewUrl} />;
-    case 'model_3d':
-      return <ModelViewer src={task.outputData.glbUrl} />;
-    case 'fabrication':
-      return <FabricationPreview data={task.outputData} />;
+  const url = task.outputData?.url || '';
+  const ext = url.split('.').pop()?.toLowerCase();
+
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext || '')) {
+    return <ImageViewer src={url} />;
   }
+  if (['glb', 'gltf'].includes(ext || '')) {
+    return <ModelViewer src={url} />;
+  }
+  return <GenericPreview data={task.outputData} />;
 }
 ```
 
@@ -670,41 +908,37 @@ We use **four separate S3 buckets** with CloudFront for better isolation, securi
 
 #### 1. funmagic-admin-users-assets (Private)
 
-Admin users' library uploads and Magi tool generated files.
+Admin users' library uploads and Magi tool generated files. All paths include `{adminId}` for per-admin file management.
 
 ```
 funmagic-admin-users-assets/
-└── {userid}/
-    └── library/
-        ├── upload/
-        │   └── {yyyymmdd}/
-        │       └── {filename}
-        └── generated/
-            ├── magi-chat/
-            │   └── {yyyymmdd}/
-            │       └── {filename}
-            └── {tool-slug}/
-                └── {yyyymmdd}/
-                    └── {filename}
+├── {env}/                              # Environment prefix (dev/staging/prod)
+│   ├── library/
+│   │   └── {adminId}/
+│   │       └── {name}-{timestamp}.{ext}
+│   └── magi/
+│       └── {adminId}/
+│           └── {name}-{timestamp}.{ext}
 ```
 
 #### 2. funmagic-web-public-assets (Public)
 
-Banners, tool thumbnails, and static UI assets.
+Banners, tool thumbnails, and static UI assets. All admin-uploaded paths include `{adminId}` to track which admin uploaded the asset.
 
 ```
 funmagic-web-public-assets/
-├── banners/
-│   ├── main/
-│   │   └── {name}-{timestamp}.jpg
-│   └── side/
-│       └── {name}-{timestamp}.jpg
-├── tools/
-│   └── {tool-slug}/
-│       ├── thumbnail/
-│       │   └── {filename}
-│       └── page_banner/
-│           └── {filename}
+├── {env}/                              # Environment prefix (dev/staging/prod)
+│   ├── banners/
+│   │   └── {adminId}/
+│   │       └── {name}-{timestamp}.{ext}
+│   ├── tools/
+│   │   └── {adminId}/
+│   │       └── {toolId}/
+│   │           └── {type}/             # thumbnail, images, etc.
+│   │               └── {name}-{timestamp}.{ext}
+│   └── brands/
+│       └── {adminId}/
+│           └── {name}-{timestamp}.{ext}
 ├── ui/
 │   └── {icons, placeholders, etc.}
 └── fonts/
@@ -713,19 +947,25 @@ funmagic-web-public-assets/
 
 #### 3. funmagic-web-users-assets-private (Private)
 
-Web users' uploaded and AI-generated files.
+Web users' AI task results. All paths include `{userId}` for GDPR compliance, per-user storage quotas, and easy data deletion.
 
 ```
 funmagic-web-users-assets-private/
-└── {userid}/
-    └── {tool-slug}/
-        ├── upload/
-        │   └── {yyyymmdd}/
-        │       └── {filename}
-        └── generated/
-            └── {yyyymmdd}/
-                └── {filename}
+└── tasks/
+    └── {userId}/
+        └── {year}/
+            └── {month}/
+                └── {day}/
+                    └── {taskId}.{ext}
 ```
+
+**Path pattern:** `tasks/{userId}/{YYYY}/{MM}/{DD}/{taskId}.{extension}`
+
+This structure enables:
+- Per-user file management and storage quotas
+- GDPR compliance (easy to delete all user data by userId prefix)
+- Date-based organization for archival and lifecycle policies
+- Efficient listing of user's recent task results
 
 #### 4. funmagic-web-users-assets-shared (Public)
 
@@ -870,17 +1110,344 @@ const generateKey = (filename: string, folder: string) => {
 
 ## 11. Task Processing & Queue
 
-### Decision: Inngest
+### Decision: BullMQ + Redis
 
-Inngest is chosen for its:
-- Serverless-friendly architecture
-- Built for Next.js integration
-- Easy local development
-- Automatic retries and error handling
+The platform uses **BullMQ** with Redis for distributed task processing, chosen for:
+- High-performance, Redis-backed job queue
+- Native TypeScript support
+- Advanced job scheduling and prioritization
+- Built-in retry with exponential backoff
+- Real-time job events via Redis Pub/Sub
+- Distributed workers for horizontal scaling
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Task Orchestrator Architecture                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│   Web App (3000)                             Worker (standalone)             │
+│        │                                            │                         │
+│        ▼                                            ▼                         │
+│   ┌─────────────────┐                    ┌─────────────────────┐             │
+│   │ POST /api/tasks │                    │   BullMQ Workers    │             │
+│   │                 │                    │   (per queue)       │             │
+│   │ 1. Auth user    │                    │                     │             │
+│   │ 2. Check idem   │                    │ ┌─────────────────┐ │             │
+│   │ 3. Check concur │                    │ │ Tool Processors │ │             │
+│   │ 4. Create task  │                    │ │ - background-rm │ │             │
+│   │ 5. Enqueue job  │                    │ │ - image-gen     │ │             │
+│   └────────┬────────┘                    │ │ - upscale       │ │             │
+│            │                             │ └─────────────────┘ │             │
+│            ▼                             └──────────┬──────────┘             │
+│   ┌─────────────────────────────────────────────────┼─────────────────────┐ │
+│   │                          Redis                   │                     │ │
+│   │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────┴─────┐               │ │
+│   │  │ fal_ai   │ │  google  │ │  openai  │ │  default   │               │ │
+│   │  │  queue   │ │  queue   │ │  queue   │ │   queue    │               │ │
+│   │  └──────────┘ └──────────┘ └──────────┘ └────────────┘               │ │
+│   │                                                                       │ │
+│   │  ┌────────────────────┐  ┌────────────────────┐                      │ │
+│   │  │ Pub/Sub Channels   │  │ Rate Limiting Keys │                      │ │
+│   │  │ task:user:{userId} │  │ user:tasks:active  │                      │ │
+│   │  └────────────────────┘  └────────────────────┘                      │ │
+│   │                                                                       │ │
+│   │  ┌────────────────────┐  ┌────────────────────┐                      │ │
+│   │  │ Circuit Breaker    │  │ Idempotency Keys   │                      │ │
+│   │  │ circuit:{provider} │  │ idem:{user}:{hash} │                      │ │
+│   │  └────────────────────┘  └────────────────────┘                      │ │
+│   └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                               │
+│   ┌─────────────────────────────────────────────────────────────────────────┐│
+│   │                          PostgreSQL                                      ││
+│   │  ┌──────────┐ ┌──────────┐ ┌─────────────────┐ ┌──────────────────┐    ││
+│   │  │  tasks   │ │providers │ │ dead_letter_    │ │ task_usage_logs  │    ││
+│   │  │          │ │          │ │ tasks           │ │                  │    ││
+│   │  └──────────┘ └──────────┘ └─────────────────┘ └──────────────────┘    ││
+│   └─────────────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Task Lifecycle
+
+#### 1. Task Creation (POST /api/tasks)
+```
+1. Authenticate user (Logto)
+2. Parse request: { toolId, inputParams, idempotencyKey? }
+3. Check idempotency (Redis) - return existing task if duplicate
+4. Check user concurrency limit (Redis) - max 5 active tasks
+5. Look up tool (DB) - verify exists and active
+6. Create task record (DB, status: pending)
+7. Increment user active task count (Redis)
+8. Store idempotency key (Redis, 1-hour TTL)
+9. Enqueue job to BullMQ (default queue)
+10. Return { taskId, status: 'pending' }
+```
+
+#### 2. Task Processing (Worker)
+```
+1. Worker picks up job from queue
+2. Validate tool is supported
+3. Get tool processor wrapper
+4. Execute processor:
+   a. Update progress (10%)
+   b. Get provider credentials from DB
+   c. Call provider API (fal.ai, Google Gemini, etc.)
+   d. Update progress (70%)
+   e. Upload result to S3
+   f. Update progress (100%)
+5. Complete task:
+   a. Update DB: status=success, outputData, completedAt
+   b. Decrement user active task count (Redis)
+   c. Publish update for SSE
+   d. Log usage for billing
+```
+
+#### 3. Real-Time Updates (SSE)
+```
+GET /api/tasks/{taskId}/stream
+1. Authenticate user
+2. Verify task ownership
+3. If already complete: return final status
+4. Create SSE stream
+5. Subscribe to Redis channel: task:user:{userId}
+6. Stream updates as SSE events
+7. Close on terminal status (success/failed)
+```
+
+### Queue Package (@magiworld/queue)
+
+Located in `packages/queue/`, provides:
+
+| Module | Purpose |
+|--------|---------|
+| `redis.ts` | Redis client singleton with TLS support |
+| `queues.ts` | BullMQ queue factory (fal_ai, google, openai, default) |
+| `pubsub.ts` | Redis Pub/Sub for real-time updates |
+| `ratelimit.ts` | User-level concurrency limiting |
+| `idempotency.ts` | Duplicate request prevention |
+| `circuit-breaker.ts` | Distributed circuit breaker |
+| `types.ts` | Shared TypeScript types |
+
+### Worker Application (@magiworld/worker)
+
+Located in `apps/worker/`, provides:
+
+| Component | Purpose |
+|-----------|---------|
+| `index.ts` | Entry point, creates workers for all queues |
+| `config.ts` | Zod-validated environment variables |
+| `s3.ts` | S3 upload utilities with userId in paths |
+| `processors/base.ts` | Base processor with progress/completion helpers |
+| `processors/wrapper.ts` | Wraps tool processors with base functionality |
+| `tools/index.ts` | Tool processor registry |
+| `tools/background-remove.ts` | Background removal tool processor |
+| `tools/types.ts` | Tool processor interfaces |
+| `tools/provider-client.ts` | Fetch provider credentials from DB |
+
+### Fault Tolerance
+
+#### Circuit Breaker
+- Redis-backed distributed circuit breaker
+- States: `closed` → `open` (after 5 failures) → `half-open` (after 30s)
+- Prevents cascade failures to external providers
+- Admin UI for manual reset
+
+#### Dead Letter Queue
+- Failed jobs (after 3 retries) moved to `dead_letter_tasks` table
+- Contains: original task ID, error message/stack, attempts, full payload
+- Admin UI for review and manual retry
+
+#### Idempotency
+- Prevents duplicate processing from retries
+- 1-hour TTL per user+idempotency key
+- Key pattern: `idem:{userId}:{hash}`
+
+#### Graceful Shutdown
+- Pauses workers on SIGTERM/SIGINT
+- Waits for active jobs to complete (configurable timeout)
+- Closes all connections cleanly
+
+### Rate Limiting
+
+#### User-Level (Concurrency)
+- Max 5 concurrent active tasks per user (configurable)
+- Redis key: `user:tasks:active:{userId}`
+- Incremented on task creation, decremented on completion
+- TTL: 1 hour (auto-extends on activity)
+
+#### Provider-Level (Queue)
+- BullMQ job options: 3 attempts, exponential backoff
+- Per-provider rate limits stored in database
+- Default timeout: 120 seconds
+
+### Queue Isolation (Web vs Admin)
+
+The platform supports separate queues for web users and admin users through the `QUEUE_PREFIX` environment variable:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Queue Isolation Architecture                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│   Web App (port 3000)                    Admin App (port 3001)               │
+│   QUEUE_PREFIX=""                        QUEUE_PREFIX="admin"                │
+│        │                                        │                             │
+│        ▼                                        ▼                             │
+│   ┌─────────────────┐                    ┌─────────────────┐                 │
+│   │ POST /api/tasks │                    │ POST /api/tasks │                 │
+│   │ Priority: WEB=5 │                    │ Priority: ADMIN=15│                │
+│   └────────┬────────┘                    └────────┬────────┘                 │
+│            │                                      │                           │
+│            ▼                                      ▼                           │
+│   ┌─────────────────────────────────────────────────────────────────────────┐│
+│   │                          Redis                                           ││
+│   │  ┌──────────────────────────┐  ┌──────────────────────────┐            ││
+│   │  │ Web Queues               │  │ Admin Queues             │            ││
+│   │  │ • default                │  │ • admin:default          │            ││
+│   │  │ • fal_ai                 │  │ • admin:fal_ai           │            ││
+│   │  │ • google                 │  │ • admin:google           │            ││
+│   │  └──────────────────────────┘  └──────────────────────────┘            ││
+│   └─────────────────────────────────────────────────────────────────────────┘│
+│            │                                      │                           │
+│            ▼                                      ▼                           │
+│   ┌─────────────────┐                    ┌─────────────────┐                 │
+│   │ Web Worker      │                    │ Admin Worker    │                 │
+│   │ QUEUE_PREFIX="" │                    │ QUEUE_PREFIX="admin"│             │
+│   │ Uses: providers │                    │ Uses: adminProviders│             │
+│   └─────────────────┘                    └─────────────────┘                 │
+│                                                                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Queue Prefix Configuration
+
+| Environment | QUEUE_PREFIX | Queue Names | Provider Table |
+|-------------|--------------|-------------|----------------|
+| Web App | `` (empty) | `default`, `fal_ai`, `google` | `providers` |
+| Admin App | `admin` | `admin:default`, `admin:fal_ai`, `admin:google` | `admin_providers` |
+
+#### Benefits of Isolation
+
+- **Cost Tracking**: Separate API keys allow tracking admin vs user usage
+- **Rate Limiting**: Admin usage doesn't affect user quotas
+- **Scaling**: Can scale admin and web workers independently
+- **Priority**: Web tasks have higher priority (processed first)
+
+### Task Priority
+
+BullMQ uses numeric priority where **lower numbers = higher priority** (processed first).
+
+```typescript
+export enum TaskPriority {
+  URGENT = 1,   // Highest priority - emergency tasks
+  HIGH = 5,     // High priority
+  WEB = 5,      // Web user tasks (default for web app)
+  NORMAL = 10,  // Normal priority
+  ADMIN = 15,   // Admin tasks (default for admin app)
+  LOW = 20,     // Background/batch tasks
+}
+```
+
+| Source | Default Priority | Value | Processing Order |
+|--------|-----------------|-------|------------------|
+| Web App | `TaskPriority.WEB` | 5 | First |
+| Admin App | `TaskPriority.ADMIN` | 15 | Second |
+| Background Jobs | `TaskPriority.LOW` | 20 | Last |
 
 ---
 
-## 12. API Security
+## 12. Provider Management
+
+### Overview
+
+AI providers are managed through the database with admin UI for configuration. This allows runtime updates without code deployment.
+
+### Provider Configuration
+
+```typescript
+interface Provider {
+  id: string;
+  slug: string;               // 'fal_ai' | 'google' | 'openai'
+  name: string;               // Display name
+  apiKeyEncrypted: string;    // Encrypted API key
+  baseUrl?: string;           // Optional custom endpoint
+  rateLimitMax: number;       // Max requests per window
+  rateLimitWindow: number;    // Window in milliseconds
+  defaultTimeout: number;     // Default timeout in milliseconds
+  status: 'active' | 'inactive' | 'degraded';
+  circuitState: 'closed' | 'open' | 'half_open';
+  circuitOpenedAt?: Date;
+  failureCount: number;
+  configJson?: object;        // Provider-specific config
+  isActive: boolean;
+}
+```
+
+### Admin UI Features
+
+- **List Providers**: Status badges, circuit breaker state, rate limits
+- **Create/Edit Provider**: Configure API keys, rate limits, timeouts
+- **Circuit Breaker**: View state, failure count, manual reset
+- **Status Toggle**: Active/inactive/degraded modes
+
+### Provider Client
+
+Tool processors fetch credentials at runtime. The client automatically selects the correct table based on `QUEUE_PREFIX`:
+
+```typescript
+import { getProviderCredentials } from './provider-client';
+
+// Automatically uses:
+// - providers table (QUEUE_PREFIX="" or undefined)
+// - admin_providers table (QUEUE_PREFIX="admin")
+const credentials = await getProviderCredentials('fal_ai');
+// { slug, apiKey, baseUrl }
+```
+
+### Admin Providers (Cost Isolation)
+
+A separate `admin_providers` table stores API keys for admin Magi tools:
+
+```typescript
+interface AdminProvider {
+  id: string;
+  slug: string;               // 'fal_ai' | 'google'
+  name: string;               // Display name
+  apiKeyEncrypted: string;    // API key (stored as-is, encryption optional)
+  status: 'active' | 'inactive';
+  configJson?: object;        // Provider-specific config (e.g., baseUrl)
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+#### Why Separate Tables?
+
+| Concern | Web `providers` | Admin `admin_providers` |
+|---------|-----------------|------------------------|
+| **Cost Attribution** | User billing | Internal/admin budget |
+| **Rate Limits** | Per-user quotas | No user quotas |
+| **Circuit Breaker** | Full circuit breaker | Simplified (status only) |
+| **Configuration** | Full config (rate limits, timeouts) | Minimal config |
+
+#### Admin Providers UI
+
+Located at `/admin-providers` in the admin app:
+- **List**: View configured providers with masked API keys
+- **Create**: Add new provider (slug, name, API key)
+- **Edit**: Update credentials or status
+- **Delete**: Remove provider (with confirmation)
+
+Required slugs for Magi tools:
+- `fal_ai` - Background removal, image generation, upscaling, rerendering
+- `google` - Nanobanana Pro (Gemini 2.0 Flash image generation)
+
+---
+
+## 13. API Security
 
 ### AI API Proxying
 
@@ -974,10 +1541,16 @@ GOOGLE_GENERATIVE_AI_API_KEY=
 FAL_API_KEY=
 
 # ==============================================
-# Job Queue (Inngest)
+# Redis (BullMQ + Pub/Sub)
 # ==============================================
-INNGEST_EVENT_KEY=
-INNGEST_SIGNING_KEY=
+REDIS_URL=redis://localhost:6379
+REDIS_TLS=false                              # true for AWS ElastiCache
+
+# ==============================================
+# Worker Configuration (apps/worker only)
+# ==============================================
+WORKER_CONCURRENCY=5                         # 1-50 concurrent jobs
+WORKER_SHUTDOWN_TIMEOUT_MS=30000             # Graceful shutdown timeout
 
 # ==============================================
 # Authentication (Logto)
@@ -1038,7 +1611,7 @@ LOGTO_ADMIN_COOKIE_SECRET=
 | 1 | CMS | Custom Admin App with shared Drizzle DB |
 | 2 | Authentication | Logto |
 | 3 | File storage | AWS S3 with CloudFront CDN |
-| 4 | Job queue | Inngest |
+| 4 | Job queue | BullMQ + Redis |
 
 ### Open Questions
 
@@ -1050,47 +1623,53 @@ LOGTO_ADMIN_COOKIE_SECRET=
 
 ---
 
-## 17. AI SDK Integration
+## 17. AI Provider Integration
 
 ### Overview
 
-The admin app uses **Vercel AI SDK** for all AI-powered features. Multiple providers are supported with a unified interface for text generation, image generation, and image processing.
+The platform uses **native provider SDKs** for all AI-powered features. This approach provides full access to provider-specific features, better TypeScript types, and simpler debugging compared to abstraction layers.
 
 ### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          AI SDK Provider Layer                               │
+│                          Native AI Provider SDKs                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                               │
 │  ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐            │
 │  │    OpenAI       │   │     Google      │   │     Fal.ai      │            │
-│  │  @ai-sdk/openai │   │  @ai-sdk/google │   │   @ai-sdk/fal   │            │
+│  │     openai      │   │  @google/genai  │   │ @fal-ai/client  │            │
 │  ├─────────────────┤   ├─────────────────┤   ├─────────────────┤            │
 │  │ • GPT-4o        │   │ • Gemini 2.0    │   │ • BRIA RMBG 2.0 │            │
-│  │ • GPT-4o Mini   │   │ • Gemini 1.5    │   │ • Image Gen     │            │
-│  │ • GPT-4 Turbo   │   │ • Gemini 2.5    │   │ • Image Upscale │            │
-│  │ • GPT-Image-1   │   │   Flash Image   │   │ • Image Rerender│            │
-│  │ • GPT-Image-1.5 │   │ • Gemini 3 Pro  │   │                 │            │
-│  │                 │   │   Image Preview │   │                 │            │
+│  │ • GPT-4o Mini   │   │ • Gemini 1.5    │   │ • Flux Schnell  │            │
+│  │ • GPT-4 Turbo   │   │ • Gemini 2.5    │   │ • Real-ESRGAN   │            │
+│  │                 │   │   Flash Image   │   │ • Flux Dev I2I  │            │
 │  └────────┬────────┘   └────────┬────────┘   └────────┬────────┘            │
 │           │                      │                      │                    │
 │           └──────────────────────┼──────────────────────┘                    │
 │                                  ▼                                           │
-│                        ┌─────────────────────┐                               │
-│                        │   AI SDK Core       │                               │
-│                        │   - streamText      │                               │
-│                        │   - generateText    │                               │
-│                        │   - generateImage   │                               │
-│                        └──────────┬──────────┘                               │
-│                                   │                                          │
-│                                   ▼                                          │
-│                        ┌─────────────────────┐                               │
-│                        │   Chat API Route    │                               │
-│                        │   /api/chat         │                               │
-│                        └─────────────────────┘                               │
+│                      ┌─────────────────────────┐                             │
+│                      │   AI Tool Implementations│                             │
+│                      │   apps/admin/lib/ai/    │                             │
+│                      │   apps/worker/src/tools/│                             │
+│                      └──────────┬──────────────┘                             │
+│                                 │                                            │
+│                                 ▼                                            │
+│                      ┌─────────────────────────┐                             │
+│                      │   Shared AI Utilities   │                             │
+│                      │   @magiworld/utils/ai   │                             │
+│                      └─────────────────────────┘                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `openai` | OpenAI API client for GPT models |
+| `@google/genai` | Google AI client for Gemini models |
+| `@fal-ai/client` | Fal.ai client for image processing models |
+| `@magiworld/utils/ai` | Shared types and helpers for AI operations |
 
 ### Supported Models
 
@@ -1408,6 +1987,78 @@ Messages support multiple content types stored as JSON:
 |----------|--------|-------------|
 | `/api/chat` | POST | Chat with AI (streaming or JSON response) |
 | `/api/upload` | POST | Upload images for chat (route: `chatImages`) |
+| `/api/tasks` | POST/GET | Create tasks, list tasks |
+| `/api/tasks/[taskId]` | GET | Get task status |
+| `/api/tasks/[taskId]/stream` | GET | SSE stream for real-time progress |
+
+### Magi Image Tools (Task-Based)
+
+The Magi image tools use the same task-based architecture as web app tools:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      Magi Tools Task Flow                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│   Admin UI                  Admin API                 Admin Worker           │
+│   ┌─────────────┐          ┌─────────────┐          ┌─────────────┐         │
+│   │ Background  │  POST    │ /api/tasks  │  Enqueue │ QUEUE_PREFIX│         │
+│   │ Remover     │ ───────▶ │             │ ───────▶ │ =admin      │         │
+│   │ Image Gen   │          │ Returns     │          │             │         │
+│   │ Upscaler    │ ◀─────── │ taskId      │          │ Uses:       │         │
+│   │ Rerenderer  │          └─────────────┘          │ admin_      │         │
+│   └─────────────┘                                   │ providers   │         │
+│         │                                           └──────┬──────┘         │
+│         │                                                  │                 │
+│         │  SSE                                             │                 │
+│         │  /api/tasks/{id}/stream                          │ Redis          │
+│         │                                                  │ Pub/Sub        │
+│         ▼                                                  ▼                 │
+│   ┌─────────────┐          ┌─────────────────────────────────┐             │
+│   │ Real-time   │ ◀─────── │ task:user:{adminId} channel     │             │
+│   │ Progress UI │          └─────────────────────────────────┘             │
+│   └─────────────┘                                                           │
+│                                                                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Available Tools
+
+| Tool | Provider | Model |
+|------|----------|-------|
+| Background Remover | fal_ai | BRIA RMBG 2.0 |
+| Image Generator | fal_ai | Flux Schnell |
+| Image Upscaler | fal_ai | Real-ESRGAN |
+| Image Rerenderer | fal_ai | Flux Dev (image-to-image) |
+| Nanobanana Pro | google | Gemini 2.0 Flash |
+
+#### useTask Hook
+
+Admin tools use the `useTask` hook for task lifecycle management:
+
+```typescript
+import { useTask } from './hooks/use-task';
+
+function BackgroundRemover() {
+  const task = useTask();
+
+  const handleProcess = async () => {
+    await task.createTask({
+      toolId: BACKGROUND_REMOVE_TOOL_ID,
+      inputParams: { imageUrl: selectedImage.url },
+    });
+  };
+
+  // Render based on task state
+  return (
+    <div>
+      {task.isLoading && <Progress value={task.progress} />}
+      {task.status === 'success' && <Result url={task.outputData.resultUrl} />}
+      {task.error && <Error message={task.error} />}
+    </div>
+  );
+}
+```
 
 ---
 
@@ -2012,6 +2663,314 @@ if (!adminUser || !adminUser.isActive) {
 
 ---
 
+## 25. Future Scaling: Separate Workers and Redis
+
+### Overview
+
+As the platform grows, you may need to fully isolate web and admin workloads. This section describes how to set up separate BullMQ workers and Redis instances.
+
+### Redis Connection Factory
+
+The queue package provides a flexible Redis connection factory that supports:
+
+- **Multiple Redis URLs**: Different Redis instances for different purposes
+- **Connection Types**: Queue, PubSub, and Default connections
+- **Environment-Aware Settings**: Different timeouts/retries for web vs admin
+- **Named Connections**: Reusable connections with identification
+
+#### Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `REDIS_URL` | Default Redis URL (required) | `rediss://redis.example.com:6379` |
+| `REDIS_QUEUE_URL` | Redis for BullMQ queues (optional) | `rediss://redis-queue.example.com:6379` |
+| `REDIS_PUBSUB_URL` | Redis for pub/sub (optional) | `rediss://redis-pubsub.example.com:6379` |
+| `REDIS_TLS` | Enable TLS connections | `true` |
+| `QUEUE_PREFIX` | Queue prefix for isolation | `admin` |
+
+#### Connection Types
+
+```typescript
+import {
+  getRedisConnection,
+  getPubSubConnection,
+  createSubscriberConnection,
+} from '@magiworld/queue';
+
+// Queue connection (for BullMQ)
+const queueRedis = getRedisConnection('queue', 'bullmq');
+
+// PubSub connection (for real-time updates)
+const pubsubRedis = getPubSubConnection('publisher');
+
+// Subscriber connection (each subscriber needs its own connection)
+const subscriber = createSubscriberConnection('task-updates');
+```
+
+#### Environment-Specific Settings
+
+The connection factory automatically applies different settings based on the environment:
+
+| Setting | Web (Production) | Admin (Internal) |
+|---------|------------------|------------------|
+| Max Reconnect Attempts | 20 | 10 |
+| Reconnect Base Delay | 100ms | 200ms |
+| Reconnect Max Delay | 3000ms | 5000ms |
+| Connect Timeout | 10000ms | 15000ms |
+| Command Timeout | 5000ms | 10000ms |
+
+#### Health Checks
+
+```typescript
+import { checkAllConnections, getConnectionStats } from '@magiworld/queue';
+
+// Check all connection types
+const health = await checkAllConnections();
+// { queue: true, pubsub: true, default: true }
+
+// Get connection statistics
+const stats = getConnectionStats();
+// { total: 3, connections: [{ key: 'web:queue:main', status: 'ready' }, ...] }
+```
+
+### Current Architecture (Shared)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Current: Shared Redis                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                     Single Redis Instance                            │   │
+│   │  ┌──────────────────────────┐  ┌──────────────────────────┐        │   │
+│   │  │ Web Queues (default:*)   │  │ Admin Queues (admin:*)   │        │   │
+│   │  └──────────────────────────┘  └──────────────────────────┘        │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                               │
+│              ┌───────────────┴───────────────┐                              │
+│              ▼                               ▼                              │
+│   ┌─────────────────┐                ┌─────────────────┐                   │
+│   │ Web Worker      │                │ Admin Worker    │                   │
+│   │ QUEUE_PREFIX="" │                │ QUEUE_PREFIX=   │                   │
+│   │                 │                │ "admin"         │                   │
+│   └─────────────────┘                └─────────────────┘                   │
+│                                                                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Target Architecture (Isolated)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     Future: Separate Redis Instances                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│   ┌───────────────────────────┐      ┌───────────────────────────┐         │
+│   │  Redis (Production)       │      │  Redis (Admin)            │         │
+│   │  redis-prod.example.com   │      │  redis-admin.example.com  │         │
+│   │  • High availability      │      │  • Lower priority         │         │
+│   │  • Auto-scaling           │      │  • Cost-optimized         │         │
+│   └─────────────┬─────────────┘      └─────────────┬─────────────┘         │
+│                 │                                  │                         │
+│                 ▼                                  ▼                         │
+│   ┌─────────────────────────────┐  ┌─────────────────────────────┐         │
+│   │ Web Worker Cluster          │  │ Admin Worker                │         │
+│   │ • 4-8 replicas              │  │ • 1-2 replicas              │         │
+│   │ • Auto-scaling              │  │ • Fixed size                │         │
+│   │ • REDIS_URL=redis-prod      │  │ • REDIS_URL=redis-admin     │         │
+│   │ • QUEUE_PREFIX=""           │  │ • QUEUE_PREFIX="admin"      │         │
+│   └─────────────────────────────┘  └─────────────────────────────┘         │
+│                                                                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Step-by-Step Migration
+
+#### Step 1: Deploy Separate Redis Instances
+
+**AWS ElastiCache / Redis Cloud:**
+
+```bash
+# Production Redis (web users)
+Name: magiworld-redis-prod
+Instance: cache.r6g.large (or larger)
+Multi-AZ: Enabled
+Encryption: At-rest and in-transit
+
+# Admin Redis (internal)
+Name: magiworld-redis-admin
+Instance: cache.t3.micro (smaller, cost-optimized)
+Multi-AZ: Optional
+Encryption: At-rest and in-transit
+```
+
+#### Step 2: Update Environment Variables
+
+**Web App (.env):**
+```bash
+REDIS_URL=redis://magiworld-redis-prod.xxx.cache.amazonaws.com:6379
+QUEUE_PREFIX=
+```
+
+**Admin App (.env):**
+```bash
+REDIS_URL=redis://magiworld-redis-admin.xxx.cache.amazonaws.com:6379
+QUEUE_PREFIX=admin
+```
+
+**Web Worker (production):**
+```bash
+REDIS_URL=redis://magiworld-redis-prod.xxx.cache.amazonaws.com:6379
+QUEUE_PREFIX=
+DATABASE_URL=postgresql://...
+```
+
+**Admin Worker:**
+```bash
+REDIS_URL=redis://magiworld-redis-admin.xxx.cache.amazonaws.com:6379
+QUEUE_PREFIX=admin
+DATABASE_URL=postgresql://...
+```
+
+#### Step 3: Deploy Separate Worker Containers
+
+**docker-compose.yml (Production):**
+
+```yaml
+services:
+  worker-web:
+    image: magiworld-worker:latest
+    environment:
+      - REDIS_URL=redis://redis-prod:6379
+      - QUEUE_PREFIX=
+      - DATABASE_URL=${DATABASE_URL}
+    deploy:
+      replicas: 4
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+
+  worker-admin:
+    image: magiworld-worker:latest
+    environment:
+      - REDIS_URL=redis://redis-admin:6379
+      - QUEUE_PREFIX=admin
+      - DATABASE_URL=${DATABASE_URL}
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+```
+
+**Kubernetes Deployment:**
+
+```yaml
+# Web Worker (high availability)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-web
+spec:
+  replicas: 4
+  template:
+    spec:
+      containers:
+        - name: worker
+          image: magiworld-worker:latest
+          env:
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secrets
+                  key: prod-url
+            - name: QUEUE_PREFIX
+              value: ""
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "1000m"
+            limits:
+              memory: "4Gi"
+              cpu: "2000m"
+---
+# Admin Worker (cost-optimized)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-admin
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: worker
+          image: magiworld-worker:latest
+          env:
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secrets
+                  key: admin-url
+            - name: QUEUE_PREFIX
+              value: "admin"
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+```
+
+#### Step 4: Update Queue Package (Optional)
+
+If you need different Redis configurations:
+
+```typescript
+// packages/queue/src/redis.ts
+
+function getRedisConfig() {
+  const url = process.env.REDIS_URL;
+  const prefix = process.env.QUEUE_PREFIX || '';
+
+  return {
+    url,
+    // Different settings based on environment
+    maxRetriesPerRequest: prefix === 'admin' ? 3 : 5,
+    connectTimeout: prefix === 'admin' ? 5000 : 10000,
+  };
+}
+```
+
+### Monitoring & Alerting
+
+#### Metrics to Track
+
+| Metric | Web Workers | Admin Workers |
+|--------|-------------|---------------|
+| Queue Depth | Alert if > 100 | Alert if > 50 |
+| Processing Time | P95 < 30s | P95 < 120s |
+| Error Rate | < 1% | < 5% |
+| Worker Memory | < 80% | < 80% |
+
+#### Recommended Tools
+
+- **BullMQ Dashboard**: Use `bull-board` or `arena` for queue visualization
+- **Redis Monitoring**: AWS CloudWatch, Redis Cloud dashboard
+- **APM**: Datadog, New Relic, or Grafana for worker metrics
+
+### Cost Optimization Tips
+
+1. **Right-size Redis instances**: Admin Redis can be smaller since it handles less traffic
+2. **Spot instances for workers**: Admin workers can use spot/preemptible instances
+3. **Scale to zero**: Admin workers can scale to 0 during off-hours
+4. **Reserved capacity**: Web Redis should use reserved instances for cost savings
+
+---
+
 ## Document History
 
 | Version | Date | Changes |
@@ -2025,3 +2984,8 @@ if (!adminUser || !adminUser.isActive) {
 | 5.1 | 2025-01-12 | Updated File Storage Strategy to 4-bucket architecture |
 | 5.2 | 2025-01-14 | Added Shared Utilities section (upload config, image dimension utilities) |
 | 6.0 | 2025-01-14 | Major update: Updated database schema with new tables (users, admin_users, oem_software_brands, attribution tables), added OEM/White-Label System, Attribution Tracking, Admin User Management sections, updated environment variables documentation, expanded AI tools documentation with Fal.ai integration, added Background Remove tool documentation |
+| 6.1 | 2025-01-16 | Updated S3 bucket structure to include userId/adminId in all paths for GDPR compliance, per-user storage management, and attribution tracking |
+| 7.0 | 2025-01-16 | Major update: Replaced Inngest with BullMQ + Redis for task processing, added Provider Management section, updated database schema with providers/dead_letter_tasks/task_usage_logs tables, comprehensive task orchestrator architecture documentation |
+| 7.1 | 2025-01-18 | Migrated from Vercel AI SDK to native provider SDKs (openai, @google/genai, @fal-ai/client), added shared AI utilities (@magiworld/utils/ai), updated AI Provider Integration section |
+| 8.0 | 2025-01-18 | Added Queue Isolation (web vs admin), Task Priority system, Admin Providers for cost isolation, Magi task-based tools, Future Scaling section for separate workers/Redis |
+| 8.1 | 2025-01-18 | Refactored Redis Connection Factory with multiple URL support (REDIS_URL, REDIS_QUEUE_URL, REDIS_PUBSUB_URL), environment-aware settings, connection types, and health checks |

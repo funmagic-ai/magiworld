@@ -31,17 +31,17 @@ function createTextCanvas(
   color: string,
   isSelected: boolean
 ): { canvas: HTMLCanvasElement; aspectRatio: number } {
-  // High resolution canvas for crisp text
   const canvasHeight = 256;
   const padding = 40;
+  const fontSizePx = 120; // Base font size for quality
+  const fontFamily = '"Noto Sans SC", "Microsoft YaHei", "SimHei", Arial, sans-serif';
+  const font = `bold ${fontSizePx}px ${fontFamily}`;
 
   // Create temporary canvas to measure text
   const tempCanvas = document.createElement('canvas');
   const tempCtx = tempCanvas.getContext('2d')!;
-  const fontSizePx = 120; // Base font size for quality
-  tempCtx.font = `bold ${fontSizePx}px "Noto Sans SC", "Microsoft YaHei", "SimHei", Arial, sans-serif`;
-  const metrics = tempCtx.measureText(text);
-  const textWidth = metrics.width;
+  tempCtx.font = font;
+  const textWidth = tempCtx.measureText(text).width;
 
   // Calculate canvas width based on text
   const canvasWidth = Math.max(256, Math.ceil(textWidth + padding * 2));
@@ -54,16 +54,15 @@ function createTextCanvas(
 
   const ctx = canvas.getContext('2d')!;
 
-  // Transparent background
+  // Clear and setup text
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-
-  // Draw text
-  ctx.font = `bold ${fontSizePx}px "Noto Sans SC", "Microsoft YaHei", "SimHei", Arial, sans-serif`;
+  ctx.font = font;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  // Text color
   const textColor = isSelected ? '#ffff00' : color;
+  const centerX = canvasWidth / 2;
+  const centerY = canvasHeight / 2;
 
   // Add glow effect
   ctx.shadowColor = textColor;
@@ -72,10 +71,10 @@ function createTextCanvas(
   // Draw text with outline for better visibility
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
   ctx.lineWidth = 4;
-  ctx.strokeText(text, canvasWidth / 2, canvasHeight / 2);
+  ctx.strokeText(text, centerX, centerY);
 
   ctx.fillStyle = textColor;
-  ctx.fillText(text, canvasWidth / 2, canvasHeight / 2);
+  ctx.fillText(text, centerX, centerY);
 
   return { canvas, aspectRatio };
 }
@@ -107,7 +106,6 @@ function Text3D({
     tex.minFilter = THREE.LinearFilter;
     tex.magFilter = THREE.LinearFilter;
 
-    // Calculate plane size based on fontSize and aspect ratio
     const height = fontSize * 1.2;
     const width = height * aspectRatio;
 
@@ -115,8 +113,8 @@ function Text3D({
   }, [text, fontSize, color, isSelected]);
 
   // Create material with emissive for visibility in dark scenes
-  const material = useMemo(() => {
-    return new THREE.MeshStandardMaterial({
+  const material = useMemo(() =>
+    new THREE.MeshStandardMaterial({
       map: texture,
       transparent: true,
       side: THREE.FrontSide,
@@ -124,16 +122,15 @@ function Text3D({
       emissive: new THREE.Color(isSelected ? '#ffff00' : '#ffffff'),
       emissiveIntensity: 0.3,
       emissiveMap: texture,
-    });
-  }, [texture, isSelected]);
+    })
+  , [texture, isSelected]);
 
   // Plane geometry
-  const geometry = useMemo(() => {
-    return new THREE.PlaneGeometry(planeWidth, planeHeight);
-  }, [planeWidth, planeHeight]);
+  const geometry = useMemo(() =>
+    new THREE.PlaneGeometry(planeWidth, planeHeight)
+  , [planeWidth, planeHeight]);
 
-  // Small gap between front and back planes to prevent Z-fighting
-  const gap = 0.01;
+  const gap = 0.01; // Small gap between front and back planes to prevent Z-fighting
 
   return (
     <group ref={groupRef} position={position} renderOrder={renderOrder}>
@@ -184,10 +181,9 @@ function DraggableTextLabel({
   const parentInverseMatrix = useRef(new THREE.Matrix4());
   const worldPosition = useRef(new THREE.Vector3());
 
-  // Calculate font size proportional to cube size (use smallest dimension as reference)
+  // Calculate font size proportional to cube size
   const minCubeDimension = Math.min(cubeSize.width, cubeSize.height, cubeSize.depth);
-  // Font size is a percentage of the cube size, scaled by the label's fontSize factor
-  const baseFontSize = (minCubeDimension * 0.08) * label.fontSize * scale;
+  const baseFontSize = minCubeDimension * 0.08 * label.fontSize * scale;
 
   // Calculate hitbox size based on actual font size
   const hitboxWidth = Math.max(label.text.length * baseFontSize * 0.8, minCubeDimension * scale * 0.3);
@@ -270,8 +266,7 @@ function DraggableTextLabel({
     }
   }, [isDragging]);
 
-  // Each text gets unique renderOrder to prevent z-fighting between texts
-  const textRenderOrder = 100 + labelIndex;
+  const textRenderOrder = 100 + labelIndex; // Unique renderOrder to prevent z-fighting
 
   return (
     <group
@@ -283,7 +278,6 @@ function DraggableTextLabel({
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
     >
-      {/* 3D Text using TextGeometry with DoubleSide material */}
       <Text3D
         text={label.text}
         fontSize={baseFontSize}
@@ -293,13 +287,13 @@ function DraggableTextLabel({
         renderOrder={textRenderOrder}
       />
 
-      {/* Invisible hitbox for easier clicking - double-sided */}
+      {/* Invisible hitbox for easier clicking */}
       <mesh visible={false}>
         <planeGeometry args={[hitboxWidth * 1.2, hitboxHeight * 1.2]} />
         <meshBasicMaterial transparent opacity={0} side={THREE.DoubleSide} />
       </mesh>
 
-      {/* Selection indicator - render behind text */}
+      {/* Selection indicator */}
       {(isSelected || isHovered) && (
         <mesh renderOrder={textRenderOrder - 1} position={[0, 0, -baseFontSize * 0.1]}>
           <planeGeometry args={[hitboxWidth, hitboxHeight]} />
@@ -355,8 +349,7 @@ function CrystalCube({
     }
   });
 
-  // Scale down for display (assuming mm input, display in reasonable units)
-  const scale = 0.02;
+  const scale = 0.02; // Scale down for display (mm to reasonable units)
   const displaySize: DisplaySize = {
     width: size.width * scale,
     height: size.height * scale,
@@ -418,7 +411,7 @@ function CrystalCube({
         )}
       </Box>
 
-      {/* Text labels as children of the cube group - they rotate with the cube */}
+      {/* Text labels - rotate with the cube */}
       <Suspense fallback={null}>
         {labels.map((label, index) => (
           <DraggableTextLabel
@@ -439,7 +432,6 @@ function CrystalCube({
   );
 }
 
-// Wrapper to manage orbit controls
 function Scene({
   size,
   textureUrl,
@@ -460,7 +452,6 @@ function Scene({
   const [isDragging, setIsDragging] = useState(false);
   const orbitControlsRef = useRef<any>(null);
 
-  // Disable orbit controls while dragging
   const handleDraggingChange = useCallback((dragging: boolean) => {
     setIsDragging(dragging);
     if (orbitControlsRef.current) {
