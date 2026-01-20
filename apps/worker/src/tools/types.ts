@@ -63,6 +63,14 @@ export interface ToolContext {
   toolConfig?: Record<string, unknown>;
   /** BullMQ job for progress updates */
   job: Job<TaskJobData, TaskJobResult>;
+  /**
+   * Update progress and publish to Redis for real-time SSE updates
+   * 更新进度并发布到 Redis 以进行实时 SSE 更新
+   *
+   * @param progress - Progress percentage (0-100) / 进度百分比
+   * @param message - Optional status message / 可选状态消息
+   */
+  updateProgress: (progress: number, message?: string) => Promise<void>;
 }
 
 /**

@@ -168,7 +168,7 @@ export async function processFigMe(ctx: ToolContext): Promise<ToolResult> {
  * @see https://platform.openai.com/docs/guides/image-generation
  */
 async function processTransformStep(ctx: ToolContext): Promise<ToolResult> {
-  const { taskId, userId, toolSlug, inputParams, toolConfig, job } = ctx;
+  const { taskId, userId, toolSlug, inputParams, toolConfig } = ctx;
   const { imageUrl, referenceImageUrl, userPrompt } = inputParams as unknown as FigMeInput;
 
   if (!imageUrl) {
@@ -196,7 +196,7 @@ async function processTransformStep(ctx: ToolContext): Promise<ToolResult> {
   // Get provider credentials
   const credentials = await getProviderCredentials('openai');
 
-  await job.updateProgress(10);
+  await ctx.updateProgress(10);
 
   // Build prompt - describes the transformation to apply
   const systemPrompt = stepConfig.systemPrompt ||
@@ -208,7 +208,7 @@ async function processTransformStep(ctx: ToolContext): Promise<ToolResult> {
   // Initialize OpenAI client
   const openai = new OpenAI({ apiKey: credentials.apiKey });
 
-  await job.updateProgress(15);
+  await ctx.updateProgress(15);
 
   // Build input content array for Responses API
   // Pass fully qualified URLs directly - no need to download/convert to base64
@@ -234,7 +234,7 @@ async function processTransformStep(ctx: ToolContext): Promise<ToolResult> {
     imageCount: inputContent.filter(c => c.type === 'input_image').length,
   });
 
-  await job.updateProgress(20);
+  await ctx.updateProgress(20);
 
   // Build generation parameters from stepConfig
   const outputFormat = stepConfig.format || 'png';
@@ -301,7 +301,7 @@ async function processTransformStep(ctx: ToolContext): Promise<ToolResult> {
     statusCode: 200,
   });
 
-  await job.updateProgress(70);
+  await ctx.updateProgress(70);
 
   // Extract image data from response.output
   // Filter for image_generation_call outputs and get the result (base64)
@@ -335,7 +335,7 @@ async function processTransformStep(ctx: ToolContext): Promise<ToolResult> {
 
   logger.debug(`Uploaded transform result to S3`, { taskId, resultUrl });
 
-  await job.updateProgress(100);
+  await ctx.updateProgress(100);
 
   return {
     outputData: {
@@ -369,7 +369,7 @@ async function processTransformStep(ctx: ToolContext): Promise<ToolResult> {
  * 下载生成的模型并重新上传到 S3 以持久化存储。
  */
 async function process3DStep(ctx: ToolContext): Promise<ToolResult> {
-  const { taskId, userId, toolSlug, inputParams, toolConfig, job } = ctx;
+  const { taskId, userId, toolSlug, inputParams, toolConfig, updateProgress } = ctx;
   const { imageUrl } = inputParams as unknown as FigMeInput;
 
   if (!imageUrl) {
@@ -390,12 +390,12 @@ async function process3DStep(ctx: ToolContext): Promise<ToolResult> {
     providerOptions,
   });
 
-  await job.updateProgress(5);
+  await ctx.updateProgress(5);
 
   // Get provider credentials from database
   const credentials = await getProviderCredentials(providerSlug);
 
-  await job.updateProgress(10);
+  await ctx.updateProgress(10);
 
   // Create appropriate SDK provider based on provider slug
   let sdkProvider: TripoProvider | HunyuanProvider;
@@ -426,7 +426,7 @@ async function process3DStep(ctx: ToolContext): Promise<ToolResult> {
   // Create client
   const client = new Magi3DClient(sdkProvider);
 
-  await job.updateProgress(15);
+  await ctx.updateProgress(15);
 
   logger.debug(`Creating 3D generation task with ${providerName}`, { taskId });
   const startTime = Date.now();
@@ -451,7 +451,7 @@ async function process3DStep(ctx: ToolContext): Promise<ToolResult> {
     provider: providerName,
   });
 
-  await job.updateProgress(20);
+  await ctx.updateProgress(20);
 
   // Poll for completion with progress updates
   // Progress range: 20-80% during 3D generation
@@ -461,7 +461,7 @@ async function process3DStep(ctx: ToolContext): Promise<ToolResult> {
     onProgress: async (task) => {
       // Map SDK progress (0-100) to our range (20-80)
       const mappedProgress = 20 + Math.floor(task.progress * 0.6);
-      await job.updateProgress(mappedProgress);
+      await updateProgress(mappedProgress);
       logger.debug(`3D generation progress: ${task.progress}%`, {
         taskId,
         sdkTaskId,
@@ -480,7 +480,7 @@ async function process3DStep(ctx: ToolContext): Promise<ToolResult> {
     latencyMs: apiLatencyMs,
   });
 
-  await job.updateProgress(85);
+  await ctx.updateProgress(85);
 
   // Check if task succeeded
   if (result.status !== TaskStatus.SUCCEEDED) {
@@ -520,7 +520,7 @@ async function process3DStep(ctx: ToolContext): Promise<ToolResult> {
 
   logger.info(`3D model uploaded to S3`, { taskId, resultUrl });
 
-  await job.updateProgress(95);
+  await ctx.updateProgress(95);
 
   // Save raw request/response for debugging and auditing
   await saveTaskResponse({
@@ -534,7 +534,7 @@ async function process3DStep(ctx: ToolContext): Promise<ToolResult> {
     statusCode: 200,
   });
 
-  await job.updateProgress(100);
+  await ctx.updateProgress(100);
 
   return {
     outputData: {

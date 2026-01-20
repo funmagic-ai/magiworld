@@ -100,24 +100,27 @@ export abstract class BaseProcessor implements Processor {
     await job.updateProgress(progress);
 
     // Update database (use correct table based on task type)
+    // Note: status stays 'processing' - only completeTask sets 'success'
+    // This prevents SSE stream from closing before outputData is received
     const tasksTable = this.getTasksTable(job);
     const idField = this.getTaskIdField(job);
     await db
       .update(tasksTable)
       .set({
         progress,
-        status: progress < 100 ? 'processing' : 'success',
+        status: 'processing',
         updatedAt: new Date(),
         ...(progress === 0 && { startedAt: new Date() }),
       })
       .where(eq(idField, taskId));
 
     // Publish to Redis for SSE
+    // Note: status stays 'processing' - only completeTask publishes 'success'
     await publishTaskUpdate(
       createTaskUpdateMessage({
         taskId,
         userId,
-        status: progress < 100 ? 'processing' : 'success',
+        status: 'processing',
         progress,
         message,
       })

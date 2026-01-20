@@ -41,7 +41,7 @@ export class ToolProcessorWrapper extends BaseProcessor {
     const { taskId, userId, toolId, toolSlug, inputParams, toolConfig } = job.data;
 
     return this.executeWithErrorHandling(job, async () => {
-      // Create tool context
+      // Create tool context with updateProgress bound to this wrapper
       const ctx: ToolContext = {
         taskId,
         userId,
@@ -50,6 +50,10 @@ export class ToolProcessorWrapper extends BaseProcessor {
         inputParams,
         toolConfig,
         job,
+        // Bind updateProgress to publish to Redis via BaseProcessor
+        updateProgress: async (progress: number, message?: string) => {
+          await this.updateProgress(job, progress, message);
+        },
       };
 
       // Execute the tool processor
