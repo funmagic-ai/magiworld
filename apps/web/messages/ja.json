@@ -1,4 +1,16 @@
 {
+  "shared": {
+    "imageUploader": {
+      "dragDrop": "ここに画像をドラッグ＆ドロップ",
+      "dropHere": "ここに画像をドロップ",
+      "or": "または",
+      "browse": "ファイルを選択",
+      "changeImage": "画像を変更",
+      "clearImage": "画像をクリア",
+      "uploadedImage": "アップロードされた画像",
+      "maxSize": "最大 {size} MB"
+    }
+  },
   "common": {
     "appName": "Magiworld",
     "loading": "読み込み中...",
@@ -83,7 +95,8 @@
       "title": "元の画像",
       "dragDrop": "ここに画像をドラッグ＆ドロップ",
       "or": "または",
-      "browse": "ファイルを選択"
+      "browse": "ファイルを選択",
+      "changeImage": "画像を変更"
     },
     "result": {
       "title": "結果",
@@ -96,6 +109,52 @@
       "processing": "処理中...",
       "download": "ダウンロード",
       "tryAnother": "別の画像を試す"
+    }
+  },
+  "figMe": {
+    "steps": {
+      "upload": "アップロード",
+      "transform": "変換",
+      "generate3d": "3Dモデル"
+    },
+    "sections": {
+      "upload": {
+        "title": "写真をアップロード"
+      },
+      "referenceStyle": {
+        "title": "スタイルを選択",
+        "styleAlt": "スタイル"
+      },
+      "transform": {
+        "title": "フィギュアスタイル",
+        "placeholder": "変換結果がここに表示されます"
+      },
+      "model3d": {
+        "title": "3Dモデル",
+        "placeholder": "3Dモデルがここに表示されます",
+        "ready": "3Dモデル完成！",
+        "mockNotice": "（モックモード - 3D SDK統合保留中）"
+      }
+    },
+    "actions": {
+      "transform": "フィギュアに変換",
+      "transforming": "変換中...",
+      "generate3d": "3Dモデルを生成",
+      "generating3d": "3D生成中...",
+      "download": "ダウンロード",
+      "reset": "やり直す",
+      "retry": "再試行",
+      "retry3d": "3Dを再生成"
+    },
+    "progress": {
+      "uploading": "画像をアップロード中...",
+      "transforming": "フィギュアスタイルに変換中...",
+      "generating3d": "3Dモデルを生成中..."
+    },
+    "hints": {
+      "selectStyle": "上からスタイルを選択",
+      "uploadPhoto": "写真をアップロード",
+      "selectStyleAndUpload": "スタイルを選択して写真をアップロード"
     }
   },
   "profile": {

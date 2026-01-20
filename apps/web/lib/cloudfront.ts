@@ -47,6 +47,19 @@ export function buildWebPrivateUrl(key: string): string {
   return `${env.CLOUDFRONT_WEB_PRIVATE_URL}/${key}`;
 }
 
+/**
+ * Build and sign a CloudFront URL from S3 key
+ * 从S3键构建并签名CloudFront URL
+ *
+ * @param key - The S3 object key / S3对象键
+ * @param expirySeconds - How long the URL should be valid / URL有效时长
+ * @returns Signed CloudFront URL / 签名的CloudFront URL
+ */
+export function getSignedWebPrivateUrl(key: string, expirySeconds?: number): string {
+  const url = buildWebPrivateUrl(key);
+  return maybeSignUrl(url, expirySeconds);
+}
+
 export function buildWebSharedUrl(key: string): string {
   return `${env.CLOUDFRONT_WEB_SHARED_URL}/${key}`;
 }

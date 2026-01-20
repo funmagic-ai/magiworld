@@ -74,6 +74,7 @@ export const toolSchema = z.object({
   toolTypeId: z.string().uuid('Tool type is required'),
   priceConfig: priceConfigSchema,
   thumbnailUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
+  referenceImages: z.array(z.string().url('Must be a valid URL')).optional(),
   configJson: z.record(z.string(), z.unknown()).optional(),
   order: z.number().int().min(0, 'Order must be 0 or greater'),
   isActive: z.boolean(),

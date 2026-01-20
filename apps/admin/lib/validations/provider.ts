@@ -47,7 +47,7 @@ const providerBaseSchema = {
     .min(1, 'Slug is required')
     .regex(/^[a-z0-9_]+$/, 'Slug must be lowercase letters, numbers, and underscores only'),
   name: z.string().min(1, 'Name is required'),
-  baseUrl: z.string().min(1, 'Base URL is required').url('Must be a valid URL'),
+  baseUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
   rateLimitMax: z.coerce
     .number()
     .int()
@@ -68,18 +68,35 @@ const providerBaseSchema = {
     .default(120000),
   status: z.enum(providerStatusOptions).default('active'),
   isActive: z.boolean(),
+  // IAM-style credentials (optional, for AWS/Tencent/etc.)
+  accessKeyId: z.string().optional(),
+  secretAccessKey: z.string().optional(),
+  region: z.string().optional(),
 };
 
 /**
- * Provider create schema - API key is required
+ * Provider create schema - at least API key OR IAM credentials required
  */
-export const providerCreateSchema = z.object({
-  ...providerBaseSchema,
-  apiKey: z.string().min(1, 'API Key is required'),
-});
+export const providerCreateSchema = z
+  .object({
+    ...providerBaseSchema,
+    apiKey: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      // Either apiKey OR both accessKeyId and secretAccessKey must be provided
+      const hasApiKey = !!data.apiKey && data.apiKey.length > 0;
+      const hasIamCredentials = !!data.accessKeyId && data.accessKeyId.length > 0 && !!data.secretAccessKey && data.secretAccessKey.length > 0;
+      return hasApiKey || hasIamCredentials;
+    },
+    {
+      message: 'Either API Key or IAM credentials (Access Key ID + Secret Access Key) are required',
+      path: ['apiKey'],
+    }
+  );
 
 /**
- * Provider edit schema - API key is optional (leave empty to keep existing)
+ * Provider edit schema - credentials optional (leave empty to keep existing)
  */
 export const providerEditSchema = z.object({
   ...providerBaseSchema,

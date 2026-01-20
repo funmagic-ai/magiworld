@@ -1,4 +1,16 @@
 {
+  "shared": {
+    "imageUploader": {
+      "dragDrop": "将图片拖放到此处",
+      "dropHere": "拖放图片到这里",
+      "or": "或",
+      "browse": "浏览文件",
+      "changeImage": "更换图片",
+      "clearImage": "清除图片",
+      "uploadedImage": "已上传的图片",
+      "maxSize": "最大 {size} MB"
+    }
+  },
   "common": {
     "appName": "Magiworld",
     "loading": "加载中...",
@@ -83,7 +95,8 @@
       "title": "原始图片",
       "dragDrop": "将图片拖放到此处",
       "or": "或",
-      "browse": "浏览文件"
+      "browse": "浏览文件",
+      "changeImage": "更换图片"
     },
     "result": {
       "title": "结果",
@@ -96,6 +109,52 @@
       "processing": "处理中...",
       "download": "下载",
       "tryAnother": "换一张"
+    }
+  },
+  "figMe": {
+    "steps": {
+      "upload": "上传",
+      "transform": "转换",
+      "generate3d": "3D模型"
+    },
+    "sections": {
+      "upload": {
+        "title": "上传照片"
+      },
+      "referenceStyle": {
+        "title": "选择风格",
+        "styleAlt": "风格"
+      },
+      "transform": {
+        "title": "人偶风格",
+        "placeholder": "转换结果将显示在这里"
+      },
+      "model3d": {
+        "title": "3D模型",
+        "placeholder": "3D模型将显示在这里",
+        "ready": "3D模型已就绪！",
+        "mockNotice": "（模拟模式 - 3D SDK集成待完成）"
+      }
+    },
+    "actions": {
+      "transform": "转换为人偶",
+      "transforming": "转换中...",
+      "generate3d": "生成3D模型",
+      "generating3d": "生成3D中...",
+      "download": "下载",
+      "reset": "重新开始",
+      "retry": "重试",
+      "retry3d": "重新生成3D"
+    },
+    "progress": {
+      "uploading": "正在上传图片...",
+      "transforming": "正在转换为人偶风格...",
+      "generating3d": "正在生成3D模型..."
+    },
+    "hints": {
+      "selectStyle": "请在上方选择风格",
+      "uploadPhoto": "请上传您的照片",
+      "selectStyleAndUpload": "请选择风格并上传照片"
     }
   },
   "profile": {

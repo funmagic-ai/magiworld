@@ -29,6 +29,10 @@ export type ProviderFormData = {
   defaultTimeout: number;
   status: 'active' | 'inactive' | 'degraded';
   isActive: boolean;
+  // IAM-style credentials (for AWS/Tencent/etc.)
+  accessKeyId?: string;
+  secretAccessKey?: string;
+  region?: string;
 };
 
 /**
@@ -47,6 +51,9 @@ export async function createProvider(data: ProviderFormData) {
     slug: data.slug,
     name: data.name,
     apiKeyEncrypted: data.apiKey || null, // TODO: Encrypt API key before storing
+    accessKeyIdEncrypted: data.accessKeyId || null, // TODO: Encrypt before storing
+    secretAccessKeyEncrypted: data.secretAccessKey || null, // TODO: Encrypt before storing
+    region: data.region || null,
     configJson: Object.keys(configJson).length > 0 ? configJson : null,
     rateLimitMax: data.rateLimitMax,
     rateLimitWindow: data.rateLimitWindow,
@@ -83,8 +90,12 @@ export async function updateProvider(id: string, data: ProviderFormData) {
     .set({
       slug: data.slug,
       name: data.name,
-      // Only update apiKey if a new value is provided (not empty)
-      ...(data.apiKey && { apiKeyEncrypted: data.apiKey }), // TODO: Encrypt API key before storing
+      // Only update credentials if a new value is provided (not empty)
+      ...(data.apiKey && { apiKeyEncrypted: data.apiKey }), // TODO: Encrypt before storing
+      ...(data.accessKeyId && { accessKeyIdEncrypted: data.accessKeyId }), // TODO: Encrypt before storing
+      ...(data.secretAccessKey && { secretAccessKeyEncrypted: data.secretAccessKey }), // TODO: Encrypt before storing
+      // Region is always updated (can be cleared)
+      region: data.region || null,
       configJson: Object.keys(configJson).length > 0 ? configJson : null,
       rateLimitMax: data.rateLimitMax,
       rateLimitWindow: data.rateLimitWindow,
@@ -151,6 +162,9 @@ export async function getProviderById(id: string) {
     slug: provider.slug,
     name: provider.name,
     hasApiKey: !!provider.apiKeyEncrypted,
+    hasAccessKeyId: !!provider.accessKeyIdEncrypted,
+    hasSecretAccessKey: !!provider.secretAccessKeyEncrypted,
+    region: provider.region || '',
     baseUrl: (configJson?.baseUrl as string) || '',
     rateLimitMax: provider.rateLimitMax ?? 100,
     rateLimitWindow: provider.rateLimitWindow ?? 60000,

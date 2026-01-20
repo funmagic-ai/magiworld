@@ -1,9 +1,10 @@
 
 import { NextResponse } from 'next/server';
 import { getLogtoContext } from '@logto/next/server-actions';
-import { db, tasks, tools, toolTypes, toolTranslations, toolTypeTranslations, eq, and, desc } from '@magiworld/db';
+import { db, tasks, tools, toolTypes, toolTranslations, toolTypeTranslations, eq, and, desc, isNull, inArray } from '@magiworld/db';
 import { logtoConfig } from '@/lib/logto';
 import { getUserByLogtoId } from '@/lib/user';
+import { maybeSignUrl } from '@/lib/cloudfront';
 import {
   enqueueTask,
   checkUserConcurrency,
@@ -13,10 +14,30 @@ import {
   generateIdempotencyKey,
 } from '@/lib/queue';
 
+/**
+ * Sign URLs in outputData if they are CloudFront URLs
+ * 如果outputData中的URL是CloudFront URL则签名
+ */
+function signOutputData(outputData: unknown): unknown {
+  if (!outputData || typeof outputData !== 'object') return outputData;
+
+  const data = outputData as Record<string, unknown>;
+  const signed = { ...data };
+
+  // Sign resultUrl if present
+  if (typeof signed.resultUrl === 'string') {
+    signed.resultUrl = maybeSignUrl(signed.resultUrl);
+  }
+
+  return signed;
+}
+
 interface CreateTaskRequest {
   toolId: string;
   inputParams: Record<string, unknown>;
   idempotencyKey?: string;
+  /** Parent task ID for multi-step workflows (e.g., Fig Me 3D step links to transform step) */
+  parentTaskId?: string;
 }
 export async function POST(request: Request) {
   try {
@@ -31,13 +52,31 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as CreateTaskRequest;
-    const { toolId, inputParams, idempotencyKey: providedIdempotencyKey } = body;
+    const { toolId, inputParams, idempotencyKey: providedIdempotencyKey, parentTaskId } = body;
 
     if (!toolId || !inputParams) {
       return NextResponse.json(
         { error: 'toolId and inputParams are required' },
         { status: 400 }
       );
+    }
+
+    // Validate parentTaskId if provided
+    if (parentTaskId) {
+      const [parentTask] = await db
+        .select({ id: tasks.id, userId: tasks.userId })
+        .from(tasks)
+        .where(eq(tasks.id, parentTaskId))
+        .limit(1);
+
+      if (!parentTask) {
+        return NextResponse.json({ error: 'Parent task not found' }, { status: 404 });
+      }
+
+      // Ensure parent task belongs to the same user
+      if (parentTask.userId !== user.id) {
+        return NextResponse.json({ error: 'Parent task does not belong to user' }, { status: 403 });
+      }
     }
 
     const idempotencyKey =
@@ -90,6 +129,7 @@ export async function POST(request: Request) {
         progress: 0,
         idempotencyKey,
         requestId: crypto.randomUUID(),
+        parentTaskId: parentTaskId || null,
       })
       .returning();
 
@@ -97,8 +137,28 @@ export async function POST(request: Request) {
     await setIdempotency(user.id, idempotencyKey, task.id);
 
     // Extract provider from tool config for queue routing
+    // For multi-step tools, get provider from the step config
     const toolConfig = tool.configJson as Record<string, unknown> | undefined;
-    const providerSlug = (toolConfig?.provider as string) || undefined;
+    let providerSlug = (toolConfig?.provider as string) || undefined;
+
+    // Check if this is a multi-step tool and get provider from step config
+    const step = (inputParams as Record<string, unknown>)?.step as string | undefined;
+    if (step && toolConfig?.steps) {
+      // Support both array format (new) and object format (legacy)
+      let stepConfig: { provider?: string } | undefined;
+      if (Array.isArray(toolConfig.steps)) {
+        // Array format: find step by name
+        stepConfig = (toolConfig.steps as Array<{ name: string; provider?: string }>)
+          .find((s) => s.name === step);
+      } else {
+        // Object format (legacy): access by key
+        const steps = toolConfig.steps as Record<string, { provider?: string }>;
+        stepConfig = steps[step];
+      }
+      if (stepConfig?.provider) {
+        providerSlug = stepConfig.provider;
+      }
+    }
 
     const jobId = await enqueueTask({
       taskId: task.id,
@@ -143,11 +203,18 @@ export async function GET(request: Request) {
     const locale = (url.searchParams.get('locale') || 'en') as 'en' | 'ja' | 'pt' | 'zh';
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 100);
     const offset = parseInt(url.searchParams.get('offset') || '0');
+    const rootOnly = url.searchParams.get('rootOnly') === 'true';
+    const includeChildren = url.searchParams.get('includeChildren') === 'true';
 
     const conditions = [eq(tasks.userId, user.id)];
     if (statusFilter && ['pending', 'processing', 'success', 'failed'].includes(statusFilter)) {
       conditions.push(eq(tasks.status, statusFilter as 'pending' | 'processing' | 'success' | 'failed'));
     }
+    // Filter to only root tasks (no parent) if requested
+    if (rootOnly) {
+      conditions.push(isNull(tasks.parentTaskId));
+    }
+
     const result = await db
       .select({
         id: tasks.id,
@@ -158,6 +225,7 @@ export async function GET(request: Request) {
         errorMessage: tasks.errorMessage,
         createdAt: tasks.createdAt,
         completedAt: tasks.completedAt,
+        parentTaskId: tasks.parentTaskId,
         toolSlug: tools.slug,
         toolTitle: toolTranslations.title,
         toolTypeSlug: toolTypes.slug,
@@ -180,15 +248,61 @@ export async function GET(request: Request) {
       .limit(limit)
       .offset(offset);
 
-    const taskList = result.map((row) => ({
+    // Fetch child tasks if requested
+    let childTasksMap: Map<string, typeof result> = new Map();
+    if (includeChildren && result.length > 0) {
+      const parentIds = result.map((r) => r.id);
+      const childTasks = await db
+        .select({
+          id: tasks.id,
+          status: tasks.status,
+          progress: tasks.progress,
+          inputParams: tasks.inputParams,
+          outputData: tasks.outputData,
+          errorMessage: tasks.errorMessage,
+          createdAt: tasks.createdAt,
+          completedAt: tasks.completedAt,
+          parentTaskId: tasks.parentTaskId,
+          toolSlug: tools.slug,
+          toolTitle: toolTranslations.title,
+          toolTypeSlug: toolTypes.slug,
+          toolTypeName: toolTypeTranslations.name,
+          toolTypeBadgeColor: toolTypes.badgeColor,
+        })
+        .from(tasks)
+        .innerJoin(tools, eq(tasks.toolId, tools.id))
+        .innerJoin(toolTypes, eq(tools.toolTypeId, toolTypes.id))
+        .innerJoin(
+          toolTranslations,
+          and(eq(toolTranslations.toolId, tools.id), eq(toolTranslations.locale, locale))
+        )
+        .innerJoin(
+          toolTypeTranslations,
+          and(eq(toolTypeTranslations.toolTypeId, toolTypes.id), eq(toolTypeTranslations.locale, locale))
+        )
+        .where(inArray(tasks.parentTaskId, parentIds))
+        .orderBy(desc(tasks.createdAt));
+
+      // Group children by parent ID
+      for (const child of childTasks) {
+        if (child.parentTaskId) {
+          const existing = childTasksMap.get(child.parentTaskId) || [];
+          existing.push(child);
+          childTasksMap.set(child.parentTaskId, existing);
+        }
+      }
+    }
+
+    const formatTask = (row: (typeof result)[0]) => ({
       id: row.id,
       status: row.status,
       progress: row.progress,
       inputParams: row.inputParams,
-      outputData: row.outputData,
+      outputData: signOutputData(row.outputData),
       errorMessage: row.errorMessage,
       createdAt: row.createdAt.toISOString(),
       completedAt: row.completedAt?.toISOString() ?? null,
+      parentTaskId: row.parentTaskId ?? null,
       tool: {
         slug: row.toolSlug,
         title: row.toolTitle,
@@ -198,7 +312,20 @@ export async function GET(request: Request) {
           badgeColor: row.toolTypeBadgeColor,
         },
       },
-    }));
+    });
+
+    const taskList = result.map((row) => {
+      const task = formatTask(row);
+      // Include child tasks if requested
+      if (includeChildren) {
+        const children = childTasksMap.get(row.id) || [];
+        return {
+          ...task,
+          childTasks: children.map(formatTask),
+        };
+      }
+      return task;
+    });
 
     return NextResponse.json({
       tasks: taskList,

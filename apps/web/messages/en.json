@@ -1,4 +1,16 @@
 {
+  "shared": {
+    "imageUploader": {
+      "dragDrop": "Drag and drop your image here",
+      "dropHere": "Drop image here",
+      "or": "or",
+      "browse": "browse files",
+      "changeImage": "Change image",
+      "clearImage": "Clear image",
+      "uploadedImage": "Uploaded image",
+      "maxSize": "max {size} MB"
+    }
+  },
   "common": {
     "appName": "Magiworld",
     "loading": "Loading...",
@@ -83,7 +95,8 @@
       "title": "Original Image",
       "dragDrop": "Drag and drop your image here",
       "or": "or",
-      "browse": "browse files"
+      "browse": "browse files",
+      "changeImage": "Change image"
     },
     "result": {
       "title": "Result",
@@ -96,6 +109,52 @@
       "processing": "Processing...",
       "download": "Download",
       "tryAnother": "Try Another"
+    }
+  },
+  "figMe": {
+    "steps": {
+      "upload": "Upload",
+      "transform": "Transform",
+      "generate3d": "3D Model"
+    },
+    "sections": {
+      "upload": {
+        "title": "Upload Photo"
+      },
+      "referenceStyle": {
+        "title": "Select Style",
+        "styleAlt": "Style"
+      },
+      "transform": {
+        "title": "Figurine Style",
+        "placeholder": "Transform result will appear here"
+      },
+      "model3d": {
+        "title": "3D Model",
+        "placeholder": "3D model will appear here",
+        "ready": "3D Model Ready!",
+        "mockNotice": "(Mock mode - 3D SDK integration pending)"
+      }
+    },
+    "actions": {
+      "transform": "Transform to Figurine",
+      "transforming": "Transforming...",
+      "generate3d": "Generate 3D Model",
+      "generating3d": "Generating 3D...",
+      "download": "Download",
+      "reset": "Start Over",
+      "retry": "Try Again",
+      "retry3d": "Regenerate 3D"
+    },
+    "progress": {
+      "uploading": "Uploading image...",
+      "transforming": "Transforming to figurine style...",
+      "generating3d": "Generating 3D model..."
+    },
+    "hints": {
+      "selectStyle": "Select a style above",
+      "uploadPhoto": "Upload your photo",
+      "selectStyleAndUpload": "Select a style and upload your photo"
     }
   },
   "profile": {

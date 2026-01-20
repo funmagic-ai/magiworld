@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import {
   Field,
   FieldLabel,
@@ -56,6 +57,7 @@ import {
   DEFAULT_TOOL_TRANSLATIONS,
   TOOL_TRANSLATIONS_EXAMPLE,
 } from '@/lib/locales';
+import { TOOL_CONFIG_EXAMPLES, type ToolSlug } from '@/lib/tool-config-examples';
 import { validateFileSize, MAX_FILE_SIZE_MB } from '@/lib/utils/file';
 import { useImageDimensions, validateAspectRatio, ASPECT_RATIOS, DEFAULT_RATIO_TOLERANCE } from '@/lib/utils/image';
 
@@ -70,6 +72,7 @@ type ToolData = {
   toolTypeId: string;
   priceConfig: unknown;
   thumbnailUrl: string | null;
+  referenceImages: string[] | null;
   configJson: unknown;
   isActive: boolean;
   isFeatured: boolean;
@@ -126,6 +129,23 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
     }
     return JSON.stringify({ type: 'request', cost_per_call: 0.003 }, null, 2);
   });
+
+  // Config JSON state (controlled for format button)
+  const [configJson, setConfigJson] = useState<string>(() => {
+    if (initialData?.configJson) {
+      return JSON.stringify(initialData.configJson as Record<string, unknown>, null, 2);
+    }
+    return '';
+  });
+  const [configJsonError, setConfigJsonError] = useState<string>('');
+
+  // Reference images state (for tools that support style references)
+  // Read from the dedicated referenceImages column
+  const [referenceImageUrls, setReferenceImageUrls] = useState<string[]>(() => {
+    return initialData?.referenceImages || [];
+  });
+  const [pendingReferenceFiles, setPendingReferenceFiles] = useState<File[]>([]);
+  const [referencePreviewUrls, setReferencePreviewUrls] = useState<string[]>([]);
 
   // Upload hook - used only during form submission
   const { upload } = useUploadFiles({
@@ -191,11 +211,35 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
       }
     }
 
+    // Upload pending reference images and merge with existing URLs
+    let finalReferenceImageUrls = [...referenceImageUrls];
+    if (pendingReferenceFiles.length > 0) {
+      try {
+        const slugValue = formData.get('slug') as string;
+        const result = await upload(pendingReferenceFiles, {
+          metadata: { toolId: slugValue || 'misc', type: 'reference-images' }
+        });
+
+        if (result.files && result.files.length > 0) {
+          const cdnUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
+          if (!cdnUrl) {
+            return { errors: { referenceImages: 'NEXT_PUBLIC_CLOUDFRONT_URL is not configured' } };
+          }
+          const newUrls = result.files.map(f => `${cdnUrl}/${f.objectInfo.key}`);
+          finalReferenceImageUrls = [...finalReferenceImageUrls, ...newUrls];
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to upload reference images';
+        return { errors: { referenceImages: `Upload failed: ${message}` } };
+      }
+    }
+
     const rawData = {
       slug: formData.get('slug') as string,
       toolTypeId: formData.get('toolTypeId') as string,
       priceConfig,
       thumbnailUrl: finalThumbnailUrl || undefined,
+      referenceImages: finalReferenceImageUrls.length > 0 ? finalReferenceImageUrls : undefined,
       configJson,
       isActive: formData.get('isActive') === 'on',
       isFeatured: formData.get('isFeatured') === 'on',
@@ -275,7 +319,7 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
   // The display URL is either the local preview or the remote URL
   const displayUrl = previewUrl || thumbnailUrl;
 
-  // Format JSON with proper indentation
+  // Format JSON with proper indentation (for translations)
   const [jsonError, setJsonError] = useState<string>('');
   const handleFormatJson = () => {
     try {
@@ -286,6 +330,59 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
       setJsonError('Invalid JSON format');
     }
   };
+
+  // Format Config JSON with proper indentation
+  const handleFormatConfigJson = () => {
+    if (!configJson.trim()) {
+      setConfigJsonError('');
+      return;
+    }
+    try {
+      const parsed = JSON.parse(configJson);
+      setConfigJson(JSON.stringify(parsed, null, 2));
+      setConfigJsonError('');
+    } catch {
+      setConfigJsonError('Invalid JSON format - please fix the syntax');
+    }
+  };
+
+  // Reference image handlers
+  const handleReferenceFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const validFiles: File[] = [];
+    const newPreviewUrls: string[] = [];
+
+    for (const file of files) {
+      const sizeValidation = validateFileSize(file);
+      if (!sizeValidation.isValid) {
+        alert(`${file.name}: ${sizeValidation.error}`);
+        continue;
+      }
+      validFiles.push(file);
+      // Create preview URL
+      newPreviewUrls.push(URL.createObjectURL(file));
+    }
+
+    if (validFiles.length > 0) {
+      setPendingReferenceFiles((prev) => [...prev, ...validFiles]);
+      setReferencePreviewUrls((prev) => [...prev, ...newPreviewUrls]);
+    }
+    e.target.value = '';
+  };
+
+  const handleRemoveReferenceUrl = (index: number) => {
+    setReferenceImageUrls((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRemovePendingReference = (index: number) => {
+    // Revoke the object URL to prevent memory leaks
+    URL.revokeObjectURL(referencePreviewUrls[index]);
+    setPendingReferenceFiles((prev) => prev.filter((_, i) => i !== index));
+    setReferencePreviewUrls((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // State for Advanced Config collapsible
+  const [advancedConfigOpen, setAdvancedConfigOpen] = useState(false);
 
   async function handleDelete() {
     if (initialData?.id) {
@@ -485,19 +582,214 @@ export function ToolForm({ initialData, toolTypes, mode }: ToolFormProps) {
               {errors.thumbnailUrl && <FieldError>{errors.thumbnailUrl}</FieldError>}
             </Field>
 
-            <Field data-invalid={!!errors.configJson}>
-              <FieldLabel htmlFor="configJson">Config JSON</FieldLabel>
+            <Field data-invalid={!!errors.configJson || !!configJsonError}>
+              <div className="flex items-center justify-between mb-2">
+                <FieldLabel htmlFor="configJson" className="mb-0">Config JSON</FieldLabel>
+                <Button type="button" variant="outline" size="sm" onClick={handleFormatConfigJson}>
+                  Format JSON
+                </Button>
+              </div>
               <Textarea
                 id="configJson"
                 name="configJson"
-                defaultValue={initialData?.configJson ? JSON.stringify(initialData.configJson as Record<string, unknown>, null, 2) : ''}
+                value={configJson}
+                onChange={(e) => {
+                  setConfigJson(e.target.value);
+                  setConfigJsonError('');
+                }}
                 placeholder='{"key": "value"}'
-                rows={4}
+                rows={8}
                 className="font-mono text-sm"
-                aria-invalid={!!errors.configJson}
+                aria-invalid={!!errors.configJson || !!configJsonError}
               />
               <FieldDescription>Tool-specific configuration in JSON format</FieldDescription>
+              {configJsonError && <FieldError>{configJsonError}</FieldError>}
               {errors.configJson && <FieldError>{errors.configJson}</FieldError>}
+
+              {/* Advanced Config Collapsible */}
+              <Collapsible open={advancedConfigOpen} onOpenChange={setAdvancedConfigOpen} className="mt-4">
+                <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border bg-muted/50 px-4 py-3 text-left text-sm font-medium hover:bg-muted transition-colors">
+                  <span className="flex items-center gap-2">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Advanced Config
+                  </span>
+                  <svg
+                    className={cn("h-4 w-4 transition-transform", advancedConfigOpen && "rotate-180")}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-4 space-y-6">
+                  {/* Configuration Tips */}
+                  {slug && TOOL_CONFIG_EXAMPLES[slug as ToolSlug] && (
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
+                      <h4 className="mb-2 flex items-center gap-2 font-semibold text-blue-800 dark:text-blue-200">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Configuration Tips for "{slug}"
+                      </h4>
+                      <p className="mb-3 text-sm text-blue-700 dark:text-blue-300">
+                        {TOOL_CONFIG_EXAMPLES[slug as ToolSlug].description}
+                      </p>
+                      <ul className="mb-4 space-y-1 text-sm text-blue-700 dark:text-blue-300">
+                        {TOOL_CONFIG_EXAMPLES[slug as ToolSlug].tips.map((tip, i) => (
+                          <li key={i} className={tip === '' ? 'h-2' : 'flex items-start gap-2'}>
+                            {tip && (
+                              <>
+                                <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
+                                <span className="whitespace-pre-wrap font-mono text-xs">{tip}</span>
+                              </>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                            Example Configuration:
+                          </span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => {
+                              setConfigJson(JSON.stringify(
+                                TOOL_CONFIG_EXAMPLES[slug as ToolSlug].exampleConfig,
+                                null,
+                                2
+                              ));
+                              setConfigJsonError('');
+                            }}
+                          >
+                            Use Example
+                          </Button>
+                        </div>
+                        <pre className="overflow-x-auto rounded bg-blue-100 p-3 text-xs text-blue-900 dark:bg-blue-900 dark:text-blue-100">
+                          {JSON.stringify(TOOL_CONFIG_EXAMPLES[slug as ToolSlug].exampleConfig, null, 2)}
+                        </pre>
+                        <div className="text-xs text-blue-600 dark:text-blue-400">
+                          <strong>Required Providers:</strong>{' '}
+                          {TOOL_CONFIG_EXAMPLES[slug as ToolSlug].requiredProviders.join(', ')}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Reference Images Section */}
+                  <div className="rounded-lg border p-4" data-invalid={!!errors.referenceImages}>
+                    <h4 className="mb-3 flex items-center gap-2 font-semibold">
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Reference Images
+                    </h4>
+                    <p className="mb-4 text-sm text-muted-foreground">
+                      Upload reference images to guide AI transformations. These images help the model understand the desired style or aesthetic.
+                    </p>
+
+                    {/* Display existing uploaded reference images */}
+                    {referenceImageUrls.length > 0 && (
+                      <div className="mb-4">
+                        <p className="mb-2 text-sm font-medium text-muted-foreground">Uploaded Images:</p>
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                          {referenceImageUrls.map((url, index) => (
+                            <div key={`uploaded-${index}`} className="group relative aspect-square overflow-hidden rounded-lg border bg-muted">
+                              <img
+                                src={url}
+                                alt={`Reference ${index + 1}`}
+                                className="h-full w-full object-cover"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveReferenceUrl(index)}
+                                className="absolute right-1 top-1 rounded-full bg-destructive p-1 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                                aria-label={`Remove reference image ${index + 1}`}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <line x1="18" y1="6" x2="6" y2="18" />
+                                  <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                              </button>
+                              <div className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-xs text-white">
+                                Saved
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Display pending reference images (to be uploaded on save) */}
+                    {pendingReferenceFiles.length > 0 && (
+                      <div className="mb-4">
+                        <p className="mb-2 text-sm font-medium text-amber-600">Pending Upload ({pendingReferenceFiles.length}):</p>
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                          {referencePreviewUrls.map((url, index) => (
+                            <div key={`pending-${index}`} className="group relative aspect-square overflow-hidden rounded-lg border-2 border-dashed border-amber-400 bg-amber-50">
+                              <img
+                                src={url}
+                                alt={`Pending ${index + 1}`}
+                                className="h-full w-full object-cover"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePendingReference(index)}
+                                className="absolute right-1 top-1 rounded-full bg-destructive p-1 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                                aria-label={`Remove pending image ${index + 1}`}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <line x1="18" y1="6" x2="6" y2="18" />
+                                  <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                              </button>
+                              <div className="absolute bottom-1 left-1 rounded bg-amber-600 px-1.5 py-0.5 text-xs text-white">
+                                Will upload on save
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Upload button */}
+                    <div className="flex items-center gap-3">
+                      <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={handleReferenceFileSelect}
+                          className="sr-only"
+                          disabled={isPending}
+                          aria-label="Add reference images"
+                        />
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Add Reference Images
+                      </label>
+                      <span className="text-sm text-muted-foreground">
+                        Max {MAX_FILE_SIZE_MB} MB each
+                      </span>
+                    </div>
+
+                    {errors.referenceImages && <FieldError className="mt-2">{errors.referenceImages}</FieldError>}
+
+                    <div className="mt-4 rounded-lg border border-muted bg-muted/30 p-3 text-sm text-muted-foreground">
+                      <strong>Tip:</strong> Upload reference images showing the desired style. Users can select one when using the tool.
+                      Reference images are stored in a dedicated column for reliable ordering.
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             </Field>
 
             <Field data-invalid={!!errors.order}>

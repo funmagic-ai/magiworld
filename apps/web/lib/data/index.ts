@@ -177,6 +177,7 @@ export async function getToolBySlug(slug: string, locale: Locale = 'en') {
       id: tools.id,
       slug: tools.slug,
       thumbnailUrl: tools.thumbnailUrl,
+      referenceImages: tools.referenceImages,
       configJson: tools.configJson,
       updatedAt: tools.updatedAt,
       toolTypeSlug: toolTypes.slug,
@@ -206,6 +207,7 @@ export async function getToolBySlug(slug: string, locale: Locale = 'en') {
     slug: row.slug,
     title: row.title,
     description: row.description,
+    referenceImages: row.referenceImages,
     configJson: row.configJson,
     thumbnail: row.thumbnailUrl ? { id: '', url: row.thumbnailUrl } : undefined,
     toolType: {

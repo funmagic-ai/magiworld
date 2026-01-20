@@ -3,7 +3,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { ImageUploader } from './image-uploader';
+import { ImageUploader } from '../shared/image-uploader';
 import { ResultPreview } from './result-preview';
 import { GenerationHistory, type Generation } from '../shared/generation-history';
 import { useTask } from '../shared/use-task';

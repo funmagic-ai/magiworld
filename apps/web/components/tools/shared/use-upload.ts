@@ -1,7 +1,20 @@
+/**
+ * @fileoverview Upload Hook for Web App
+ * @fileoverview Web应用上传钩子
+ *
+ * Provides file upload functionality using presigned URLs to S3.
+ * After upload, calls signUrl server action to get a signed CloudFront URL.
+ * 使用预签名URL上传文件到S3。
+ * 上传后调用signUrl服务端操作获取签名的CloudFront URL。
+ *
+ * @module components/tools/shared/use-upload
+ */
+
 'use client';
 
 import { useState, useCallback } from 'react';
 import { useUploadFile } from '@better-upload/client';
+import { signUrl } from '@/lib/actions/upload';
 
 export interface UseUploadState {
   isUploading: boolean;
@@ -12,6 +25,7 @@ export interface UseUploadState {
 }
 
 export interface UploadOptions {
+  /** Upload route to use / 使用的上传路由 */
   route?: string;
 }
 
@@ -56,8 +70,12 @@ export function useUpload(options: UploadOptions = {}): UseUploadReturn {
         }
 
         const uploadedKey = result.file.objectInfo.key;
+        // Build CloudFront URL using environment variable
         const baseUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_WEB_PRIVATE_URL || '';
-        const uploadedUrl = baseUrl ? `${baseUrl}/${uploadedKey}` : uploadedKey;
+        const unsignedUrl = baseUrl ? `${baseUrl}/${uploadedKey}` : uploadedKey;
+
+        // Sign the URL for private CloudFront access
+        const uploadedUrl = await signUrl(unsignedUrl);
 
         setState({
           isUploading: false,

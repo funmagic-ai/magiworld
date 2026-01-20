@@ -175,8 +175,11 @@ export function createRedisOptions(type: RedisConnectionType = 'default'): Redis
     // Connection timeout
     connectTimeout: settings.connectTimeout,
 
-    // Command timeout
-    commandTimeout: settings.commandTimeout,
+    // Note: commandTimeout is intentionally NOT set here for BullMQ compatibility.
+    // BullMQ workers use blocking commands (BRPOPLPUSH, BZPOPMIN) that wait
+    // indefinitely for jobs. Setting commandTimeout causes these to fail with
+    // "Command timed out" errors every few seconds.
+    // See: https://docs.bullmq.io/guide/connections
 
     // Reconnection strategy
     retryStrategy: (times: number) => {

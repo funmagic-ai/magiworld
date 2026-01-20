@@ -142,6 +142,12 @@ export const tools = pgTable('tools', {
   /** URL to tool thumbnail image */
   thumbnailUrl: text('thumbnail_url'),
   /**
+   * Reference images for style guidance (e.g., for fig-me tool)
+   * Stored as PostgreSQL text array to preserve order
+   * @example ['https://cdn.example.com/style1.jpg', 'https://cdn.example.com/style2.jpg']
+   */
+  referenceImages: text('reference_images').array(),
+  /**
    * Tool-specific configuration as JSON
    * Used to store tool parameters, UI options, and processing hints
    * @example { "maxFileSize": 10485760, "allowedFormats": ["jpg", "png"] }
@@ -501,8 +507,19 @@ export const providers = pgTable('providers', {
   slug: text('slug').notNull().unique(),
   /** Display name for the provider */
   name: text('name').notNull(),
-  /** AES-256 encrypted API key (optional, can use env var instead) */
+  /**
+   * Credential fields - use whichever your provider requires:
+   * - apiKey: For simple API key auth (OpenAI, fal.ai, etc.)
+   * - accessKeyId + secretAccessKey: For IAM-style auth (AWS, Tencent, etc.)
+   */
+  /** AES-256 encrypted API key (for simple API key providers) */
   apiKeyEncrypted: text('api_key_encrypted'),
+  /** AES-256 encrypted Access Key ID (for IAM-style providers like AWS/Tencent) */
+  accessKeyIdEncrypted: text('access_key_id_encrypted'),
+  /** AES-256 encrypted Secret Access Key (for IAM-style providers) */
+  secretAccessKeyEncrypted: text('secret_access_key_encrypted'),
+  /** Cloud region (e.g., 'us-east-1', 'ap-guangzhou') */
+  region: text('region'),
   /** Maximum requests per rate limit window */
   rateLimitMax: integer('rate_limit_max').default(100),
   /** Rate limit window in milliseconds */
@@ -549,8 +566,19 @@ export const adminProviders = pgTable('admin_providers', {
   slug: text('slug').notNull().unique(),
   /** Display name for the provider */
   name: text('name').notNull(),
-  /** AES-256 encrypted API key */
+  /**
+   * Credential fields - use whichever your provider requires:
+   * - apiKey: For simple API key auth (OpenAI, fal.ai, etc.)
+   * - accessKeyId + secretAccessKey: For IAM-style auth (AWS, Tencent, etc.)
+   */
+  /** AES-256 encrypted API key (for simple API key providers) */
   apiKeyEncrypted: text('api_key_encrypted'),
+  /** AES-256 encrypted Access Key ID (for IAM-style providers like AWS/Tencent) */
+  accessKeyIdEncrypted: text('access_key_id_encrypted'),
+  /** AES-256 encrypted Secret Access Key (for IAM-style providers) */
+  secretAccessKeyEncrypted: text('secret_access_key_encrypted'),
+  /** Cloud region (e.g., 'us-east-1', 'ap-guangzhou') */
+  region: text('region'),
   /** Provider operational status */
   status: providerStatusEnum('status').notNull().default('active'),
   /** Provider-specific configuration as JSON */
@@ -619,6 +647,61 @@ export const tasks = pgTable('tasks', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
   /** Task last update timestamp */
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  /**
+   * Parent task ID for multi-step workflows
+   * Links child tasks to their parent task (e.g., 3D generation task linked to transform task)
+   * Null for root/standalone tasks
+   */
+  parentTaskId: uuid('parent_task_id'),
+});
+
+/**
+ * Task Responses Table
+ *
+ * Records raw request/response data from AI providers for each task step.
+ * Supports multi-step tools (e.g., fig-me with transform + 3d steps).
+ * Used for debugging, auditing, and replay analysis.
+ *
+ * @example
+ * {
+ *   taskId: '<task-uuid>',
+ *   stepName: 'transform',
+ *   provider: 'openai',
+ *   model: 'gpt-4o',
+ *   rawRequest: { model: 'gpt-4o', input: [...], tools: [...] },
+ *   rawResponse: { id: 'resp_xxx', output: [...], usage: {...} },
+ *   latencyMs: 3500
+ * }
+ */
+export const taskResponses = pgTable('task_responses', {
+  /** Unique identifier (UUID v4) */
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** Reference to the parent task */
+  taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  /** Step name for multi-step tools (e.g., 'transform', '3d') */
+  stepName: text('step_name'),
+  /** Provider slug (e.g., 'openai', 'fal_ai', '3d_tripo') */
+  provider: text('provider'),
+  /** Model name used (e.g., 'gpt-4o', 'gpt-image-1.5') */
+  model: text('model'),
+  /**
+   * Raw request sent to the provider API
+   * Stores the complete request payload for replay/debugging
+   */
+  rawRequest: jsonb('raw_request'),
+  /**
+   * Raw response from the provider API
+   * Stores the complete response including usage data
+   */
+  rawResponse: jsonb('raw_response'),
+  /** API call latency in milliseconds */
+  latencyMs: integer('latency_ms'),
+  /** HTTP status code from the API response */
+  statusCode: integer('status_code'),
+  /** Error message if the API call failed */
+  errorMessage: text('error_message'),
+  /** Record creation timestamp */
+  createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
 /**
@@ -928,6 +1011,11 @@ export type AdminUserInsert = typeof adminUsers.$inferInsert;
 export type Task = typeof tasks.$inferSelect;
 /** Inferred insert type for tasks table */
 export type TaskInsert = typeof tasks.$inferInsert;
+
+/** Inferred select type for task_responses table */
+export type TaskResponse = typeof taskResponses.$inferSelect;
+/** Inferred insert type for task_responses table */
+export type TaskResponseInsert = typeof taskResponses.$inferInsert;
 
 /** Inferred select type for providers table */
 export type Provider = typeof providers.$inferSelect;

@@ -16,13 +16,26 @@ import type { TaskJobData, TaskJobResult } from '@magiworld/queue';
 /**
  * Provider credentials fetched from database
  * 从数据库获取的提供商凭据
+ *
+ * Use whichever fields your provider requires:
+ * - apiKey: For API key authentication
+ * - accessKeyId + secretAccessKey: For IAM-style authentication
+ * 使用您的提供商所需的字段：
+ * - apiKey：用于 API 密钥认证
+ * - accessKeyId + secretAccessKey：用于 IAM 风格认证
  */
 export interface ProviderCredentials {
-  /** Provider slug (e.g., 'fal_ai', 'openai', 'google') */
+  /** Provider slug (e.g., 'fal_ai', 'openai', 'hunyuan') */
   slug: string;
-  /** API key for authentication */
-  apiKey: string;
-  /** Optional base URL for the provider API */
+  /** API key for API key authentication */
+  apiKey?: string;
+  /** Access Key ID for IAM-style authentication */
+  accessKeyId?: string;
+  /** Secret Access Key for IAM-style authentication */
+  secretAccessKey?: string;
+  /** Region if required by the provider */
+  region?: string;
+  /** Base URL for the provider API */
   baseUrl?: string;
 }
 
@@ -41,6 +54,13 @@ export interface ToolContext {
   toolSlug: string;
   /** Input parameters from the task */
   inputParams: Record<string, unknown>;
+  /**
+   * Tool configuration from database (tools.configJson)
+   * Contains admin-configured prompts, reference images, model params per step
+   * 来自数据库的工具配置（tools.configJson）
+   * 包含管理员配置的每步骤提示词、参考图片、模型参数
+   */
+  toolConfig?: Record<string, unknown>;
   /** BullMQ job for progress updates */
   job: Job<TaskJobData, TaskJobResult>;
 }

@@ -38,7 +38,7 @@ export class ToolProcessorWrapper extends BaseProcessor {
    * 使用工具处理器处理任务
    */
   async process(job: Job<TaskJobData, TaskJobResult>): Promise<TaskJobResult> {
-    const { taskId, userId, toolId, toolSlug, inputParams } = job.data;
+    const { taskId, userId, toolId, toolSlug, inputParams, toolConfig } = job.data;
 
     return this.executeWithErrorHandling(job, async () => {
       // Create tool context
@@ -48,6 +48,7 @@ export class ToolProcessorWrapper extends BaseProcessor {
         toolId,
         toolSlug: toolSlug || this.toolSlug,
         inputParams,
+        toolConfig,
         job,
       };
 

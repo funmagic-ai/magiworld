@@ -1,4 +1,16 @@
 {
+  "shared": {
+    "imageUploader": {
+      "dragDrop": "Arraste e solte sua imagem aqui",
+      "dropHere": "Solte a imagem aqui",
+      "or": "ou",
+      "browse": "procurar arquivos",
+      "changeImage": "Alterar imagem",
+      "clearImage": "Limpar imagem",
+      "uploadedImage": "Imagem carregada",
+      "maxSize": "máx {size} MB"
+    }
+  },
   "common": {
     "appName": "Magiworld",
     "loading": "Carregando...",
@@ -83,7 +95,8 @@
       "title": "Imagem Original",
       "dragDrop": "Arraste e solte sua imagem aqui",
       "or": "ou",
-      "browse": "procurar arquivos"
+      "browse": "procurar arquivos",
+      "changeImage": "Alterar imagem"
     },
     "result": {
       "title": "Resultado",
@@ -96,6 +109,52 @@
       "processing": "Processando...",
       "download": "Baixar",
       "tryAnother": "Tentar Outra"
+    }
+  },
+  "figMe": {
+    "steps": {
+      "upload": "Upload",
+      "transform": "Transformar",
+      "generate3d": "Modelo 3D"
+    },
+    "sections": {
+      "upload": {
+        "title": "Carregar Foto"
+      },
+      "referenceStyle": {
+        "title": "Selecionar Estilo",
+        "styleAlt": "Estilo"
+      },
+      "transform": {
+        "title": "Estilo Figurino",
+        "placeholder": "O resultado da transformação aparecerá aqui"
+      },
+      "model3d": {
+        "title": "Modelo 3D",
+        "placeholder": "O modelo 3D aparecerá aqui",
+        "ready": "Modelo 3D Pronto!",
+        "mockNotice": "(Modo mock - Integração do SDK 3D pendente)"
+      }
+    },
+    "actions": {
+      "transform": "Transformar em Figurino",
+      "transforming": "Transformando...",
+      "generate3d": "Gerar Modelo 3D",
+      "generating3d": "Gerando 3D...",
+      "download": "Baixar",
+      "reset": "Recomeçar",
+      "retry": "Tentar Novamente",
+      "retry3d": "Regenerar 3D"
+    },
+    "progress": {
+      "uploading": "Carregando imagem...",
+      "transforming": "Transformando para estilo figurino...",
+      "generating3d": "Gerando modelo 3D..."
+    },
+    "hints": {
+      "selectStyle": "Selecione um estilo acima",
+      "uploadPhoto": "Carregue sua foto",
+      "selectStyleAndUpload": "Selecione um estilo e carregue sua foto"
     }
   },
   "profile": {

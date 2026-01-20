@@ -20,6 +20,7 @@ import { processImageGenerate } from './image-generate';
 import { processImageUpscale } from './image-upscale';
 import { processImageRerender } from './image-rerender';
 import { processNanobanana } from './nanobanana';
+import { processFigMe } from './fig-me';
 
 /**
  * Tool processor registry
@@ -53,6 +54,11 @@ const TOOL_PROCESSORS: Record<string, ToolRegistration> = {
     slug: 'nanobanana',
     process: processNanobanana,
     description: 'Generate images using Google Gemini 2.0 Flash with text and image inputs',
+  },
+  'fig-me': {
+    slug: 'fig-me',
+    process: processFigMe,
+    description: 'Create 3D figurines from photos (multi-step: transform → 3D generation)',
   },
 };
 

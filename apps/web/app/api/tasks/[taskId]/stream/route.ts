@@ -2,6 +2,24 @@ import { getLogtoContext } from '@logto/next/server-actions';
 import { db, tasks, eq, and } from '@magiworld/db';
 import { logtoConfig } from '@/lib/logto';
 import { getUserByLogtoId } from '@/lib/user';
+import { maybeSignUrl } from '@/lib/cloudfront';
+
+/**
+ * Sign URLs in outputData if they are CloudFront URLs
+ * 如果outputData中的URL是CloudFront URL则签名
+ */
+function signOutputData(outputData: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!outputData) return null;
+
+  const signed = { ...outputData };
+
+  // Sign resultUrl if present
+  if (typeof signed.resultUrl === 'string') {
+    signed.resultUrl = maybeSignUrl(signed.resultUrl);
+  }
+
+  return signed;
+}
 
 interface RouteParams {
   params: Promise<{ taskId: string }>;
@@ -36,7 +54,7 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Re
       taskId: task.id,
       status: task.status,
       progress: task.progress,
-      outputData: task.outputData,
+      outputData: signOutputData(task.outputData as Record<string, unknown> | null),
       error: task.errorMessage,
       timestamp: Date.now(),
     });
@@ -69,7 +87,12 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Re
 
           if (update.taskId !== taskId) return;
 
-          const sseMessage = `data: ${message}\n\n`;
+          // Sign URLs in outputData before sending to client
+          if (update.outputData) {
+            update.outputData = signOutputData(update.outputData);
+          }
+
+          const sseMessage = `data: ${JSON.stringify(update)}\n\n`;
           controller.enqueue(encoder.encode(sseMessage));
 
           if (update.status === 'success' || update.status === 'failed') {

@@ -35,14 +35,14 @@ export class ProviderNotFoundError extends Error {
 }
 
 /**
- * Error thrown when provider has no API key configured
- * 当提供商没有配置 API 密钥时抛出的错误
+ * Error thrown when provider has no credentials configured
+ * 当提供商没有配置凭据时抛出的错误
  */
-export class ProviderNoApiKeyError extends Error {
+export class ProviderNoCredentialsError extends Error {
   constructor(slug: string, isAdmin: boolean) {
     const table = isAdmin ? 'adminProviders' : 'providers';
-    super(`Provider ${slug} has no API key configured (table: ${table})`);
-    this.name = 'ProviderNoApiKeyError';
+    super(`Provider ${slug} has no credentials configured. Set either apiKey or accessKeyId+secretAccessKey (table: ${table})`);
+    this.name = 'ProviderNoCredentialsError';
   }
 }
 
@@ -71,6 +71,9 @@ export async function getProviderCredentials(providerSlug: string): Promise<Prov
       .select({
         slug: adminProviders.slug,
         apiKeyEncrypted: adminProviders.apiKeyEncrypted,
+        accessKeyIdEncrypted: adminProviders.accessKeyIdEncrypted,
+        secretAccessKeyEncrypted: adminProviders.secretAccessKeyEncrypted,
+        region: adminProviders.region,
         configJson: adminProviders.configJson,
         isActive: adminProviders.isActive,
         status: adminProviders.status,
@@ -87,8 +90,11 @@ export async function getProviderCredentials(providerSlug: string): Promise<Prov
       throw new ProviderNotFoundError(providerSlug, true);
     }
 
-    if (!provider.apiKeyEncrypted) {
-      throw new ProviderNoApiKeyError(providerSlug, true);
+    // Check that at least one credential type is configured
+    const hasApiKey = !!provider.apiKeyEncrypted;
+    const hasIamCredentials = !!provider.accessKeyIdEncrypted && !!provider.secretAccessKeyEncrypted;
+    if (!hasApiKey && !hasIamCredentials) {
+      throw new ProviderNoCredentialsError(providerSlug, true);
     }
 
     const configJson = provider.configJson as Record<string, unknown> | null;
@@ -96,7 +102,10 @@ export async function getProviderCredentials(providerSlug: string): Promise<Prov
 
     return {
       slug: provider.slug,
-      apiKey: provider.apiKeyEncrypted,
+      apiKey: provider.apiKeyEncrypted || undefined,
+      accessKeyId: provider.accessKeyIdEncrypted || undefined,
+      secretAccessKey: provider.secretAccessKeyEncrypted || undefined,
+      region: provider.region || undefined,
       baseUrl,
     };
   }
@@ -106,6 +115,9 @@ export async function getProviderCredentials(providerSlug: string): Promise<Prov
     .select({
       slug: providers.slug,
       apiKeyEncrypted: providers.apiKeyEncrypted,
+      accessKeyIdEncrypted: providers.accessKeyIdEncrypted,
+      secretAccessKeyEncrypted: providers.secretAccessKeyEncrypted,
+      region: providers.region,
       configJson: providers.configJson,
       isActive: providers.isActive,
       status: providers.status,
@@ -122,8 +134,11 @@ export async function getProviderCredentials(providerSlug: string): Promise<Prov
     throw new ProviderNotFoundError(providerSlug, false);
   }
 
-  if (!provider.apiKeyEncrypted) {
-    throw new ProviderNoApiKeyError(providerSlug, false);
+  // Check that at least one credential type is configured
+  const hasApiKey = !!provider.apiKeyEncrypted;
+  const hasIamCredentials = !!provider.accessKeyIdEncrypted && !!provider.secretAccessKeyEncrypted;
+  if (!hasApiKey && !hasIamCredentials) {
+    throw new ProviderNoCredentialsError(providerSlug, false);
   }
 
   // Extract baseUrl from configJson if present
@@ -132,7 +147,10 @@ export async function getProviderCredentials(providerSlug: string): Promise<Prov
 
   return {
     slug: provider.slug,
-    apiKey: provider.apiKeyEncrypted,
+    apiKey: provider.apiKeyEncrypted || undefined,
+    accessKeyId: provider.accessKeyIdEncrypted || undefined,
+    secretAccessKey: provider.secretAccessKeyEncrypted || undefined,
+    region: provider.region || undefined,
     baseUrl,
   };
 }

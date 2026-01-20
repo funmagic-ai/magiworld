@@ -56,6 +56,9 @@ type ProviderData = {
   slug: string;
   name: string;
   hasApiKey: boolean;
+  hasAccessKeyId: boolean;
+  hasSecretAccessKey: boolean;
+  region: string | null;
   baseUrl: string;
   rateLimitMax: number;
   rateLimitWindow: number;
@@ -77,6 +80,17 @@ type FieldErrors = Record<string, string>;
 type FormState = {
   errors: FieldErrors;
   success?: boolean;
+  values?: {
+    slug?: string;
+    name?: string;
+    baseUrl?: string;
+    region?: string;
+    rateLimitMax?: string;
+    rateLimitWindow?: string;
+    defaultTimeout?: string;
+    status?: string;
+    isActive?: boolean;
+  };
 };
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -100,12 +114,28 @@ export function ProviderForm({ initialData, mode }: ProviderFormProps) {
       slug: formData.get('slug') as string,
       name: formData.get('name') as string,
       apiKey: formData.get('apiKey') as string || undefined,
+      accessKeyId: formData.get('accessKeyId') as string || undefined,
+      secretAccessKey: formData.get('secretAccessKey') as string || undefined,
+      region: formData.get('region') as string || undefined,
       baseUrl: formData.get('baseUrl') as string || undefined,
       rateLimitMax: formData.get('rateLimitMax') as string,
       rateLimitWindow: formData.get('rateLimitWindow') as string,
       defaultTimeout: formData.get('defaultTimeout') as string,
       status: formData.get('status') as string,
       isActive: formData.get('isActive') === 'on',
+    };
+
+    // Preserve values for re-render on error
+    const preservedValues = {
+      slug: rawData.slug,
+      name: rawData.name,
+      baseUrl: rawData.baseUrl,
+      region: rawData.region,
+      rateLimitMax: rawData.rateLimitMax,
+      rateLimitWindow: rawData.rateLimitWindow,
+      defaultTimeout: rawData.defaultTimeout,
+      status: rawData.status,
+      isActive: rawData.isActive,
     };
 
     const schema = mode === 'create' ? providerCreateSchema : providerEditSchema;
@@ -117,7 +147,7 @@ export function ProviderForm({ initialData, mode }: ProviderFormProps) {
         const path = issue.path.join('.');
         fieldErrors[path] = issue.message;
       }
-      return { errors: fieldErrors };
+      return { errors: fieldErrors, values: preservedValues };
     }
 
     const data: ProviderFormData = result.data;
@@ -134,7 +164,7 @@ export function ProviderForm({ initialData, mode }: ProviderFormProps) {
       if (errorMessage.includes('NEXT_REDIRECT')) {
         throw error;
       }
-      return { errors: { _form: `Failed to save: ${errorMessage}` } };
+      return { errors: { _form: `Failed to save: ${errorMessage}` }, values: preservedValues };
     }
   };
 
@@ -142,6 +172,13 @@ export function ProviderForm({ initialData, mode }: ProviderFormProps) {
     errors: {},
   });
   const errors = formState.errors;
+  const values = formState.values;
+
+  // Get value with fallback: preserved value > initial data > default
+  const getValue = <T,>(key: keyof NonNullable<typeof values>, fallback: T): T | string => {
+    if (values?.[key] !== undefined) return values[key] as string;
+    return fallback;
+  };
 
   async function handleDelete() {
     if (initialData?.id) {
@@ -170,9 +207,10 @@ export function ProviderForm({ initialData, mode }: ProviderFormProps) {
               <Input
                 id="slug"
                 name="slug"
-                defaultValue={initialData?.slug || ''}
+                defaultValue={getValue('slug', initialData?.slug || '')}
                 placeholder="e.g., fal_ai, google, openai"
                 aria-invalid={!!errors.slug}
+                key={`slug-${values?.slug ?? 'init'}`}
               />
               <FieldDescription>
                 URL-friendly identifier (lowercase, underscores). Used for queue routing.
@@ -187,60 +225,137 @@ export function ProviderForm({ initialData, mode }: ProviderFormProps) {
               <Input
                 id="name"
                 name="name"
-                defaultValue={initialData?.name || ''}
+                defaultValue={getValue('name', initialData?.name || '')}
                 placeholder="e.g., Fal.ai, Google Gemini, OpenAI"
                 aria-invalid={!!errors.name}
+                key={`name-${values?.name ?? 'init'}`}
               />
               <FieldDescription>Display name for the provider</FieldDescription>
               {errors.name && <FieldError>{errors.name}</FieldError>}
             </Field>
 
-            <Field data-invalid={!!errors.apiKey}>
-              <FieldLabel htmlFor="apiKey">
-                API Key {mode === 'create' && <span className="text-destructive">*</span>}
-                {mode === 'edit' && initialData?.hasApiKey && (
-                  <span className="ml-2 text-xs font-normal text-green-600">(configured)</span>
-                )}
-              </FieldLabel>
-              <Input
-                id="apiKey"
-                name="apiKey"
-                type="password"
-                placeholder={mode === 'edit' && initialData?.hasApiKey
-                  ? 'Leave empty to keep current key'
-                  : 'sk-...'}
-                aria-invalid={!!errors.apiKey}
-                autoComplete="off"
-              />
-              <FieldDescription>
-                {mode === 'edit' && initialData?.hasApiKey
-                  ? 'Enter a new key to replace the existing one, or leave empty to keep current'
-                  : 'API key for authenticating with the provider (required)'}
-              </FieldDescription>
-              {errors.apiKey && <FieldError>{errors.apiKey}</FieldError>}
-            </Field>
+            {/* Credentials Section */}
+            <div className="rounded-lg border p-4 space-y-4">
+              <div className="text-sm font-medium text-muted-foreground">
+                Credentials (fill in whichever your provider requires)
+              </div>
+
+              <Field data-invalid={!!errors.apiKey}>
+                <FieldLabel htmlFor="apiKey">
+                  API Key
+                  {mode === 'edit' && initialData?.hasApiKey && (
+                    <span className="ml-2 text-xs font-normal text-green-600">(configured)</span>
+                  )}
+                </FieldLabel>
+                <Input
+                  id="apiKey"
+                  name="apiKey"
+                  type="password"
+                  placeholder={mode === 'edit' && initialData?.hasApiKey
+                    ? 'Leave empty to keep current'
+                    : 'sk-...'}
+                  aria-invalid={!!errors.apiKey}
+                  autoComplete="off"
+                />
+                <FieldDescription>
+                  For providers using API key authentication
+                </FieldDescription>
+                {errors.apiKey && <FieldError>{errors.apiKey}</FieldError>}
+              </Field>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">or IAM credentials</span>
+                </div>
+              </div>
+
+              <Field data-invalid={!!errors.accessKeyId}>
+                <FieldLabel htmlFor="accessKeyId">
+                  Access Key ID
+                  {mode === 'edit' && initialData?.hasAccessKeyId && (
+                    <span className="ml-2 text-xs font-normal text-green-600">(configured)</span>
+                  )}
+                </FieldLabel>
+                <Input
+                  id="accessKeyId"
+                  name="accessKeyId"
+                  type="text"
+                  placeholder={mode === 'edit' && initialData?.hasAccessKeyId
+                    ? 'Leave empty to keep current'
+                    : 'Access key ID...'}
+                  aria-invalid={!!errors.accessKeyId}
+                  autoComplete="off"
+                />
+                <FieldDescription>
+                  For providers using IAM-style authentication
+                </FieldDescription>
+                {errors.accessKeyId && <FieldError>{errors.accessKeyId}</FieldError>}
+              </Field>
+
+              <Field data-invalid={!!errors.secretAccessKey}>
+                <FieldLabel htmlFor="secretAccessKey">
+                  Secret Access Key
+                  {mode === 'edit' && initialData?.hasSecretAccessKey && (
+                    <span className="ml-2 text-xs font-normal text-green-600">(configured)</span>
+                  )}
+                </FieldLabel>
+                <Input
+                  id="secretAccessKey"
+                  name="secretAccessKey"
+                  type="password"
+                  placeholder={mode === 'edit' && initialData?.hasSecretAccessKey
+                    ? 'Leave empty to keep current'
+                    : 'Secret access key...'}
+                  aria-invalid={!!errors.secretAccessKey}
+                  autoComplete="off"
+                />
+                <FieldDescription>
+                  Paired with Access Key ID
+                </FieldDescription>
+                {errors.secretAccessKey && <FieldError>{errors.secretAccessKey}</FieldError>}
+              </Field>
+
+              <Field data-invalid={!!errors.region}>
+                <FieldLabel htmlFor="region">Region</FieldLabel>
+                <Input
+                  id="region"
+                  name="region"
+                  type="text"
+                  defaultValue={getValue('region', initialData?.region || '')}
+                  placeholder="Optional region..."
+                  aria-invalid={!!errors.region}
+                  key={`region-${values?.region ?? 'init'}`}
+                />
+                <FieldDescription>
+                  Region if required by the provider
+                </FieldDescription>
+                {errors.region && <FieldError>{errors.region}</FieldError>}
+              </Field>
+            </div>
 
             <Field data-invalid={!!errors.baseUrl}>
-              <FieldLabel htmlFor="baseUrl">
-                Base URL <span className="text-destructive">*</span>
-              </FieldLabel>
+              <FieldLabel htmlFor="baseUrl">Base URL</FieldLabel>
               <Input
                 id="baseUrl"
                 name="baseUrl"
                 type="url"
-                defaultValue={initialData?.baseUrl || ''}
+                defaultValue={getValue('baseUrl', initialData?.baseUrl || '')}
                 placeholder="https://api.example.com/v1"
                 aria-invalid={!!errors.baseUrl}
+                key={`baseUrl-${values?.baseUrl ?? 'init'}`}
               />
               <FieldDescription>
-                API endpoint URL for the provider (e.g., https://api.openai.com/v1)
+                API endpoint URL if required by the provider
               </FieldDescription>
               {errors.baseUrl && <FieldError>{errors.baseUrl}</FieldError>}
             </Field>
 
             <Field>
               <FieldLabel htmlFor="status">Status</FieldLabel>
-              <Select name="status" defaultValue={initialData?.status || 'active'}>
+              <Select name="status" defaultValue={getValue('status', initialData?.status || 'active') as string} key={`status-${values?.status ?? 'init'}`}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
@@ -266,7 +381,8 @@ export function ProviderForm({ initialData, mode }: ProviderFormProps) {
               <Switch
                 id="isActive"
                 name="isActive"
-                defaultChecked={initialData?.isActive ?? true}
+                defaultChecked={values?.isActive !== undefined ? values.isActive : (initialData?.isActive ?? true)}
+                key={`isActive-${values?.isActive ?? 'init'}`}
               />
             </Field>
           </FieldGroup>
@@ -285,10 +401,11 @@ export function ProviderForm({ initialData, mode }: ProviderFormProps) {
                 id="rateLimitMax"
                 name="rateLimitMax"
                 type="number"
-                defaultValue={initialData?.rateLimitMax ?? 100}
+                defaultValue={getValue('rateLimitMax', String(initialData?.rateLimitMax ?? 100))}
                 min={1}
                 max={10000}
                 aria-invalid={!!errors.rateLimitMax}
+                key={`rateLimitMax-${values?.rateLimitMax ?? 'init'}`}
               />
               <FieldDescription>
                 Maximum number of requests allowed per rate limit window
@@ -302,11 +419,12 @@ export function ProviderForm({ initialData, mode }: ProviderFormProps) {
                 id="rateLimitWindow"
                 name="rateLimitWindow"
                 type="number"
-                defaultValue={initialData?.rateLimitWindow ?? 60000}
+                defaultValue={getValue('rateLimitWindow', String(initialData?.rateLimitWindow ?? 60000))}
                 min={1000}
                 max={3600000}
                 step={1000}
                 aria-invalid={!!errors.rateLimitWindow}
+                key={`rateLimitWindow-${values?.rateLimitWindow ?? 'init'}`}
               />
               <FieldDescription>
                 Rate limit window in milliseconds (1000 = 1 second, 60000 = 1 minute)
@@ -320,11 +438,12 @@ export function ProviderForm({ initialData, mode }: ProviderFormProps) {
                 id="defaultTimeout"
                 name="defaultTimeout"
                 type="number"
-                defaultValue={initialData?.defaultTimeout ?? 120000}
+                defaultValue={getValue('defaultTimeout', String(initialData?.defaultTimeout ?? 120000))}
                 min={1000}
                 max={600000}
                 step={1000}
                 aria-invalid={!!errors.defaultTimeout}
+                key={`defaultTimeout-${values?.defaultTimeout ?? 'init'}`}
               />
               <FieldDescription>
                 Default request timeout in milliseconds (120000 = 2 minutes)

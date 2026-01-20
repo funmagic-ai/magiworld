@@ -2,12 +2,12 @@
  * @fileoverview Image Uploader Component
  * @fileoverview 图片上传组件
  *
- * Drag-and-drop image upload with preview.
- * Styled similar to Nano Banana Pro playground.
- * 带预览的拖放图片上传。
- * 样式类似于Nano Banana Pro playground。
+ * Shared drag-and-drop image upload with preview.
+ * Used by multiple tools (background-remove, fig-me, etc.)
+ * 共享的带预览的拖放图片上传组件。
+ * 被多个工具使用（background-remove、fig-me等）
  *
- * @module components/tools/background-remove/image-uploader
+ * @module components/tools/shared/image-uploader
  */
 
 'use client';
@@ -25,6 +25,8 @@ interface ImageUploaderProps {
   onClear?: () => void;
   disabled?: boolean;
   className?: string;
+  /** Compact mode for secondary/smaller upload areas */
+  compact?: boolean;
 }
 
 export function ImageUploader({
@@ -33,8 +35,9 @@ export function ImageUploader({
   onClear,
   disabled,
   className,
+  compact,
 }: ImageUploaderProps) {
-  const t = useTranslations('bgRemove.upload');
+  const t = useTranslations('shared.imageUploader');
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -116,7 +119,8 @@ export function ImageUploader({
       aria-label={previewUrl ? t('changeImage') : t('dragDrop')}
       aria-disabled={disabled}
       className={cn(
-        'relative w-full h-full min-h-[200px] rounded-lg border-2 border-dashed transition-all',
+        'relative w-full h-full rounded-lg border-2 border-dashed transition-all',
+        compact ? 'min-h-[120px]' : 'min-h-[200px]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         disabled && 'opacity-50 cursor-not-allowed',
         !disabled && !previewUrl && 'cursor-pointer hover:border-primary hover:bg-muted/30',
@@ -142,7 +146,7 @@ export function ImageUploader({
             <button
               onClick={handleClear}
               className="absolute top-2 right-2 z-10 p-1.5 bg-background/80 hover:bg-destructive text-muted-foreground hover:text-destructive-foreground transition-all rounded-md border shadow-sm"
-              aria-label="Clear image"
+              aria-label={t('clearImage')}
             >
               <HugeiconsIcon icon={Cancel01Icon} className="w-4 h-4" strokeWidth={2} />
             </button>
@@ -150,31 +154,37 @@ export function ImageUploader({
           {/* Preview image */}
           <img
             src={previewUrl}
-            alt="Uploaded image"
+            alt={t('uploadedImage')}
             className="w-full h-full object-contain rounded-md"
           />
         </div>
       ) : (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4">
-          <div className="p-4 rounded-full bg-muted/50">
+        <div className={cn(
+          'absolute inset-0 flex flex-col items-center justify-center p-4',
+          compact ? 'gap-2' : 'gap-3'
+        )}>
+          <div className={cn('rounded-full bg-muted/50', compact ? 'p-2' : 'p-4')}>
             <HugeiconsIcon
               icon={isDragging ? Image01Icon : CloudUploadIcon}
               className={cn(
-                'w-10 h-10 transition-colors',
+                'transition-colors',
+                compact ? 'w-6 h-6' : 'w-10 h-10',
                 isDragging ? 'text-primary' : 'text-muted-foreground'
               )}
               strokeWidth={1.5}
             />
           </div>
           <div className="text-center">
-            <p className="text-sm font-medium text-foreground">
-              {isDragging ? 'Drop image here' : t('dragDrop')}
+            <p className={cn('font-medium text-foreground', compact ? 'text-xs' : 'text-sm')}>
+              {isDragging ? t('dropHere') : (compact ? t('browse') : t('dragDrop'))}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {t('or')} <span className="text-primary underline">{t('browse')}</span>
-            </p>
-            <p className="text-xs text-muted-foreground/70 mt-2">
-              (max {MAX_FILE_SIZE_MB}&nbsp;MB)
+            {!compact && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {t('or')} <span className="text-primary underline">{t('browse')}</span>
+              </p>
+            )}
+            <p className={cn('text-muted-foreground/70', compact ? 'text-[10px] mt-1' : 'text-xs mt-2')}>
+              ({t('maxSize', { size: MAX_FILE_SIZE_MB })})
             </p>
           </div>
         </div>

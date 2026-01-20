@@ -52,6 +52,7 @@ export type ToolFormData = {
   toolTypeId: string;
   priceConfig?: PriceConfig;
   thumbnailUrl?: string;
+  referenceImages?: string[];
   configJson?: Record<string, unknown>;
   isActive: boolean;
   isFeatured: boolean;
@@ -81,6 +82,7 @@ export async function createTool(data: ToolFormData) {
       toolTypeId: data.toolTypeId,
       priceConfig: data.priceConfig || null,
       thumbnailUrl: data.thumbnailUrl || null,
+      referenceImages: data.referenceImages || null,
       configJson: data.configJson || null,
       isActive: data.isActive,
       isFeatured: data.isFeatured,
@@ -121,6 +123,7 @@ export async function updateTool(id: string, data: ToolFormData) {
       toolTypeId: data.toolTypeId,
       priceConfig: data.priceConfig || null,
       thumbnailUrl: data.thumbnailUrl || null,
+      referenceImages: data.referenceImages || null,
       configJson: data.configJson || null,
       isActive: data.isActive,
       isFeatured: data.isFeatured,
