@@ -136,29 +136,7 @@ export async function POST(request: Request) {
     await incrementUserTasks(user.id);
     await setIdempotency(user.id, idempotencyKey, task.id);
 
-    // Extract provider from tool config for queue routing
-    // For multi-step tools, get provider from the step config
     const toolConfig = tool.configJson as Record<string, unknown> | undefined;
-    let providerSlug = (toolConfig?.provider as string) || undefined;
-
-    // Check if this is a multi-step tool and get provider from step config
-    const step = (inputParams as Record<string, unknown>)?.step as string | undefined;
-    if (step && toolConfig?.steps) {
-      // Support both array format (new) and object format (legacy)
-      let stepConfig: { provider?: string } | undefined;
-      if (Array.isArray(toolConfig.steps)) {
-        // Array format: find step by name
-        stepConfig = (toolConfig.steps as Array<{ name: string; provider?: string }>)
-          .find((s) => s.name === step);
-      } else {
-        // Object format (legacy): access by key
-        const steps = toolConfig.steps as Record<string, { provider?: string }>;
-        stepConfig = steps[step];
-      }
-      if (stepConfig?.provider) {
-        providerSlug = stepConfig.provider;
-      }
-    }
 
     const jobId = await enqueueTask({
       taskId: task.id,
@@ -170,7 +148,6 @@ export async function POST(request: Request) {
       toolConfig,
       idempotencyKey,
       requestId: task.requestId!,
-      providerSlug, // Route to fal_ai, google, or openai queue
     });
 
     await db.update(tasks).set({ bullJobId: jobId }).where(eq(tasks.id, task.id));

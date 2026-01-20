@@ -1,15 +1,3 @@
-/**
- * @fileoverview Alert Dialog UI Component
- * @fileoverview 警告对话框UI组件
- *
- * Confirmation dialog for destructive or important actions.
- * Based on Base UI AlertDialog primitive.
- * 用于破坏性或重要操作的确认对话框。
- * 基于Base UI AlertDialog原语构建。
- *
- * @module components/ui/alert-dialog
- */
-
 "use client"
 
 import * as React from "react"

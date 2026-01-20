@@ -15,6 +15,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -139,6 +140,20 @@ export function ListToolbar({
         />
         <span className="text-muted-foreground whitespace-nowrap">Show deleted</span>
       </label>
+    </div>
+  );
+}
+
+/**
+ * Skeleton fallback for ListToolbar while loading.
+ */
+export function ListToolbarSkeleton() {
+  return (
+    <div className="flex flex-wrap items-center gap-3 mb-6 p-4 bg-muted/30 rounded-lg border">
+      <Skeleton className="h-9 flex-1 min-w-[200px]" />
+      <Skeleton className="h-9 w-[150px]" />
+      <Skeleton className="h-9 w-[150px]" />
+      <Skeleton className="h-6 w-28 ml-auto" />
     </div>
   );
 }

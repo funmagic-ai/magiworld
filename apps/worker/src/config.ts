@@ -25,6 +25,10 @@ const envSchema = z.object({
   // Queue prefix for worker isolation (e.g., "web", "admin")
   QUEUE_PREFIX: z.string().optional().default(''),
 
+  // Comma-separated list of queues to listen to (e.g., "default,fal_ai,openai,3d_tripo,3d_hunyuan")
+  // If empty, listens to all queues in QueueNames enum (default, fal_ai, google, openai)
+  WORKER_QUEUES: z.string().optional().default(''),
+
   // Database
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
 

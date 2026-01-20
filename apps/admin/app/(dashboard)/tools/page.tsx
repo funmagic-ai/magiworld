@@ -18,6 +18,7 @@
  * @module apps/admin/app/tools/page
  */
 
+import { Suspense } from 'react';
 import {
   db,
   tools,
@@ -34,7 +35,7 @@ import {
 } from '@magiworld/db';
 import Link from 'next/link';
 import { RestoreToolButton } from '@/components/restore-tool-button';
-import { ListToolbar } from '@/components/list-toolbar';
+import { ListToolbar, ListToolbarSkeleton } from '@/components/list-toolbar';
 import { ToolActiveToggle } from '@/components/tool-active-toggle';
 
 /**
@@ -187,9 +188,10 @@ export default async function ToolsPage({ searchParams }: PageProps) {
     getToolsList(params),
     getToolTypeOptions(),
   ]);
+  const pageKey = JSON.stringify(params);
 
   return (
-    <div className="p-8">
+    <div key={pageKey} className="p-8">
       {/* Page Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -209,17 +211,19 @@ export default async function ToolsPage({ searchParams }: PageProps) {
       </div>
 
       {/* Toolbar */}
-      <ListToolbar
-        searchPlaceholder="Search tools..."
-        filterOptions={toolTypeOptions}
-        filterLabel="Type"
-        filterParamName="toolType"
-        sortOptions={SORT_OPTIONS}
-        currentSearch={params.search || ''}
-        currentFilter={params.toolType || ''}
-        currentSort={params.sort || ''}
-        showDeleted={params.showDeleted === 'true'}
-      />
+      <Suspense fallback={<ListToolbarSkeleton />}>
+        <ListToolbar
+          searchPlaceholder="Search tools..."
+          filterOptions={toolTypeOptions}
+          filterLabel="Type"
+          filterParamName="toolType"
+          sortOptions={SORT_OPTIONS}
+          currentSearch={params.search || ''}
+          currentFilter={params.toolType || ''}
+          currentSort={params.sort || ''}
+          showDeleted={params.showDeleted === 'true'}
+        />
+      </Suspense>
 
       {/* Tools Table */}
       <div className="rounded-lg border bg-card">

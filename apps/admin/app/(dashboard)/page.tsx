@@ -15,6 +15,7 @@
  * @module app/(dashboard)/page
  */
 
+import Link from 'next/link';
 import { db, tools, toolTypes, media, homeBanners, count } from '@magiworld/db';
 
 /**
@@ -159,7 +160,7 @@ interface StatCardProps {
  */
 function StatCard({ title, value, href, icon }: StatCardProps) {
   return (
-    <a
+    <Link
       href={href}
       className="rounded-lg border bg-card p-6 shadow-sm transition-colors hover:bg-accent"
     >
@@ -168,6 +169,6 @@ function StatCard({ title, value, href, icon }: StatCardProps) {
         <span className="text-muted-foreground">{icon}</span>
       </div>
       <div className="mt-2 text-3xl font-bold">{value}</div>
-    </a>
+    </Link>
   );
 }

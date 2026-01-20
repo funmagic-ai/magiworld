@@ -1,15 +1,3 @@
-/**
- * @fileoverview Progress UI Component
- * @fileoverview 进度条UI组件
- *
- * Progress bar with determinate and indeterminate states.
- * Based on Base UI Progress primitive.
- * 带确定和不确定状态的进度条。
- * 基于Base UI Progress原语构建。
- *
- * @module components/ui/progress
- */
-
 "use client"
 
 import { Progress as ProgressPrimitive } from "@base-ui/react/progress"
@@ -57,7 +45,7 @@ function ProgressIndicator({
   return (
     <ProgressPrimitive.Indicator
       data-slot="progress-indicator"
-      className={cn("bg-primary h-full transition-[width]", className)}
+      className={cn("bg-primary h-full transition-all", className)}
       {...props}
     />
   )

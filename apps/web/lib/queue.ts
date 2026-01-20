@@ -4,7 +4,6 @@ import type {
   TaskUpdateMessage,
   IdempotencyResult,
   PriceConfig,
-  QueueName,
 } from '@magiworld/queue';
 
 export interface CreateTaskParams {
@@ -19,24 +18,6 @@ export interface CreateTaskParams {
   idempotencyKey?: string;
   requestId?: string;
   timeout?: number;
-  /** Provider slug for queue routing (fal_ai, google, openai) */
-  providerSlug?: string;
-}
-
-/**
- * Map provider slug to queue name
- * 将供应商 slug 映射到队列名称
- */
-function getQueueNameForProvider(providerSlug?: string): QueueName | undefined {
-  if (!providerSlug) return undefined;
-
-  const providerToQueue: Record<string, QueueName> = {
-    fal_ai: 'fal_ai',
-    google: 'google',
-    openai: 'openai',
-  };
-
-  return providerToQueue[providerSlug.toLowerCase()];
 }
 
 export async function enqueueTask(params: CreateTaskParams): Promise<string> {
@@ -56,9 +37,8 @@ export async function enqueueTask(params: CreateTaskParams): Promise<string> {
     timeout: params.timeout,
   };
 
-  // Route to provider-specific queue if provider is specified
-  const queueName = getQueueNameForProvider(params.providerSlug);
-  return _enqueue(jobData, queueName);
+  // All tasks go to default queue (prefix separates web vs admin)
+  return _enqueue(jobData);
 }
 
 export async function checkUserConcurrency(

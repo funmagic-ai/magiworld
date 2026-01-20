@@ -21,6 +21,8 @@ export interface CreateTaskParams {
   toolId: string;
   inputParams: Record<string, unknown>;
   idempotencyKey?: string;
+  /** Parent task ID for multi-step workflows */
+  parentTaskId?: string;
 }
 
 interface CreateTaskResponse {

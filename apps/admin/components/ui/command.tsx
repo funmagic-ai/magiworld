@@ -1,15 +1,3 @@
-/**
- * @fileoverview Command UI Component
- * @fileoverview 命令面板UI组件
- *
- * Command palette with search, groups, and keyboard navigation.
- * Based on cmdk (Command Menu) library.
- * 带搜索、分组和键盘导航的命令面板。
- * 基于cmdk（命令菜单）库构建。
- *
- * @module components/ui/command
- */
-
 "use client"
 
 import * as React from "react"

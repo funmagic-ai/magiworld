@@ -1,15 +1,3 @@
-/**
- * @fileoverview Slider UI Component
- * @fileoverview 滑块UI组件
- *
- * Range slider for selecting numeric values.
- * Based on Base UI Slider primitive.
- * 用于选择数值的范围滑块。
- * 基于Base UI Slider原语构建。
- *
- * @module components/ui/slider
- */
-
 "use client"
 
 import * as React from "react"

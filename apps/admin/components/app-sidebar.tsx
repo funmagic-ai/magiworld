@@ -86,6 +86,8 @@ const menuItems: MenuItem[] = [
     title: 'System',
     icon: Settings02Icon,
     children: [
+      { title: 'Tasks', url: '/tasks' },
+      { title: 'BullMQ Jobs', url: '/jobs' },
       { title: 'Providers', url: '/providers' },
       { title: 'Admin Providers', url: '/admin-providers' },
       { title: 'Dead Letters', url: '/dead-letters' },

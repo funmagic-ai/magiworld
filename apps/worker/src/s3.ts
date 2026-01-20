@@ -186,3 +186,50 @@ export async function uploadBase64Image(
 
   return uploadTaskResult(userId, taskId, base64, extension, toolSlug);
 }
+
+/**
+ * Download file from URL and upload to S3
+ * 从 URL 下载文件并上传到 S3
+ *
+ * Downloads a file from a remote URL and re-uploads it to S3.
+ * Useful for persisting 3D models from providers that have expiring URLs.
+ * 从远程 URL 下载文件并重新上传到 S3。
+ * 用于持久化来自 URL 会过期的提供商的 3D 模型。
+ *
+ * @param userId - User ID (or Admin ID) / 用户 ID（或管理员 ID）
+ * @param taskId - Task ID / 任务 ID
+ * @param sourceUrl - URL to download from / 要下载的 URL
+ * @param extension - File extension (e.g., 'glb', 'fbx') / 文件扩展名
+ * @param toolSlug - Tool slug for organizing results / 工具标识用于组织结果
+ * @returns S3 object URL / S3 对象 URL
+ */
+export async function downloadAndUpload(
+  userId: string,
+  taskId: string,
+  sourceUrl: string,
+  extension: string,
+  toolSlug?: string
+): Promise<string> {
+  logger.info(`Downloading file from provider`, {
+    taskId,
+    sourceUrl: sourceUrl.substring(0, 100) + '...',
+    extension,
+  });
+
+  // Download the file
+  const response = await fetch(sourceUrl);
+
+  if (!response.ok) {
+    throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+
+  logger.info(`Downloaded file, uploading to S3`, {
+    taskId,
+    size: buffer.length,
+  });
+
+  // Upload to S3
+  return uploadTaskResult(userId, taskId, buffer, extension, toolSlug);
+}

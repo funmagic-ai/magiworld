@@ -14,10 +14,11 @@
  */
 
 import OpenAI from 'openai';
+import { Magi3DClient, TripoProvider, HunyuanProvider, TaskType, TaskStatus } from 'magi-3d/server';
 import type { ToolContext, ToolResult } from './types';
 import { getProviderCredentials } from './provider-client';
 import { saveTaskResponse, sanitizeResponse } from './task-response';
-import { uploadBase64Image } from '../s3';
+import { uploadBase64Image, downloadAndUpload } from '../s3';
 import { createLogger } from '@magiworld/utils/logger';
 
 const logger = createLogger('tool:fig-me');
@@ -62,7 +63,16 @@ interface TransformStepConfig extends BaseStepConfig {
  */
 interface Step3DConfig extends BaseStepConfig {
   name: '3d';
-  modelParams?: Record<string, unknown>;
+  /** Provider slug: '3d_tripo' or '3d_hunyuan' */
+  provider?: '3d_tripo' | '3d_hunyuan';
+  /** Output format: 'glb', 'fbx', 'obj' */
+  format?: 'glb' | 'fbx' | 'obj';
+  /**
+   * Provider-specific options passed to the 3D SDK
+   * Tripo: pbr, texture, texture_quality, geometry_quality, face_limit, quad, auto_size
+   * Hunyuan: EnablePBR, FaceCount, GenerateType, PolygonType, ResultFormat
+   */
+  providerOptions?: Record<string, unknown>;
 }
 
 /**
@@ -349,10 +359,14 @@ async function processTransformStep(ctx: ToolContext): Promise<ToolResult> {
  * Process 3D generation step - Generate 3D model from transformed image
  * 处理3D生成步骤 - 从转换后的图像生成3D模型
  *
- * Uses 3D SDK (Tripo or Hunyuan) for 3D model generation.
- * Reads admin-configured modelParams from toolConfig.
- * 使用3D SDK（Tripo或Hunyuan）生成3D模型。
- * 从 toolConfig 读取管理员配置的 modelParams。
+ * Uses magi-3d SDK with Tripo or Hunyuan provider for 3D model generation.
+ * Provider is selected via configJson.steps[].provider ('3d_tripo' or '3d_hunyuan').
+ * Uses blocking polling with 5-second intervals to check progress.
+ * Downloads the generated model and re-uploads to S3 for persistence.
+ * 使用 magi-3d SDK 和 Tripo 或 Hunyuan 提供商生成 3D 模型。
+ * 通过 configJson.steps[].provider 选择提供商（'3d_tripo' 或 '3d_hunyuan'）。
+ * 使用5秒间隔的阻塞轮询检查进度。
+ * 下载生成的模型并重新上传到 S3 以持久化存储。
  */
 async function process3DStep(ctx: ToolContext): Promise<ToolResult> {
   const { taskId, userId, toolSlug, inputParams, toolConfig, job } = ctx;
@@ -364,64 +378,158 @@ async function process3DStep(ctx: ToolContext): Promise<ToolResult> {
 
   // Get step config from toolConfig.steps array (or legacy object format)
   const stepConfig = findStepByName<Step3DConfig>(toolConfig?.steps, '3d');
-  const modelParams = stepConfig.modelParams || {};
+  const providerSlug = stepConfig.provider || '3d_tripo';
+  const outputFormat = stepConfig.format || 'glb';
+  const providerOptions = stepConfig.providerOptions || {};
 
   logger.info(`Processing Fig Me 3D generation`, {
     taskId,
+    provider: providerSlug,
+    format: outputFormat,
     imageUrl: imageUrl.substring(0, 50) + '...',
-    modelParams,
+    providerOptions,
   });
 
-  // Get provider credentials
-  // TODO: Replace with actual 3D SDK provider slug (e.g., '3d_tripo' or '3d_hunyuan')
-  // For now, skip credential check in mock mode
-  // const credentials = await getProviderCredentials('3d_tripo');
+  await job.updateProgress(5);
+
+  // Get provider credentials from database
+  const credentials = await getProviderCredentials(providerSlug);
 
   await job.updateProgress(10);
 
-  logger.debug(`Calling 3D SDK API (MOCK MODE)`, { taskId });
+  // Create appropriate SDK provider based on provider slug
+  let sdkProvider: TripoProvider | HunyuanProvider;
+  let providerName: string;
+
+  if (providerSlug === '3d_hunyuan') {
+    // Hunyuan uses secretId + secretKey + region
+    if (!credentials.accessKeyId || !credentials.secretAccessKey) {
+      throw new Error('Hunyuan provider requires accessKeyId (secretId) and secretAccessKey (secretKey)');
+    }
+    sdkProvider = new HunyuanProvider({
+      secretId: credentials.accessKeyId,
+      secretKey: credentials.secretAccessKey,
+      region: credentials.region || 'ap-guangzhou',
+    });
+    providerName = 'hunyuan';
+  } else {
+    // Tripo uses apiKey
+    if (!credentials.apiKey) {
+      throw new Error('Tripo provider requires apiKey');
+    }
+    sdkProvider = new TripoProvider({
+      apiKey: credentials.apiKey,
+    });
+    providerName = 'tripo';
+  }
+
+  // Create client
+  const client = new Magi3DClient(sdkProvider);
+
+  await job.updateProgress(15);
+
+  logger.debug(`Creating 3D generation task with ${providerName}`, { taskId });
   const startTime = Date.now();
+
+  // Build request payload for logging
+  const requestPayload = {
+    type: TaskType.IMAGE_TO_3D,
+    input: imageUrl,
+    providerOptions,
+  };
+
+  // Create the 3D generation task
+  const sdkTaskId = await client.createTask({
+    type: TaskType.IMAGE_TO_3D,
+    input: imageUrl,
+    providerOptions,
+  });
+
+  logger.info(`Created 3D task, polling for completion`, {
+    taskId,
+    sdkTaskId,
+    provider: providerName,
+  });
 
   await job.updateProgress(20);
 
-  // MOCK: Simulate 3D generation processing time
-  // TODO: Replace with actual magi-3d-sdk call when SDK is available
-  //
-  // Example expected usage:
-  // import { Magi3D } from 'magi-3d-sdk';
-  // const client = new Magi3D({ apiKey: credentials.apiKey });
-  // const result = await client.generate({
-  //   imageUrl,
-  //   format: modelParams.format || 'glb',
-  //   textureResolution: modelParams.textureResolution || 1024,
-  // });
-
-  // Simulate processing delay (2-4 seconds)
-  await new Promise((resolve) => setTimeout(resolve, 2000 + Math.random() * 2000));
-
-  await job.updateProgress(50);
-
-  // Simulate more processing
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-
-  await job.updateProgress(70);
+  // Poll for completion with progress updates
+  // Progress range: 20-80% during 3D generation
+  // Uses 5-second polling interval
+  const result = await client.pollUntilDone(sdkTaskId, {
+    interval: 5000, // 5 seconds between polls
+    onProgress: async (task) => {
+      // Map SDK progress (0-100) to our range (20-80)
+      const mappedProgress = 20 + Math.floor(task.progress * 0.6);
+      await job.updateProgress(mappedProgress);
+      logger.debug(`3D generation progress: ${task.progress}%`, {
+        taskId,
+        sdkTaskId,
+        status: task.status,
+        progressDetail: task.progressDetail,
+      });
+    },
+  });
 
   const apiLatencyMs = Date.now() - startTime;
-  logger.debug(`3D SDK API responded (MOCK)`, { taskId, latencyMs: apiLatencyMs });
 
-  // MOCK: Return a placeholder result
-  // In real implementation, this would be the actual 3D model URL
-  // For now, we'll return the input image URL as placeholder
-  const mockResultUrl = imageUrl; // In real impl: upload GLB to S3
+  logger.info(`3D generation completed`, {
+    taskId,
+    sdkTaskId,
+    status: result.status,
+    latencyMs: apiLatencyMs,
+  });
 
-  // Save raw request/response for debugging and auditing (mock data)
+  await job.updateProgress(85);
+
+  // Check if task succeeded
+  if (result.status !== TaskStatus.SUCCEEDED) {
+    // Save error response
+    await saveTaskResponse({
+      taskId,
+      stepName: '3d',
+      provider: providerSlug,
+      model: providerName,
+      rawRequest: requestPayload,
+      rawResponse: sanitizeResponse(result.rawResponse),
+      latencyMs: apiLatencyMs,
+      errorMessage: result.error?.message || 'Unknown error',
+    });
+    throw new Error(`3D generation failed: ${result.error?.message || 'Unknown error'}`);
+  }
+
+  // Get the model URL from result
+  const modelUrl = result.result?.model;
+  if (!modelUrl) {
+    throw new Error('3D generation succeeded but no model URL returned');
+  }
+
+  logger.debug(`Downloading 3D model from provider`, {
+    taskId,
+    modelUrl: modelUrl.substring(0, 100) + '...',
+  });
+
+  // Download and re-upload to S3 (provider URLs may expire)
+  const resultUrl = await downloadAndUpload(
+    userId,
+    taskId,
+    modelUrl,
+    outputFormat,
+    toolSlug
+  );
+
+  logger.info(`3D model uploaded to S3`, { taskId, resultUrl });
+
+  await job.updateProgress(95);
+
+  // Save raw request/response for debugging and auditing
   await saveTaskResponse({
     taskId,
     stepName: '3d',
-    provider: '3d_tripo',
-    model: 'tripo-3d-mock',
-    rawRequest: { imageUrl, modelParams, isMock: true },
-    rawResponse: { resultUrl: mockResultUrl, isMock: true },
+    provider: providerSlug,
+    model: providerName,
+    rawRequest: requestPayload,
+    rawResponse: sanitizeResponse(result.rawResponse),
     latencyMs: apiLatencyMs,
     statusCode: 200,
   });
@@ -430,17 +538,20 @@ async function process3DStep(ctx: ToolContext): Promise<ToolResult> {
 
   return {
     outputData: {
-      resultUrl: mockResultUrl,
-      provider: '3d_tripo',
-      model: 'tripo-3d-mock',
+      resultUrl,
+      providerModelUrl: modelUrl, // Original provider URL for reference
+      provider: providerSlug,
+      model: providerName,
       step: '3d',
-      format: 'glb',
-      isMock: true, // Flag to indicate this is mock data
+      format: outputFormat,
+      sdkTaskId,
+      thumbnail: result.result?.thumbnail,
     },
     usageData: {
-      provider: '3d_tripo',
-      model: 'tripo-3d-mock',
+      provider: providerSlug,
+      model: providerName,
       apiLatencyMs,
+      sdkTaskId,
     },
   };
 }

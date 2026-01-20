@@ -1,15 +1,3 @@
-/**
- * @fileoverview Label UI Component
- * @fileoverview 标签UI组件
- *
- * Accessible label for form inputs with consistent typography.
- * Associates with input via htmlFor attribute.
- * 表单输入的无障碍标签，具有统一的排版。
- * 通过htmlFor属性与输入关联。
- *
- * @module components/ui/label
- */
-
 "use client"
 
 import * as React from "react"

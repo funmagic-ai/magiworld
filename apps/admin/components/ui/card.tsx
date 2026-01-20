@@ -1,15 +1,3 @@
-/**
- * @fileoverview Card UI Component
- * @fileoverview 卡片UI组件
- *
- * Container card with header, content, and footer slots.
- * Includes styling for nested images.
- * 带头部、内容和底部插槽的容器卡片。
- * 包含嵌套图片的样式支持。
- *
- * @module components/ui/card
- */
-
 import * as React from "react"
 
 import { cn } from "@/lib/utils"

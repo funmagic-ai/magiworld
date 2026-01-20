@@ -37,11 +37,12 @@ function ComboboxTrigger({
   )
 }
 
-function ComboboxClear(props: ComboboxPrimitive.Clear.Props) {
+function ComboboxClear({ className, ...props }: ComboboxPrimitive.Clear.Props) {
   return (
     <ComboboxPrimitive.Clear
       data-slot="combobox-clear"
       render={<InputGroupButton variant="ghost" size="icon-xs" />}
+      className={cn(className)}
       {...props}
     >
       <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} className="pointer-events-none" />
@@ -178,8 +179,10 @@ function ComboboxLabel({
   )
 }
 
-function ComboboxCollection(props: ComboboxPrimitive.Collection.Props) {
-  return <ComboboxPrimitive.Collection data-slot="combobox-collection" {...props} />
+function ComboboxCollection({ ...props }: ComboboxPrimitive.Collection.Props) {
+  return (
+    <ComboboxPrimitive.Collection data-slot="combobox-collection" {...props} />
+  )
 }
 
 function ComboboxEmpty({ className, ...props }: ComboboxPrimitive.Empty.Props) {

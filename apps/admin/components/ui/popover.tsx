@@ -1,15 +1,3 @@
-/**
- * @fileoverview Popover UI Component
- * @fileoverview 弹出框UI组件
- *
- * Floating content positioned relative to a trigger element.
- * Based on Base UI Popover primitive.
- * 相对于触发元素定位的浮动内容。
- * 基于Base UI Popover原语构建。
- *
- * @module components/ui/popover
- */
-
 "use client"
 
 import * as React from "react"

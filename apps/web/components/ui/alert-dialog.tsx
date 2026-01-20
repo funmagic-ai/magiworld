@@ -129,8 +129,17 @@ function AlertDialogDescription({
   )
 }
 
-function AlertDialogAction(props: React.ComponentProps<typeof Button>) {
-  return <Button data-slot="alert-dialog-action" {...props} />
+function AlertDialogAction({
+  className,
+  ...props
+}: React.ComponentProps<typeof Button>) {
+  return (
+    <Button
+      data-slot="alert-dialog-action"
+      className={cn(className)}
+      {...props}
+    />
+  )
 }
 
 function AlertDialogCancel({

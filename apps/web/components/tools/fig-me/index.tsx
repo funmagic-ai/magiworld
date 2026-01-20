@@ -17,8 +17,9 @@
 
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, Suspense } from 'react';
 import { useTranslations } from 'next-intl';
+import dynamic from 'next/dynamic';
 import { ImageUploader } from '../shared/image-uploader';
 import { ProgressBar } from '../shared/progress-bar';
 import { useTask } from '../shared/use-task';
@@ -38,6 +39,20 @@ import {
   CubeIcon,
 } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
+
+// Dynamic import for ModelViewer (client-only, no SSR)
+const ModelViewer = dynamic(
+  () => import('../shared/model-viewer').then((mod) => mod.ModelViewer),
+  { ssr: false, loading: () => <ModelViewerPlaceholder /> }
+);
+
+function ModelViewerPlaceholder() {
+  return (
+    <div className="w-full h-full flex items-center justify-center bg-gray-900 rounded-lg">
+      <HugeiconsIcon icon={CubeIcon} className="w-12 h-12 text-primary/50 animate-pulse" />
+    </div>
+  );
+}
 
 /**
  * Tool data passed from the router
@@ -285,8 +300,8 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
         inputParams: {
           step: '3d',
           imageUrl: transformTask.resultUrl,
-          parentTaskId: transformTask.taskId,
         },
+        parentTaskId: transformTask.taskId,
       });
 
       if (!taskId) {
@@ -581,7 +596,7 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
         <Card>
           <CardContent className="p-6 space-y-6">
             <div className="grid md:grid-cols-2 gap-6">
-              {/* Figurine thumbnail */}
+              {/* Transformed image thumbnail */}
               <div className="space-y-2">
                 <h4 className="text-sm font-medium text-muted-foreground">{t('sections.transform.title')}</h4>
                 <div className="aspect-square rounded-lg overflow-hidden border bg-muted">
@@ -595,46 +610,28 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
                 </div>
               </div>
 
-              {/* 3D Model result */}
+              {/* 3D Model viewer */}
               <div className="space-y-2">
                 <h4 className="text-sm font-medium text-muted-foreground">{t('sections.model3d.title')}</h4>
-                <div className="aspect-square rounded-lg overflow-hidden border bg-muted relative group">
-                  {/* TODO: Replace with 3D model viewer when real 3D SDK is integrated */}
-                  <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-gradient-to-br from-primary/10 to-primary/5">
-                    <HugeiconsIcon icon={CubeIcon} className="w-16 h-16 text-primary animate-pulse" />
-                    <div className="text-center">
-                      <p className="font-medium text-primary">{t('sections.model3d.ready')}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {t('sections.model3d.mockNotice')}
-                      </p>
-                    </div>
-                  </div>
+                <div className="aspect-square rounded-lg overflow-hidden border bg-muted">
                   {task3D.resultUrl && (
-                    <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        onClick={() => handleDownload(task3D.resultUrl!, 'figurine-3d.glb')}
-                        variant="secondary"
-                        size="icon"
-                        className="h-8 w-8"
-                      >
-                        <HugeiconsIcon icon={Download04Icon} className="w-4 h-4" />
-                      </Button>
-                    </div>
+                    <ModelViewer
+                      url={task3D.resultUrl}
+                      autoRotate
+                      allowMaximize
+                      className="w-full h-full"
+                    />
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Action buttons */}
-            <div className="flex flex-col sm:flex-row gap-3 pt-4">
-              <Button onClick={handleRetry3D} variant="outline" size="lg" className="flex-1 gap-2">
-                <HugeiconsIcon icon={RefreshIcon} className="w-5 h-5" />
-                {t('actions.retry3d')}
-              </Button>
+            {/* Action button - Download only (no regenerate) */}
+            <div className="flex justify-center pt-4">
               <Button
-                onClick={() => task3D.resultUrl && handleDownload(task3D.resultUrl, 'figurine-3d.glb')}
+                onClick={() => task3D.resultUrl && task3D.taskId && handleDownload(task3D.resultUrl, `${task3D.taskId}.glb`)}
                 size="lg"
-                className="flex-1 gap-2"
+                className="gap-2 px-8"
                 disabled={!task3D.resultUrl}
               >
                 <HugeiconsIcon icon={Download04Icon} className="w-5 h-5" />

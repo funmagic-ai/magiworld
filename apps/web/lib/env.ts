@@ -7,7 +7,6 @@ const serverEnvSchema = z.object({
 
   S3_WEB_PRIVATE_BUCKET: z.string().min(1, 'S3_WEB_PRIVATE_BUCKET is required'),
   S3_WEB_SHARED_BUCKET: z.string().min(1, 'S3_WEB_SHARED_BUCKET is required'),
-  S3_PUBLIC_ASSETS_BUCKET: z.string().min(1, 'S3_PUBLIC_ASSETS_BUCKET is required'),
 
   CLOUDFRONT_WEB_PRIVATE_URL: z.string().url('CLOUDFRONT_WEB_PRIVATE_URL must be a valid URL'),
   CLOUDFRONT_WEB_SHARED_URL: z.string().url('CLOUDFRONT_WEB_SHARED_URL must be a valid URL'),

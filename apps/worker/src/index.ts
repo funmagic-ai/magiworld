@@ -59,13 +59,29 @@ async function processJob(job: Job<TaskJobData, TaskJobResult>): Promise<TaskJob
 }
 
 /**
- * Create workers for all queues (with prefix applied)
+ * Get list of queues to listen to
+ * 获取要监听的队列列表
+ *
+ * Simple approach: Just use 'default' queue.
+ * Queue prefix (QUEUE_PREFIX env var) separates web vs admin environments.
+ * - Web: 'default' queue
+ * - Admin: 'admin_default' queue (with QUEUE_PREFIX=admin)
  */
-function createWorkers(): Worker<TaskJobData, TaskJobResult>[] {
+function getQueuesToListen(): string[] {
+  // Simple: just use default queue
+  // The prefix is applied separately by getPrefixedQueueName
+  return ['default'];
+}
+
+/**
+ * Create workers for all queues (with prefix applied)
+ * Supports dynamic queue names discovered from database or env var
+ */
+function createWorkers(queues: string[]): Worker<TaskJobData, TaskJobResult>[] {
   const redis = getRedis();
   const workers: Worker<TaskJobData, TaskJobResult>[] = [];
 
-  for (const baseQueueName of Object.values(QueueNames)) {
+  for (const baseQueueName of queues) {
     const prefixedName = getPrefixedQueueName(baseQueueName as QueueName);
 
     const worker = new Worker<TaskJobData, TaskJobResult>(prefixedName, processJob, {
@@ -121,8 +137,12 @@ async function main() {
     process.exit(1);
   }
 
+  // Get queues to listen to
+  const queues = getQueuesToListen();
+  logger.info(`Will listen to queues: ${queues.join(', ')}`);
+
   // Create workers
-  const workers = createWorkers();
+  const workers = createWorkers(queues);
 
   // Setup graceful shutdown
   setupGracefulShutdown(workers, async () => {

@@ -9,8 +9,10 @@
  *
  * Environment Variables:
  * - REDIS_URL: Default Redis URL (required)
- * - REDIS_QUEUE_URL: Redis for BullMQ queues (optional, falls back to REDIS_URL)
- * - REDIS_PUBSUB_URL: Redis for pub/sub (optional, falls back to REDIS_URL)
+ * - WEB_REDIS_URL: Redis URL for web workers (optional, falls back to REDIS_URL)
+ * - ADMIN_REDIS_URL: Redis URL for admin workers (optional, falls back to REDIS_URL)
+ * - REDIS_QUEUE_URL: Redis for BullMQ queues (optional, falls back to environment-specific URL)
+ * - REDIS_PUBSUB_URL: Redis for pub/sub (optional, falls back to environment-specific URL)
  * - REDIS_TLS: Enable TLS ('true' to enable)
  * - QUEUE_PREFIX: Queue prefix for isolation ('admin' for admin queues)
  *
@@ -114,29 +116,45 @@ export function getEnvironmentSettings(): EnvironmentSettings {
 }
 
 /**
- * Get Redis URL for a specific connection type
- * 获取特定连接类型的 Redis URL
+ * Get environment-specific base Redis URL
+ * 获取环境特定的基础 Redis URL
  *
- * Falls back to REDIS_URL if specific URL is not set.
- * 如果未设置特定 URL，则回退到 REDIS_URL。
- *
- * @param type - Connection type / 连接类型
- * @returns Redis URL
+ * Priority: WEB_REDIS_URL/ADMIN_REDIS_URL > REDIS_URL
  */
-export function getRedisUrl(type: RedisConnectionType = 'default'): string {
+function getEnvironmentRedisUrl(): string {
   const defaultUrl = process.env.REDIS_URL;
 
   if (!defaultUrl) {
     throw new Error('REDIS_URL environment variable is not set');
   }
 
+  if (isAdminMode()) {
+    return process.env.ADMIN_REDIS_URL || defaultUrl;
+  }
+
+  return process.env.WEB_REDIS_URL || defaultUrl;
+}
+
+/**
+ * Get Redis URL for a specific connection type
+ * 获取特定连接类型的 Redis URL
+ *
+ * Priority: REDIS_QUEUE_URL/REDIS_PUBSUB_URL > WEB_REDIS_URL/ADMIN_REDIS_URL > REDIS_URL
+ * 优先级：REDIS_QUEUE_URL/REDIS_PUBSUB_URL > WEB_REDIS_URL/ADMIN_REDIS_URL > REDIS_URL
+ *
+ * @param type - Connection type / 连接类型
+ * @returns Redis URL
+ */
+export function getRedisUrl(type: RedisConnectionType = 'default'): string {
+  const envUrl = getEnvironmentRedisUrl();
+
   switch (type) {
     case 'queue':
-      return process.env.REDIS_QUEUE_URL || defaultUrl;
+      return process.env.REDIS_QUEUE_URL || envUrl;
     case 'pubsub':
-      return process.env.REDIS_PUBSUB_URL || defaultUrl;
+      return process.env.REDIS_PUBSUB_URL || envUrl;
     default:
-      return defaultUrl;
+      return envUrl;
   }
 }
 
@@ -257,8 +275,10 @@ export function logRedisConfig(): void {
     tlsEnabled: isTlsEnabled(),
     urls: {
       default: process.env.REDIS_URL ? '(set)' : '(not set)',
-      queue: process.env.REDIS_QUEUE_URL ? '(set)' : '(using default)',
-      pubsub: process.env.REDIS_PUBSUB_URL ? '(set)' : '(using default)',
+      web: process.env.WEB_REDIS_URL ? '(set)' : '(using default)',
+      admin: process.env.ADMIN_REDIS_URL ? '(set)' : '(using default)',
+      queue: process.env.REDIS_QUEUE_URL ? '(set)' : '(using env-specific)',
+      pubsub: process.env.REDIS_PUBSUB_URL ? '(set)' : '(using env-specific)',
     },
   });
 }

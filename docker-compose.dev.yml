@@ -20,7 +20,7 @@
 #   - admin:           Next.js admin app at http://localhost:3002
 #   - worker:          BullMQ worker for web tasks (no prefix)
 #   - worker-admin:    BullMQ worker for admin tasks (prefix: admin)
-#   - bull-board:      Queue monitoring dashboard at http://localhost:8082
+#   - (task monitoring now in admin app at /system/tasks)
 #
 # =============================================================================
 
@@ -205,27 +205,6 @@ services:
       - WORKER_SHUTDOWN_TIMEOUT_MS=30000
     env_file:
       - ./apps/worker/.env
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - magiworld-network
-
-  # ---------------------------------------------------------------------------
-  # Bull Board - Queue Monitoring Dashboard
-  # ---------------------------------------------------------------------------
-  bull-board:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev.bull-board
-    container_name: magiworld-bull-board
-    restart: unless-stopped
-    ports:
-      - "8082:8082"
-    environment:
-      - NODE_ENV=development
-      - PORT=8082
-      - REDIS_URL=redis://redis:6379
     depends_on:
       redis:
         condition: service_healthy

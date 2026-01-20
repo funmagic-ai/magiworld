@@ -12,13 +12,18 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   {
-    href: '/ai-lab',
-    translationKey: 'allTools',
-    isActive: (pathname) => pathname === '/ai-lab',
+    href: '/assets',
+    translationKey: 'assets',
+    isActive: (pathname) => pathname === '/assets',
+  },
+  {
+    href: '/assets/tasks',
+    translationKey: 'myTasks',
+    isActive: (pathname) => pathname === '/assets/tasks' || pathname.startsWith('/assets/tasks/'),
   },
 ];
 
-export function AILabNav() {
+export function AssetsNav() {
   const t = useTranslations('nav');
   const pathname = usePathname();
 

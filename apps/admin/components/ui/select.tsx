@@ -1,15 +1,3 @@
-/**
- * @fileoverview Select UI Component
- * @fileoverview 选择器UI组件
- *
- * Dropdown select with trigger, options, and value display.
- * Based on Base UI Select primitive.
- * 带触发器、选项和值显示的下拉选择器。
- * 基于Base UI Select原语构建。
- *
- * @module components/ui/select
- */
-
 "use client"
 
 import * as React from "react"
@@ -31,19 +19,13 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   )
 }
 
-function SelectValue({
-  className,
-  placeholder,
-  ...props
-}: SelectPrimitive.Value.Props & { placeholder?: string }) {
+function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
       className={cn("flex flex-1 text-left", className)}
       {...props}
-    >
-      {(value) => value ?? <span className="text-muted-foreground">{placeholder}</span>}
-    </SelectPrimitive.Value>
+    />
   )
 }
 

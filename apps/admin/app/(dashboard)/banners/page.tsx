@@ -19,6 +19,7 @@
  * @module apps/admin/app/banners/page
  */
 
+import { Suspense } from 'react';
 import {
   db,
   homeBanners,
@@ -33,7 +34,7 @@ import {
 } from '@magiworld/db';
 import Link from 'next/link';
 import { RestoreBannerButton } from '@/components/restore-banner-button';
-import { ListToolbar } from '@/components/list-toolbar';
+import { ListToolbar, ListToolbarSkeleton } from '@/components/list-toolbar';
 import { BannerActiveToggle } from '@/components/banner-active-toggle';
 
 /**
@@ -156,9 +157,10 @@ interface PageProps {
 export default async function BannersPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const bannersList = await getBannersList(params);
+  const pageKey = JSON.stringify(params);
 
   return (
-    <div className="p-8">
+    <div key={pageKey} className="p-8">
       {/* Page Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -178,17 +180,19 @@ export default async function BannersPage({ searchParams }: PageProps) {
       </div>
 
       {/* Toolbar */}
-      <ListToolbar
-        searchPlaceholder="Search banners..."
-        filterOptions={FILTER_OPTIONS}
-        filterLabel="Type"
-        filterParamName="type"
-        sortOptions={SORT_OPTIONS}
-        currentSearch={params.search || ''}
-        currentFilter={params.type || ''}
-        currentSort={params.sort || ''}
-        showDeleted={params.showDeleted === 'true'}
-      />
+      <Suspense fallback={<ListToolbarSkeleton />}>
+        <ListToolbar
+          searchPlaceholder="Search banners..."
+          filterOptions={FILTER_OPTIONS}
+          filterLabel="Type"
+          filterParamName="type"
+          sortOptions={SORT_OPTIONS}
+          currentSearch={params.search || ''}
+          currentFilter={params.type || ''}
+          currentSort={params.sort || ''}
+          showDeleted={params.showDeleted === 'true'}
+        />
+      </Suspense>
 
       {/* Banners Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

@@ -47,7 +47,20 @@ export {
   getQueueStats,
   getAllQueueStats,
   getPrefixedQueueName,
+  getQueueJobs,
+  removeQueueJob,
+  retryQueueJob,
+  cleanQueueJobs,
+  // Full name variants (for admin panel to access all queues)
+  discoverAllQueues,
+  getQueueByFullName,
+  getQueueStatsByFullName,
+  getQueueJobsByFullName,
+  removeQueueJobByFullName,
+  retryQueueJobByFullName,
+  cleanQueueJobsByFullName,
 } from './queues';
+export type { JobState, SerializedJob } from './queues';
 
 // Pub/Sub for real-time updates
 export {

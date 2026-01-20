@@ -37,6 +37,7 @@ export default async function LibraryPage({ searchParams }: PageProps) {
 
   return (
     <LibraryClient
+      key={params.folder || 'root'}
       folders={contents.folders}
       media={contents.media}
       currentFolder={contents.currentFolder}

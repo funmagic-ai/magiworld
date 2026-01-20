@@ -1,15 +1,3 @@
-/**
- * @fileoverview Avatar UI Component
- * @fileoverview 头像UI组件
- *
- * User avatar component with image and fallback support.
- * Based on Base UI Avatar primitive.
- * 用户头像组件，支持图片和备用文本。
- * 基于Base UI Avatar原语构建。
- *
- * @module components/ui/avatar
- */
-
 "use client"
 
 import * as React from "react"

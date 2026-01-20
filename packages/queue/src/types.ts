@@ -156,6 +156,10 @@ export interface DeadLetterEntry {
 
 /**
  * Queue names for different providers / 不同供应商的队列名称
+ *
+ * Note: This is the base set of queues. Additional queues are created
+ * dynamically based on provider slugs (e.g., '3d_tripo', '3d_hunyuan').
+ * 注意：这是基础队列集。其他队列根据提供商 slug 动态创建。
  */
 export const QueueNames = {
   FAL_AI: 'fal_ai',
@@ -165,6 +169,12 @@ export const QueueNames = {
 } as const;
 
 export type QueueName = (typeof QueueNames)[keyof typeof QueueNames];
+
+/**
+ * Dynamic queue name - can be a static queue name or any provider slug
+ * 动态队列名称 - 可以是静态队列名称或任何提供商 slug
+ */
+export type DynamicQueueName = QueueName | string;
 
 /**
  * Default queue configuration / 默认队列配置
