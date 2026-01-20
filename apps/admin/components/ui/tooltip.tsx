@@ -12,6 +12,7 @@
 
 "use client"
 
+import { useId } from "react"
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"
 
 import { cn } from "@/lib/utils"
@@ -37,8 +38,15 @@ function Tooltip({ ...props }: TooltipPrimitive.Root.Props) {
   )
 }
 
-function TooltipTrigger({ ...props }: TooltipPrimitive.Trigger.Props) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+function TooltipTrigger({ id, ...props }: TooltipPrimitive.Trigger.Props) {
+  const generatedId = useId()
+  return (
+    <TooltipPrimitive.Trigger
+      data-slot="tooltip-trigger"
+      id={id ?? generatedId}
+      {...props}
+    />
+  )
 }
 
 function TooltipContent({
