@@ -18,7 +18,6 @@ import { usePathname } from 'next/navigation';
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
@@ -45,7 +44,13 @@ import {
   Settings02Icon,
   IdeaIcon,
 } from '@hugeicons/core-free-icons';
+import { UserButton } from '@/components/auth/user-button';
+import { signOut } from '@/lib/auth-actions';
 
+/**
+ * Menu item type definition
+ * 菜单项类型定义
+ */
 type MenuItem = {
   title: string;
   url?: string;
@@ -53,6 +58,10 @@ type MenuItem = {
   children?: { title: string; url: string }[];
 };
 
+/**
+ * Navigation menu items configuration
+ * 导航菜单项配置
+ */
 const menuItems: MenuItem[] = [
   {
     title: 'Dashboard',
@@ -103,60 +112,121 @@ const menuItems: MenuItem[] = [
   },
 ];
 
+/**
+ * App sidebar props
+ * 应用侧边栏属性
+ */
 type AppSidebarProps = {
-  footer?: React.ReactNode;
+  user: {
+    name?: string;
+    email?: string;
+    picture?: string;
+  };
 };
 
-export function AppSidebar({ footer }: AppSidebarProps) {
+/**
+ * App Sidebar Component
+ * 应用侧边栏组件
+ *
+ * Renders the main navigation sidebar with:
+ * - User button at the top
+ * - Collapsible menu groups
+ * - Active route highlighting
+ *
+ * 渲染主导航侧边栏，包含：
+ * - 顶部用户按钮
+ * - 可折叠菜单组
+ * - 当前路由高亮
+ */
+export function AppSidebar({ user }: AppSidebarProps) {
   const pathname = usePathname();
 
+  // Track mounted state for hydration safety
+  // 跟踪挂载状态以确保水合安全
+  const [mounted, setMounted] = useState(false);
+
+  // Track open state for each collapsible menu
+  // 跟踪每个可折叠菜单的展开状态
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
+
+  /**
+   * Calculate initial open state based on current pathname
+   * 根据当前路径计算初始展开状态
+   */
+  const getInitialOpenState = () => {
+    const state: Record<string, boolean> = {};
+    menuItems.forEach((item) => {
+      if (item.children) {
+        state[item.title] = item.children.some((child) =>
+          child.url === '/' ? pathname === '/' : pathname.startsWith(child.url)
+        );
+      }
+    });
+    return state;
+  };
+
+  // Initialize on mount and update when pathname changes
+  // 挂载时初始化，路径变化时更新
+  useEffect(() => {
+    setMounted(true);
+    setOpenMenus(getInitialOpenState());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  // Render skeleton during SSR to avoid hydration mismatch
+  // SSR 期间渲染骨架屏以避免水合不匹配
+  if (!mounted) {
+    return (
+      <Sidebar collapsible="icon">
+        <div className="flex flex-col p-4 space-y-4">
+          <div className="h-8 w-8 rounded bg-muted animate-pulse" />
+          <div className="h-4 w-32 rounded bg-muted animate-pulse" />
+        </div>
+      </Sidebar>
+    );
+  }
+
+  /**
+   * Check if a URL is active
+   * 检查 URL 是否为当前活动路由
+   */
   const isActive = (url: string) => {
     if (url === '/') return pathname === '/';
     return pathname.startsWith(url);
   };
 
+  /**
+   * Check if any child in a group is active
+   * 检查组中是否有任何子项为活动状态
+   */
   const isGroupActive = (children?: { url: string }[]) => {
     if (!children) return false;
     return children.some((child) => isActive(child.url));
   };
 
-  // Track open state for each collapsible menu
-  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
-
-  // Initialize open state based on active routes (only once on mount)
-  useEffect(() => {
-    const initialState: Record<string, boolean> = {};
-    menuItems.forEach((item) => {
-      if (item.children) {
-        initialState[item.title] = isGroupActive(item.children);
-      }
-    });
-    setOpenMenus(initialState);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  /**
+   * Toggle a menu's open state
+   * 切换菜单的展开状态
+   */
   const toggleMenu = (title: string) => {
     setOpenMenus((prev) => ({ ...prev, [title]: !prev[title] }));
   };
 
   return (
     <Sidebar collapsible="icon">
+      {/* Header with user button */}
       <SidebarHeader className="border-b">
-        <div className="flex h-12 items-center gap-2 px-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <span className="text-sm font-bold">M</span>
-          </div>
-          <span className="font-semibold group-data-[collapsible=icon]:hidden">
-            Admin
-          </span>
-        </div>
+        <UserButton user={user} onSignOut={signOut} />
       </SidebarHeader>
+
+      {/* Navigation content */}
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => {
                 // Simple menu item (no children)
+                // 简单菜单项（无子项）
                 if (!item.children && item.url) {
                   return (
                     <SidebarMenuItem key={item.title}>
@@ -171,6 +241,7 @@ export function AppSidebar({ footer }: AppSidebarProps) {
                 }
 
                 // Collapsible menu item (with children)
+                // 可折叠菜单项（有子项）
                 return (
                   <Collapsible
                     key={item.title}
@@ -180,6 +251,7 @@ export function AppSidebar({ footer }: AppSidebarProps) {
                   >
                     <SidebarMenuItem>
                       <CollapsibleTrigger
+                        nativeButton={true}
                         render={
                           <SidebarMenuButton
                             isActive={isGroupActive(item.children)}
@@ -200,7 +272,7 @@ export function AppSidebar({ footer }: AppSidebarProps) {
                           {item.children?.map((child) => (
                             <SidebarMenuSubItem key={child.title}>
                               <SidebarMenuSubButton
-                                render={<Link href={child.url} />}
+                                render={(props) => <Link {...props} href={child.url} />}
                                 isActive={isActive(child.url)}
                               >
                                 <span>{child.title}</span>
@@ -217,11 +289,7 @@ export function AppSidebar({ footer }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      {footer && (
-        <SidebarFooter className="border-t">
-          {footer}
-        </SidebarFooter>
-      )}
+
       <SidebarRail />
     </Sidebar>
   );

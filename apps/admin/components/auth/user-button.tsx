@@ -59,7 +59,7 @@ export function UserButton({ user, onSignOut }: UserButtonProps) {
           <p className="truncate text-xs text-muted-foreground">{user.email}</p>
         </div>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="right" className="w-56">
+      <DropdownMenuContent align="start" side="top" className="w-56">
         <div className="px-2 py-1.5">
           <p className="text-sm font-medium">{user.name || 'Admin User'}</p>
           <p className="text-xs text-muted-foreground">{user.email}</p>

@@ -42,7 +42,10 @@ interface TransformStepConfig extends BaseStepConfig {
   model?: string;
   /** Image generation model (e.g., gpt-image-1.5) */
   imageModel?: string;
-  systemPrompt?: string;
+  /** Admin-configured system prompt (role: system) */
+  system?: string;
+  /** Admin-configured user prompt (role: user) */
+  user?: string;
   /** Image size: 1024x1024, 1024x1536, 1536x1024, auto */
   size?: string;
   /** Rendering quality: low, medium, high */
@@ -55,6 +58,8 @@ interface TransformStepConfig extends BaseStepConfig {
   background?: 'transparent' | 'opaque';
   /** Moderation strictness: auto (default) or low */
   moderation?: 'auto' | 'low';
+  /** Action mode: auto (default), edit (modify image), generate (create new) */
+  action?: 'auto' | 'edit' | 'generate';
 }
 
 /**
@@ -117,7 +122,9 @@ interface FigMeInput {
   imageUrl: string;
   /** Reference image URL for style guidance (user-selected from configJson.referenceImages) */
   referenceImageUrl?: string;
-  /** Optional user prompt to customize the transformation */
+  /** Optional end-user system prompt (appended to admin system prompt) */
+  systemPrompt?: string;
+  /** Optional end-user prompt (appended to admin user prompt) */
   userPrompt?: string;
 }
 
@@ -169,7 +176,7 @@ export async function processFigMe(ctx: ToolContext): Promise<ToolResult> {
  */
 async function processTransformStep(ctx: ToolContext): Promise<ToolResult> {
   const { taskId, userId, toolSlug, inputParams, toolConfig } = ctx;
-  const { imageUrl, referenceImageUrl, userPrompt } = inputParams as unknown as FigMeInput;
+  const { imageUrl, referenceImageUrl, systemPrompt: userSystemPrompt, userPrompt } = inputParams as unknown as FigMeInput;
 
   if (!imageUrl) {
     throw new Error('imageUrl is required for transform step');
@@ -190,7 +197,10 @@ async function processTransformStep(ctx: ToolContext): Promise<ToolResult> {
     imageModel,
     imageUrl: imageUrl.substring(0, 50) + '...',
     hasReferenceImage: !!referenceImageUrl,
-    hasSystemPrompt: !!stepConfig.systemPrompt,
+    hasAdminSystem: !!stepConfig.system,
+    hasAdminUser: !!stepConfig.user,
+    hasUserSystem: !!userSystemPrompt,
+    hasUserPrompt: !!userPrompt,
   });
 
   // Get provider credentials
@@ -198,12 +208,21 @@ async function processTransformStep(ctx: ToolContext): Promise<ToolResult> {
 
   await ctx.updateProgress(10);
 
-  // Build prompt - describes the transformation to apply
-  const systemPrompt = stepConfig.systemPrompt ||
-    'Transform this photo into a cute 3D figurine style character. Make it colorful, toy-like, with smooth surfaces suitable for 3D printing. Keep the person\'s distinctive features but stylize them in a chibi/kawaii aesthetic.';
-  const fullPrompt = userPrompt
-    ? `${systemPrompt}\n\nUser request: ${userPrompt}`
-    : systemPrompt;
+  // Build system prompt - combine admin config + user input
+  // Default system prompt if none provided
+  const defaultSystem = 'You are an expert at transforming photos into 3D figurine style characters.';
+  const systemContent = [
+    stepConfig.system || defaultSystem,
+    userSystemPrompt,
+  ].filter(Boolean).join('\n\n');
+
+  // Build user prompt - combine admin config + user input
+  // Default user prompt if none provided
+  const defaultUser = 'Transform this photo into a cute 3D figurine style character. Make it colorful, toy-like, with smooth surfaces suitable for 3D printing. Keep the person\'s distinctive features but stylize them in a chibi/kawaii aesthetic.';
+  const userContent = [
+    stepConfig.user || defaultUser,
+    userPrompt,
+  ].filter(Boolean).join('\n\n');
 
   // Initialize OpenAI client
   const openai = new OpenAI({ apiKey: credentials.apiKey });
@@ -211,27 +230,27 @@ async function processTransformStep(ctx: ToolContext): Promise<ToolResult> {
   await ctx.updateProgress(15);
 
   // Build input content array for Responses API
-  // Pass fully qualified URLs directly - no need to download/convert to base64
-  // Add text labels between images for clarity
+  // Images are included in the user message
   type InputContent =
     | { type: 'input_text'; text: string }
     | { type: 'input_image'; image_url: string; detail: 'auto' | 'low' | 'high' };
 
-  const inputContent: InputContent[] = [
-    { type: 'input_text', text: fullPrompt },
+  // User message content with text and images
+  const userMessageContent: InputContent[] = [
+    { type: 'input_text', text: userContent },
     { type: 'input_text', text: '[UploadImage]' },
     { type: 'input_image', image_url: imageUrl, detail: 'auto' },
   ];
 
   // Add reference image if provided
   if (referenceImageUrl) {
-    inputContent.push({ type: 'input_text', text: '[ReferenceImage]' });
-    inputContent.push({ type: 'input_image', image_url: referenceImageUrl, detail: 'auto' });
+    userMessageContent.push({ type: 'input_text', text: '[ReferenceImage]' });
+    userMessageContent.push({ type: 'input_image', image_url: referenceImageUrl, detail: 'auto' });
   }
 
   logger.debug(`Prepared input for OpenAI Responses API`, {
     taskId,
-    imageCount: inputContent.filter(c => c.type === 'input_image').length,
+    imageCount: userMessageContent.filter(c => c.type === 'input_image').length,
   });
 
   await ctx.updateProgress(20);
@@ -241,48 +260,56 @@ async function processTransformStep(ctx: ToolContext): Promise<ToolResult> {
   const size = stepConfig.size || 'auto';
   const quality = stepConfig.quality || 'auto';
   const background = stepConfig.background || 'auto';
+  const moderation = stepConfig.moderation || 'auto';
+  const action = stepConfig.action || 'auto';
 
   logger.debug(`Calling OpenAI Responses API`, { taskId, model, imageModel });
   const startTime = Date.now();
 
+  // Build input messages with separate system and user roles
+  const inputMessages = [
+    {
+      role: 'system' as const,
+      content: systemContent,
+    },
+    {
+      role: 'user' as const,
+      content: userMessageContent,
+    },
+  ];
+
   // Build request payload for logging
   const requestPayload = {
     model,
-    input: [
-      {
-        role: 'user',
-        content: inputContent,
-      },
-    ],
+    input: inputMessages,
     tools: [{
       type: 'image_generation',
       model: imageModel,
+      action,
       size,
       quality,
       background,
+      moderation,
       output_format: outputFormat,
     }],
   };
 
   // Call OpenAI Responses API with image_generation tool
   // @see https://platform.openai.com/docs/guides/image-generation
+  // Cast tools array - SDK types may be outdated but API supports action, gpt-image-1.5
   const response = await openai.responses.create({
     model,
-    input: [
-      {
-        role: 'user',
-        content: inputContent,
-      },
-    ],
+    input: inputMessages,
     tools: [{
       type: 'image_generation',
-      // Cast to expected type - SDK types may be outdated but API supports gpt-image-1.5
-      model: imageModel as 'gpt-image-1',
-      size: size as '1024x1024' | '1024x1536' | '1536x1024' | 'auto',
-      quality: quality as 'low' | 'medium' | 'high' | 'auto',
-      background: background as 'transparent' | 'opaque' | 'auto',
-      output_format: outputFormat as 'png' | 'webp' | 'jpeg',
-    }],
+      model: imageModel,
+      action,
+      size,
+      quality,
+      background,
+      moderation,
+      output_format: outputFormat,
+    }] as unknown as OpenAI.Responses.Tool[],
   });
 
   const apiLatencyMs = Date.now() - startTime;
