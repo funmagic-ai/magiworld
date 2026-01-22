@@ -43,6 +43,10 @@ const envSchema = z.object({
   S3_WEB_PRIVATE_BUCKET: z.string().min(1, 'S3_WEB_PRIVATE_BUCKET is required'),
   CLOUDFRONT_WEB_PRIVATE_URL: z.string().min(1, 'CLOUDFRONT_WEB_PRIVATE_URL is required'),
 
+  // CloudFront URL signing credentials (for signing URLs before sending to external APIs)
+  CLOUDFRONT_KEY_PAIR_ID: z.string().optional(),
+  CLOUDFRONT_PRIVATE_KEY: z.string().optional(),
+
   // Admin assets bucket (for admin task results)
   S3_ADMIN_ASSETS_BUCKET: z.string().optional(),
   // Support both CLOUDFRONT_ADMIN_URL and NEXT_PUBLIC_CLOUDFRONT_ADMIN_URL for convenience

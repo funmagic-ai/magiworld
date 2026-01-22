@@ -16,7 +16,7 @@
 import { fal } from '@fal-ai/client';
 import type { ToolContext, ToolResult } from './types';
 import { getProviderCredentials } from './provider-client';
-import { uploadBase64Image } from '../s3';
+import { uploadBase64Image, maybeSignUrl } from '../s3';
 import { createLogger } from '@magiworld/utils/logger';
 import { bufferToBase64 } from '@magiworld/utils/ai';
 
@@ -75,12 +75,15 @@ export async function processImageUpscale(ctx: ToolContext): Promise<ToolResult>
   await job.updateProgress(10);
 
   // Step 2: Call fal.ai API using native SDK
+  // Sign URL before sending to external API
+  const signedImageUrl = maybeSignUrl(imageUrl);
+
   logger.debug(`Calling fal.ai Real-ESRGAN API`, { taskId });
   const startTime = Date.now();
 
   const result = await fal.subscribe('fal-ai/real-esrgan', {
     input: {
-      image_url: imageUrl,
+      image_url: signedImageUrl,
       scale,
     },
     logs: false,

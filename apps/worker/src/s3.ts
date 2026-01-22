@@ -15,10 +15,79 @@
  */
 
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/cloudfront-signer';
 import { config, getS3EnvPrefix, isAdminWorker } from './config';
 import { createLogger } from '@magiworld/utils/logger';
 
 const logger = createLogger('s3');
+
+/** Default URL expiry time in seconds (1 hour) */
+const DEFAULT_EXPIRY_SECONDS = 3600;
+
+/**
+ * Check if CloudFront URL signing is enabled
+ * 检查是否启用了 CloudFront URL 签名
+ */
+export function isSigningEnabled(): boolean {
+  return !!(config.CLOUDFRONT_KEY_PAIR_ID && config.CLOUDFRONT_PRIVATE_KEY);
+}
+
+/**
+ * Get the CloudFront private key (with newline handling)
+ * 获取 CloudFront 私钥（处理换行符）
+ */
+function getPrivateKey(): string {
+  return config.CLOUDFRONT_PRIVATE_KEY?.replace(/\\n/g, '\n') || '';
+}
+
+/**
+ * Sign a CloudFront URL for external API access
+ * 为外部 API 访问签名 CloudFront URL
+ *
+ * Use this to sign URLs before sending them to external APIs (OpenAI, fal.ai, etc.)
+ * that need to fetch our private S3 assets.
+ * 在将 URL 发送给需要获取我们私有 S3 资源的外部 API（OpenAI、fal.ai 等）之前使用此函数签名。
+ *
+ * @param url - The CloudFront URL to sign / 要签名的 CloudFront URL
+ * @param expirySeconds - Expiry time in seconds (default: 1 hour) / 过期时间（默认：1小时）
+ * @returns Signed URL if signing is enabled, original URL otherwise / 如果启用签名则返回签名 URL，否则返回原 URL
+ */
+export function signUrl(url: string, expirySeconds?: number): string {
+  // Only sign URLs from our CloudFront distribution
+  if (!url.startsWith(config.CLOUDFRONT_WEB_PRIVATE_URL)) {
+    return url;
+  }
+
+  // Skip if signing not configured
+  if (!isSigningEnabled()) {
+    logger.warn('CloudFront signing not configured, returning unsigned URL');
+    return url;
+  }
+
+  const expiry = expirySeconds || DEFAULT_EXPIRY_SECONDS;
+  const dateLessThan = new Date(Date.now() + expiry * 1000);
+
+  return getSignedUrl({
+    url,
+    keyPairId: config.CLOUDFRONT_KEY_PAIR_ID!,
+    dateLessThan,
+    privateKey: getPrivateKey(),
+  });
+}
+
+/**
+ * Sign a URL if it's from our CloudFront distribution
+ * 如果 URL 来自我们的 CloudFront 分发则签名
+ *
+ * This is a convenience function that safely handles non-CloudFront URLs.
+ * 这是一个便捷函数，可安全处理非 CloudFront URL。
+ *
+ * @param url - URL to potentially sign / 可能需要签名的 URL
+ * @returns Signed URL if applicable, original URL otherwise / 如适用则返回签名 URL，否则返回原 URL
+ */
+export function maybeSignUrl(url: string): string {
+  return signUrl(url);
+}
 
 /**
  * S3 client instance (lazy initialized)

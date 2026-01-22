@@ -22,6 +22,7 @@ import { useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
 import { ImageUploader } from '../shared/image-uploader';
 import { ProgressBar } from '../shared/progress-bar';
+import { RecentTasks } from '../shared/recent-tasks';
 import { useTask } from '../shared/use-task';
 import { useUpload } from '../shared/use-upload';
 import { Button } from '@/components/ui/button';
@@ -34,7 +35,6 @@ import {
   Download04Icon,
   Copy01Icon,
   Tick02Icon,
-  RefreshIcon,
   ArrowRight01Icon,
   CubeIcon,
 } from '@hugeicons/core-free-icons';
@@ -249,15 +249,16 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
       // Reuse existing uploaded URL or upload new image
       let imageUrl = uploadedImageUrl;
       if (!imageUrl && inputFile) {
-        imageUrl = await upload.upload(inputFile);
-        if (!imageUrl) {
+        const uploadResult = await upload.upload(inputFile);
+        if (!uploadResult) {
           throw new Error('Failed to upload image');
         }
-        // Store for retry
+        // Store UNSIGNED URL for retry and task creation (never expires)
+        imageUrl = uploadResult.unsignedUrl;
         setUploadedImageUrl(imageUrl);
       }
 
-      // Create transform task with reference image
+      // Create transform task with reference image (using unsigned URL)
       const taskId = await transformTaskHook.createTask({
         toolId: tool.id,
         inputParams: {
@@ -561,13 +562,9 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
               </div>
             </div>
 
-            {/* Action buttons */}
-            <div className="flex flex-col sm:flex-row gap-3 pt-4">
-              <Button onClick={handleRetryTransform} variant="outline" size="lg" className="flex-1 gap-2">
-                <HugeiconsIcon icon={RefreshIcon} className="w-5 h-5" />
-                {t('actions.retry')}
-              </Button>
-              <Button onClick={handleGenerate3D} size="lg" className="flex-1 gap-2">
+            {/* Action button - Generate 3D only (retry removed to encourage proceeding) */}
+            <div className="flex justify-center pt-4">
+              <Button onClick={handleGenerate3D} size="lg" className="gap-2 px-8">
                 {t('actions.generate3d')}
                 <HugeiconsIcon icon={ArrowRight01Icon} className="w-5 h-5" />
               </Button>
@@ -641,6 +638,9 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Recent Tasks - show user's recent tasks for this tool */}
+      <RecentTasks toolId={tool.id} limit={4} />
     </div>
   );
 }

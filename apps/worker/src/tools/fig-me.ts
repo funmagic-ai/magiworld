@@ -18,7 +18,7 @@ import { Magi3DClient, TripoProvider, HunyuanProvider, TaskType, TaskStatus } fr
 import type { ToolContext, ToolResult } from './types';
 import { getProviderCredentials } from './provider-client';
 import { saveTaskResponse, sanitizeResponse } from './task-response';
-import { uploadBase64Image, downloadAndUpload } from '../s3';
+import { uploadBase64Image, downloadAndUpload, maybeSignUrl } from '../s3';
 import { createLogger } from '@magiworld/utils/logger';
 
 const logger = createLogger('tool:fig-me');
@@ -235,17 +235,21 @@ async function processTransformStep(ctx: ToolContext): Promise<ToolResult> {
     | { type: 'input_text'; text: string }
     | { type: 'input_image'; image_url: string; detail: 'auto' | 'low' | 'high' };
 
+  // Sign URLs before sending to external API (OpenAI needs accessible URLs)
+  const signedImageUrl = maybeSignUrl(imageUrl);
+  const signedReferenceUrl = referenceImageUrl ? maybeSignUrl(referenceImageUrl) : undefined;
+
   // User message content with text and images
   const userMessageContent: InputContent[] = [
     { type: 'input_text', text: userContent },
     { type: 'input_text', text: '[UploadImage]' },
-    { type: 'input_image', image_url: imageUrl, detail: 'auto' },
+    { type: 'input_image', image_url: signedImageUrl, detail: 'auto' },
   ];
 
   // Add reference image if provided
-  if (referenceImageUrl) {
+  if (signedReferenceUrl) {
     userMessageContent.push({ type: 'input_text', text: '[ReferenceImage]' });
-    userMessageContent.push({ type: 'input_image', image_url: referenceImageUrl, detail: 'auto' });
+    userMessageContent.push({ type: 'input_image', image_url: signedReferenceUrl, detail: 'auto' });
   }
 
   logger.debug(`Prepared input for OpenAI Responses API`, {
@@ -458,17 +462,20 @@ async function process3DStep(ctx: ToolContext): Promise<ToolResult> {
   logger.debug(`Creating 3D generation task with ${providerName}`, { taskId });
   const startTime = Date.now();
 
+  // Sign URL before sending to external 3D API
+  const signedImageUrl = maybeSignUrl(imageUrl);
+
   // Build request payload for logging
   const requestPayload = {
     type: TaskType.IMAGE_TO_3D,
-    input: imageUrl,
+    input: signedImageUrl,
     providerOptions,
   };
 
   // Create the 3D generation task
   const sdkTaskId = await client.createTask({
     type: TaskType.IMAGE_TO_3D,
-    input: imageUrl,
+    input: signedImageUrl,
     providerOptions,
   });
 

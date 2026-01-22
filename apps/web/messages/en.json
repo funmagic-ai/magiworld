@@ -82,8 +82,20 @@
       "success": "Completed",
       "failed": "Failed"
     },
+    "step": {
+      "transform": "Transform",
+      "3d": "3D Model"
+    },
     "viewResult": "View Result",
-    "createdAt": "Created"
+    "createdAt": "Created",
+    "completedAt": "Completed",
+    "download": "Download",
+    "copyUrl": "Copy URL",
+    "copied": "Copied!",
+    "error": "An error occurred",
+    "close": "Close",
+    "recentTasks": "Recent Tasks",
+    "allTasks": "All Tasks"
   },
   "footer": {
     "rights": "All rights reserved",

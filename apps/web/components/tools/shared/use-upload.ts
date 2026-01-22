@@ -3,9 +3,9 @@
  * @fileoverview Web应用上传钩子
  *
  * Provides file upload functionality using presigned URLs to S3.
- * After upload, calls signUrl server action to get a signed CloudFront URL.
+ * Returns both signed URL (for display) and unsigned URL (for storage).
  * 使用预签名URL上传文件到S3。
- * 上传后调用signUrl服务端操作获取签名的CloudFront URL。
+ * 返回签名URL（用于显示）和未签名URL（用于存储）。
  *
  * @module components/tools/shared/use-upload
  */
@@ -16,12 +16,30 @@ import { useState, useCallback } from 'react';
 import { useUploadFile } from '@better-upload/client';
 import { signUrl } from '@/lib/actions/upload';
 
+/**
+ * Upload result containing both signed and unsigned URLs
+ * 上传结果，包含签名和未签名URL
+ */
+export interface UploadResult {
+  /** Signed URL for immediate display (expires after 1 hour) */
+  signedUrl: string;
+  /** Unsigned URL for database storage (never expires) */
+  unsignedUrl: string;
+  /** S3 object key */
+  key: string;
+}
+
 export interface UseUploadState {
   isUploading: boolean;
   progress: number;
   error: string | null;
+  /** @deprecated Use signedUrl instead */
   uploadedUrl: string | null;
   uploadedKey: string | null;
+  /** Signed URL for display (expires after 1 hour) */
+  signedUrl: string | null;
+  /** Unsigned URL for storage (never expires) */
+  unsignedUrl: string | null;
 }
 
 export interface UploadOptions {
@@ -30,7 +48,8 @@ export interface UploadOptions {
 }
 
 export interface UseUploadReturn extends UseUploadState {
-  upload: (file: File) => Promise<string | null>;
+  /** Upload file and return result with both signed and unsigned URLs */
+  upload: (file: File) => Promise<UploadResult | null>;
   reset: () => void;
 }
 
@@ -43,6 +62,8 @@ export function useUpload(options: UploadOptions = {}): UseUploadReturn {
     error: null,
     uploadedUrl: null,
     uploadedKey: null,
+    signedUrl: null,
+    unsignedUrl: null,
   });
 
   const {
@@ -53,13 +74,15 @@ export function useUpload(options: UploadOptions = {}): UseUploadReturn {
   } = useUploadFile({ route });
 
   const upload = useCallback(
-    async (file: File): Promise<string | null> => {
+    async (file: File): Promise<UploadResult | null> => {
       setState({
         isUploading: true,
         progress: 0,
         error: null,
         uploadedUrl: null,
         uploadedKey: null,
+        signedUrl: null,
+        unsignedUrl: null,
       });
 
       try {
@@ -69,23 +92,25 @@ export function useUpload(options: UploadOptions = {}): UseUploadReturn {
           throw new Error('Upload failed - no result returned');
         }
 
-        const uploadedKey = result.file.objectInfo.key;
-        // Build CloudFront URL using environment variable
+        const key = result.file.objectInfo.key;
+        // Build unsigned CloudFront URL
         const baseUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_WEB_PRIVATE_URL || '';
-        const unsignedUrl = baseUrl ? `${baseUrl}/${uploadedKey}` : uploadedKey;
+        const unsignedUrl = baseUrl ? `${baseUrl}/${key}` : key;
 
-        // Sign the URL for private CloudFront access
-        const uploadedUrl = await signUrl(unsignedUrl);
+        // Sign the URL for immediate display
+        const signedUrl = await signUrl(unsignedUrl);
 
         setState({
           isUploading: false,
           progress: 100,
           error: null,
-          uploadedUrl,
-          uploadedKey,
+          uploadedUrl: signedUrl, // Backward compatibility
+          uploadedKey: key,
+          signedUrl,
+          unsignedUrl,
         });
 
-        return uploadedUrl;
+        return { signedUrl, unsignedUrl, key };
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Upload failed';
         setState((prev) => ({
@@ -107,6 +132,8 @@ export function useUpload(options: UploadOptions = {}): UseUploadReturn {
       error: null,
       uploadedUrl: null,
       uploadedKey: null,
+      signedUrl: null,
+      unsignedUrl: null,
     });
   }, [hookReset]);
 
@@ -116,6 +143,8 @@ export function useUpload(options: UploadOptions = {}): UseUploadReturn {
     error: state.error || hookError?.message || null,
     uploadedUrl: state.uploadedUrl,
     uploadedKey: state.uploadedKey,
+    signedUrl: state.signedUrl,
+    unsignedUrl: state.unsignedUrl,
     upload,
     reset,
   };

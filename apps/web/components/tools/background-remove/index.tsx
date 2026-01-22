@@ -109,8 +109,8 @@ export function BackgroundRemoveInterface({ tool }: BackgroundRemoveInterfacePro
     setSelectedGenerationId(generationId);
 
     try {
-      const uploadedUrl = await upload.upload(inputFile);
-      if (!uploadedUrl) {
+      const uploadResult = await upload.upload(inputFile);
+      if (!uploadResult) {
         throw new Error('Failed to upload image');
       }
 
@@ -119,10 +119,11 @@ export function BackgroundRemoveInterface({ tool }: BackgroundRemoveInterfacePro
           g.id === generationId ? { ...g, progress: 20 } : g
         )
       );
+      // Use UNSIGNED URL for task creation (never expires in database)
       const taskId = await task.createTask({
         toolId: tool.id,
         inputParams: {
-          imageUrl: uploadedUrl,
+          imageUrl: uploadResult.unsignedUrl,
         },
       });
 

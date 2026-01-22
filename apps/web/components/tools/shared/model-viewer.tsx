@@ -74,6 +74,14 @@ function Model({ url, autoRotate = true }: ModelProps) {
     }
   });
 
+  // Cleanup GLTF resources on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      // Dispose of the cached GLTF when component unmounts
+      useGLTF.clear(url);
+    };
+  }, [url]);
+
   return (
     <group ref={groupRef}>
       <primitive object={scene} />

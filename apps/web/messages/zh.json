@@ -82,8 +82,20 @@
       "success": "已完成",
       "failed": "失败"
     },
+    "step": {
+      "transform": "转换",
+      "3d": "3D模型"
+    },
     "viewResult": "查看结果",
-    "createdAt": "创建时间"
+    "createdAt": "创建时间",
+    "completedAt": "完成时间",
+    "download": "下载",
+    "copyUrl": "复制链接",
+    "copied": "已复制！",
+    "error": "发生错误",
+    "close": "关闭",
+    "recentTasks": "最近任务",
+    "allTasks": "全部任务"
   },
   "footer": {
     "rights": "版权所有",

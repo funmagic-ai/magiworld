@@ -15,6 +15,17 @@ import {
 } from '@/lib/queue';
 
 /**
+ * Sign a CloudFront URL for retrieval
+ * 为检索签名CloudFront URL
+ *
+ * URLs are stored unsigned in the database, signed on retrieval.
+ * URL存储时未签名，检索时签名。
+ */
+function signUrlForRetrieval(url: string): string {
+  return maybeSignUrl(url);
+}
+
+/**
  * Sign URLs in outputData if they are CloudFront URLs
  * 如果outputData中的URL是CloudFront URL则签名
  */
@@ -26,7 +37,30 @@ function signOutputData(outputData: unknown): unknown {
 
   // Sign resultUrl if present
   if (typeof signed.resultUrl === 'string') {
-    signed.resultUrl = maybeSignUrl(signed.resultUrl);
+    signed.resultUrl = signUrlForRetrieval(signed.resultUrl);
+  }
+
+  // Sign thumbnail if present
+  if (typeof signed.thumbnail === 'string') {
+    signed.thumbnail = signUrlForRetrieval(signed.thumbnail);
+  }
+
+  return signed;
+}
+
+/**
+ * Sign URLs in inputParams if they are CloudFront URLs
+ * 如果inputParams中的URL是CloudFront URL则签名
+ */
+function signInputParams(inputParams: unknown): unknown {
+  if (!inputParams || typeof inputParams !== 'object') return inputParams;
+
+  const data = inputParams as Record<string, unknown>;
+  const signed = { ...data };
+
+  // Sign imageUrl if present (used as thumbnail for 3D tasks)
+  if (typeof signed.imageUrl === 'string') {
+    signed.imageUrl = signUrlForRetrieval(signed.imageUrl);
   }
 
   return signed;
@@ -38,6 +72,72 @@ interface CreateTaskRequest {
   idempotencyKey?: string;
   /** Parent task ID for multi-step workflows (e.g., Fig Me 3D step links to transform step) */
   parentTaskId?: string;
+}
+
+/**
+ * Multi-step tools that require additional steps after the first
+ * Maps tool slug to the step name that indicates it's the first step
+ */
+const MULTI_STEP_TOOLS: Record<string, string> = {
+  'fig-me': 'transform', // transform step needs a 3d child to be complete
+};
+
+type TaskStatus = 'pending' | 'processing' | 'success' | 'failed';
+
+interface TaskWithChildren {
+  id: string;
+  status: TaskStatus;
+  outputData: unknown;
+  toolSlug: string;
+  childTasks?: TaskWithChildren[];
+}
+
+/**
+ * Get effective status for a task (considers child tasks for multi-step workflows)
+ * For multi-step tasks: success only if ALL expected children are success
+ *
+ * This is a server-side version of the function in task-card.tsx
+ * 获取任务的有效状态（考虑多步骤工作流的子任务）
+ */
+function getEffectiveStatus(task: TaskWithChildren): TaskStatus {
+  const isMultiStepTool = task.toolSlug in MULTI_STEP_TOOLS;
+  const outputData = task.outputData as Record<string, unknown> | null;
+  const step = outputData?.step as string | undefined;
+
+  // Check if this is the first step of a multi-step tool
+  if (isMultiStepTool) {
+    const firstStepName = MULTI_STEP_TOOLS[task.toolSlug];
+    const isFirstStep = step === firstStepName || !step; // No step means it's the initial task
+
+    // If first step is complete but no child tasks yet, show as processing
+    if (isFirstStep && task.status === 'success') {
+      if (!task.childTasks || task.childTasks.length === 0) {
+        // First step done, waiting for next step to be triggered
+        return 'processing';
+      }
+    }
+  }
+
+  // If task has children, determine status from children
+  if (task.childTasks && task.childTasks.length > 0) {
+    const childStatuses = task.childTasks.map((c) => c.status);
+
+    // If any child failed, the whole task failed
+    if (childStatuses.includes('failed')) return 'failed';
+
+    // If any child is still processing/pending, show as processing
+    if (childStatuses.includes('processing')) return 'processing';
+    if (childStatuses.includes('pending')) return 'pending';
+
+    // All children must be success for the task to be success
+    if (childStatuses.every((s) => s === 'success')) return 'success';
+
+    // Default to processing if mixed states
+    return 'processing';
+  }
+
+  // No children, use task's own status
+  return task.status;
 }
 export async function POST(request: Request) {
   try {
@@ -177,6 +277,7 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const statusFilter = url.searchParams.get('status');
+    const toolIdFilter = url.searchParams.get('toolId');
     const locale = (url.searchParams.get('locale') || 'en') as 'en' | 'ja' | 'pt' | 'zh';
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 100);
     const offset = parseInt(url.searchParams.get('offset') || '0');
@@ -184,13 +285,20 @@ export async function GET(request: Request) {
     const includeChildren = url.searchParams.get('includeChildren') === 'true';
 
     const conditions = [eq(tasks.userId, user.id)];
-    if (statusFilter && ['pending', 'processing', 'success', 'failed'].includes(statusFilter)) {
-      conditions.push(eq(tasks.status, statusFilter as 'pending' | 'processing' | 'success' | 'failed'));
+    // Note: status filter is applied AFTER calculating effective status (see below)
+    // Filter by tool ID if provided
+    if (toolIdFilter) {
+      conditions.push(eq(tasks.toolId, toolIdFilter));
     }
     // Filter to only root tasks (no parent) if requested
     if (rootOnly) {
       conditions.push(isNull(tasks.parentTaskId));
     }
+
+    // When filtering by status, we need to fetch more tasks because effective status
+    // may differ from raw status (for multi-step workflows with children)
+    // Fetch extra to compensate for tasks that will be filtered out
+    const fetchLimit = statusFilter ? limit * 3 + 20 : limit;
 
     const result = await db
       .select({
@@ -222,12 +330,14 @@ export async function GET(request: Request) {
       )
       .where(and(...conditions))
       .orderBy(desc(tasks.createdAt))
-      .limit(limit)
+      .limit(fetchLimit)
       .offset(offset);
 
-    // Fetch child tasks if requested
+    // Fetch child tasks if requested OR if filtering by status
+    // (status filter requires children to calculate effective status)
+    const needChildren = includeChildren || !!statusFilter;
     let childTasksMap: Map<string, typeof result> = new Map();
-    if (includeChildren && result.length > 0) {
+    if (needChildren && result.length > 0) {
       const parentIds = result.map((r) => r.id);
       const childTasks = await db
         .select({
@@ -274,7 +384,7 @@ export async function GET(request: Request) {
       id: row.id,
       status: row.status,
       progress: row.progress,
-      inputParams: row.inputParams,
+      inputParams: signInputParams(row.inputParams),
       outputData: signOutputData(row.outputData),
       errorMessage: row.errorMessage,
       createdAt: row.createdAt.toISOString(),
@@ -291,25 +401,57 @@ export async function GET(request: Request) {
       },
     });
 
-    const taskList = result.map((row) => {
+    // Build task list with children and calculate effective status
+    let taskList = result.map((row) => {
+      const children = childTasksMap.get(row.id) || [];
+
+      // Calculate effective status using the server-side function
+      const taskForStatus: TaskWithChildren = {
+        id: row.id,
+        status: row.status,
+        outputData: row.outputData,
+        toolSlug: row.toolSlug,
+        childTasks: children.map((c) => ({
+          id: c.id,
+          status: c.status,
+          outputData: c.outputData,
+          toolSlug: c.toolSlug,
+        })),
+      };
+      const effectiveStatus = getEffectiveStatus(taskForStatus);
+
       const task = formatTask(row);
-      // Include child tasks if requested
+      // Include child tasks if requested (not just for internal filtering)
       if (includeChildren) {
-        const children = childTasksMap.get(row.id) || [];
         return {
           ...task,
           childTasks: children.map(formatTask),
+          _effectiveStatus: effectiveStatus, // Internal field for filtering
         };
       }
-      return task;
+      return {
+        ...task,
+        _effectiveStatus: effectiveStatus,
+      };
     });
 
+    // Filter by effective status if status filter is provided
+    if (statusFilter && ['pending', 'processing', 'success', 'failed'].includes(statusFilter)) {
+      taskList = taskList.filter((t) => t._effectiveStatus === statusFilter);
+    }
+
+    // Apply the original limit after filtering
+    const limitedTasks = taskList.slice(0, limit);
+
+    // Remove internal _effectiveStatus field from response
+    const cleanedTasks = limitedTasks.map(({ _effectiveStatus, ...rest }) => rest);
+
     return NextResponse.json({
-      tasks: taskList,
+      tasks: cleanedTasks,
       pagination: {
         limit,
         offset,
-        hasMore: taskList.length === limit,
+        hasMore: limitedTasks.length === limit,
       },
     });
   } catch (error) {

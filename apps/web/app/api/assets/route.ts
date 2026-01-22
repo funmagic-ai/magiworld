@@ -4,6 +4,7 @@ import { getLogtoContext } from '@logto/next/server-actions';
 import { db, tasks, tools, userAssets, toolTranslations, eq, and, desc, isNull } from '@magiworld/db';
 import { logtoConfig } from '@/lib/logto';
 import { getUserByLogtoId } from '@/lib/user';
+import { maybeSignUrl } from '@/lib/cloudfront';
 
 interface SaveAssetRequest {
   taskId: string;
@@ -138,8 +139,9 @@ export async function GET(request: Request) {
       id: row.id,
       name: row.name,
       type: row.type,
-      url: row.url,
-      thumbnailUrl: row.thumbnailUrl,
+      // Sign URLs for private CloudFront access
+      url: row.url ? maybeSignUrl(row.url) : row.url,
+      thumbnailUrl: row.thumbnailUrl ? maybeSignUrl(row.thumbnailUrl) : row.thumbnailUrl,
       metadata: row.metadata,
       createdAt: row.createdAt.toISOString(),
       toolTitle: row.toolTitle,

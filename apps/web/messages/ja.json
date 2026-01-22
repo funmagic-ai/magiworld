@@ -82,8 +82,20 @@
       "success": "完了",
       "failed": "失敗"
     },
+    "step": {
+      "transform": "変換",
+      "3d": "3Dモデル"
+    },
     "viewResult": "結果を見る",
-    "createdAt": "作成日時"
+    "createdAt": "作成日時",
+    "completedAt": "完了日時",
+    "download": "ダウンロード",
+    "copyUrl": "URLをコピー",
+    "copied": "コピーしました！",
+    "error": "エラーが発生しました",
+    "close": "閉じる",
+    "recentTasks": "最近のタスク",
+    "allTasks": "すべてのタスク"
   },
   "footer": {
     "rights": "全著作権所有",

@@ -82,8 +82,20 @@
       "success": "Concluídas",
       "failed": "Falharam"
     },
+    "step": {
+      "transform": "Transformar",
+      "3d": "Modelo 3D"
+    },
     "viewResult": "Ver Resultado",
-    "createdAt": "Criado em"
+    "createdAt": "Criado em",
+    "completedAt": "Concluído em",
+    "download": "Baixar",
+    "copyUrl": "Copiar URL",
+    "copied": "Copiado!",
+    "error": "Ocorreu um erro",
+    "close": "Fechar",
+    "recentTasks": "Tarefas Recentes",
+    "allTasks": "Todas as Tarefas"
   },
   "footer": {
     "rights": "Todos os direitos reservados",
