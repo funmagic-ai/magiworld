@@ -6,20 +6,22 @@
  * Displays a grid of task cards with:
  * - Status filtering
  * - Responsive grid layout (2-3-4 columns)
- * - Click to expand modal
- * - Real-time progress updates
+ * - Click to expand modal (or redirect to tool for active tasks)
+ * - Real-time progress updates via polling
  *
  * @module components/ailab/task-list
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Loading03Icon, TaskDone01Icon } from '@hugeicons/core-free-icons';
-import { TaskCard, type TaskItem } from './task-card';
+import { TaskCard, type TaskItem, getEffectiveStatus } from './task-card';
 import { TaskDetailModal } from './task-detail-modal';
+import { useTaskPolling } from './use-task-polling';
 
 interface TaskListProps {
   locale: string;
@@ -30,43 +32,33 @@ type StatusFilter = (typeof STATUS_FILTERS)[number];
 
 export function TaskList({ locale }: TaskListProps) {
   const t = useTranslations('tasks');
-  const [tasks, setTasks] = useState<TaskItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const fetchTasks = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const params = new URLSearchParams({
-        locale,
-        rootOnly: 'true',
-        includeChildren: 'true',
-      });
-      if (filter !== 'all') {
-        params.set('status', filter);
-      }
-      const response = await fetch(`/api/tasks?${params}`);
-      if (response.ok) {
-        const data = await response.json();
-        setTasks(data.tasks);
-      }
-    } catch (error) {
-      console.error('Failed to fetch tasks:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [locale, filter]);
-
-  useEffect(() => {
-    fetchTasks();
-  }, [fetchTasks]);
+  // Use shared polling hook
+  const { tasks, isLoading } = useTaskPolling({
+    locale,
+    filter,
+    rootOnly: true,
+    includeChildren: true,
+  });
 
   const handleTaskClick = useCallback((task: TaskItem) => {
-    setSelectedTask(task);
-    setModalOpen(true);
-  }, []);
+    const effectiveStatus = getEffectiveStatus(task);
+
+    // For completed or failed tasks, open the detail modal
+    if (effectiveStatus === 'success' || effectiveStatus === 'failed') {
+      setSelectedTask(task);
+      setModalOpen(true);
+      return;
+    }
+
+    // For processing/pending/waiting tasks, redirect to the tool page to continue
+    const toolUrl = `/${locale}/ai-lab/${task.tool.type.slug}/${task.tool.slug}?taskId=${task.id}`;
+    router.push(toolUrl);
+  }, [locale, router]);
 
   const handleModalClose = useCallback((open: boolean) => {
     setModalOpen(open);
@@ -83,6 +75,8 @@ export function TaskList({ locale }: TaskListProps) {
       processing: t('status.processing'),
       success: t('status.success'),
       failed: t('status.failed'),
+      waiting: t('status.waiting'),
+      continue: t('status.continue'),
     },
   };
 

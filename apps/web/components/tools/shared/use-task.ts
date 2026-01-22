@@ -40,8 +40,18 @@ export interface UseTaskState {
   isLoading: boolean;
 }
 
+export interface AttachToTaskParams {
+  taskId: string;
+  /** Initial progress (from fetched task data) */
+  progress?: number;
+  /** Initial output data (from fetched task data) */
+  outputData?: TaskUpdate['outputData'];
+}
+
 export interface UseTaskReturn extends UseTaskState {
   createTask: (params: CreateTaskParams) => Promise<string | null>;
+  /** Attach to an existing task and subscribe to its SSE stream */
+  attachToTask: (params: AttachToTaskParams) => void;
   cancel: () => void;
   reset: () => void;
 }
@@ -196,9 +206,34 @@ export function useTask(): UseTaskReturn {
     });
   }, []);
 
+  const attachToTask = useCallback(
+    ({ taskId, progress = 0, outputData }: AttachToTaskParams) => {
+      // Close existing connection if any
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+
+      // Set initial state with provided data
+      setState({
+        taskId,
+        status: 'processing',
+        progress,
+        outputData: outputData || null,
+        error: null,
+        isLoading: true,
+      });
+
+      // Subscribe to SSE for live updates
+      subscribeToUpdates(taskId);
+    },
+    [subscribeToUpdates]
+  );
+
   return {
     ...state,
     createTask,
+    attachToTask,
     cancel,
     reset,
   };

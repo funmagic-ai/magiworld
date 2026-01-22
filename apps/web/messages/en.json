@@ -73,7 +73,9 @@
       "pending": "Pending",
       "processing": "Processing",
       "success": "Completed",
-      "failed": "Failed"
+      "failed": "Failed",
+      "waiting": "Waiting",
+      "continue": "Continue"
     },
     "filters": {
       "all": "All",

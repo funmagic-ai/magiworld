@@ -28,6 +28,10 @@ function signUrlForRetrieval(url: string): string {
 /**
  * Sign URLs in outputData if they are CloudFront URLs
  * 如果outputData中的URL是CloudFront URL则签名
+ *
+ * Returns both signed and unsigned URLs:
+ * - resultUrl: signed for display (expires after 1 hour)
+ * - unsignedResultUrl: unsigned for subsequent task creation (never expires)
  */
 function signOutputData(outputData: unknown): unknown {
   if (!outputData || typeof outputData !== 'object') return outputData;
@@ -35,9 +39,10 @@ function signOutputData(outputData: unknown): unknown {
   const data = outputData as Record<string, unknown>;
   const signed = { ...data };
 
-  // Sign resultUrl if present
+  // Sign resultUrl if present, keep unsigned version for task creation
   if (typeof signed.resultUrl === 'string') {
-    signed.resultUrl = signUrlForRetrieval(signed.resultUrl);
+    signed.unsignedResultUrl = signed.resultUrl;  // Keep unsigned for task creation
+    signed.resultUrl = signUrlForRetrieval(signed.resultUrl);  // Sign for display
   }
 
   // Sign thumbnail if present

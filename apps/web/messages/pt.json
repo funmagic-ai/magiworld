@@ -73,7 +73,9 @@
       "pending": "Pendente",
       "processing": "Processando",
       "success": "Concluído",
-      "failed": "Falhou"
+      "failed": "Falhou",
+      "waiting": "Aguardando",
+      "continue": "Continuar"
     },
     "filters": {
       "all": "Todas",

@@ -17,8 +17,9 @@
 
 'use client';
 
-import { useState, useCallback, useEffect, Suspense } from 'react';
+import { useState, useCallback, useEffect, useRef, Suspense } from 'react';
 import { useTranslations } from 'next-intl';
+import { useSearchParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { ImageUploader } from '../shared/image-uploader';
 import { ProgressBar } from '../shared/progress-bar';
@@ -98,19 +99,27 @@ type UIStep = 'input' | 'transforming' | 'transformed' | 'generating3d' | 'compl
 
 interface TaskState {
   taskId: string | null;
+  /** Signed URL for display (expires after 1 hour) */
   resultUrl: string | null;
+  /** Unsigned URL for subsequent task creation (never expires) */
+  unsignedResultUrl: string | null;
   status: 'idle' | 'processing' | 'success' | 'failed';
   error: string | null;
 }
 
 export function FigMeInterface({ tool }: FigMeInterfaceProps) {
   const t = useTranslations('figMe');
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   // Get reference images from the dedicated column
   const referenceImages = getReferenceImages(tool.referenceImages);
 
   // UI step state
   const [uiStep, setUIStep] = useState<UIStep>('input');
+
+  // Track if we've already processed the resumeTaskId (use ref to avoid re-renders)
+  const resumeProcessedRef = useRef(false);
 
   // Input image state
   const [inputImage, setInputImage] = useState<string | null>(null);
@@ -125,6 +134,7 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
   const [transformTask, setTransformTask] = useState<TaskState>({
     taskId: null,
     resultUrl: null,
+    unsignedResultUrl: null,
     status: 'idle',
     error: null,
   });
@@ -133,6 +143,7 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
   const [task3D, setTask3D] = useState<TaskState>({
     taskId: null,
     resultUrl: null,
+    unsignedResultUrl: null,
     status: 'idle',
     error: null,
   });
@@ -141,6 +152,120 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
   const transformTaskHook = useTask();
   const task3DHook = useTask();
   const upload = useUpload({ route: 'tools' });
+
+  // Load existing task if taskId is in URL (runs once on mount)
+  useEffect(() => {
+    const taskId = searchParams.get('taskId');
+
+    // Skip if no taskId or already processed
+    if (!taskId || resumeProcessedRef.current) return;
+
+    // Mark as processed immediately to prevent re-runs
+    resumeProcessedRef.current = true;
+
+    const loadTask = async () => {
+      try {
+        // Fetch the task data (includes children for multi-step tasks)
+        const response = await fetch(`/api/tasks/${taskId}?includeChildren=true`);
+        if (!response.ok) {
+          console.error('Failed to fetch task');
+          return;
+        }
+
+        const taskData = await response.json();
+        const outputData = taskData.outputData as Record<string, unknown> | null;
+        const inputParams = taskData.inputParams as Record<string, unknown> | null;
+        const step = outputData?.step as string | undefined;
+
+        // Restore input image from inputParams if available
+        if (inputParams?.imageUrl) {
+          setInputImage(inputParams.imageUrl as string);
+          setUploadedImageUrl(inputParams.imageUrl as string);
+        }
+        if (inputParams?.referenceImageUrl) {
+          setSelectedReferenceUrl(inputParams.referenceImageUrl as string);
+        }
+
+        // Determine which step we're at and set appropriate state
+        if (step === 'transform' || !step) {
+          // This is a transform task
+          if (taskData.status === 'processing' || taskData.status === 'pending') {
+            // Transform is still processing - attach to task for live SSE updates
+            transformTaskHook.attachToTask({
+              taskId,
+              progress: taskData.progress || 0,
+            });
+            setUIStep('transforming');
+          } else if (taskData.status === 'success') {
+            // Transform is done
+            setTransformTask({
+              taskId,
+              resultUrl: outputData?.resultUrl as string,
+              unsignedResultUrl: outputData?.unsignedResultUrl as string,
+              status: 'success',
+              error: null,
+            });
+
+            // Check if there are child tasks (3D step)
+            const childTasks = taskData.childTasks as Array<{
+              id: string;
+              status: string;
+              outputData: Record<string, unknown> | null;
+            }> | undefined;
+
+            if (childTasks && childTasks.length > 0) {
+              const child3D = childTasks[childTasks.length - 1];
+              if (child3D.status === 'processing' || child3D.status === 'pending') {
+                // 3D is still processing - attach to task for live SSE updates
+                task3DHook.attachToTask({
+                  taskId: child3D.id,
+                  progress: (child3D as { progress?: number }).progress || 0,
+                });
+                setUIStep('generating3d');
+              } else if (child3D.status === 'success') {
+                // 3D is done
+                setTask3D({
+                  taskId: child3D.id,
+                  resultUrl: child3D.outputData?.resultUrl as string,
+                  unsignedResultUrl: child3D.outputData?.unsignedResultUrl as string,
+                  status: 'success',
+                  error: null,
+                });
+                setUIStep('complete');
+              } else if (child3D.status === 'failed') {
+                // 3D failed
+                setTask3D({
+                  taskId: child3D.id,
+                  resultUrl: null,
+                  unsignedResultUrl: null,
+                  status: 'failed',
+                  error: 'Failed',
+                });
+                setUIStep('transformed'); // Go back to show retry option
+              }
+            } else {
+              // No child tasks - waiting for user to click "Generate 3D"
+              setUIStep('transformed');
+            }
+          } else if (taskData.status === 'failed') {
+            // Transform failed
+            setTransformTask({
+              taskId,
+              resultUrl: null,
+              unsignedResultUrl: null,
+              status: 'failed',
+              error: taskData.errorMessage || 'Failed',
+            });
+            setUIStep('input');
+          }
+        }
+      } catch (error) {
+        console.error('Error loading task:', error);
+      }
+    };
+
+    loadTask();
+  }, [searchParams]);
 
   // Sync transform task hook state
   useEffect(() => {
@@ -158,6 +283,8 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
         taskId: transformTaskHook.taskId,
         status: newStatus,
         resultUrl: (transformTaskHook.outputData?.resultUrl as string) || prev.resultUrl,
+        // Store unsigned URL for subsequent task creation (never expires)
+        unsignedResultUrl: (transformTaskHook.outputData?.unsignedResultUrl as string) || prev.unsignedResultUrl,
         error: transformTaskHook.error,
       }));
 
@@ -193,6 +320,7 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
         taskId: task3DHook.taskId,
         status: newStatus,
         resultUrl: (task3DHook.outputData?.resultUrl as string) || prev.resultUrl,
+        unsignedResultUrl: (task3DHook.outputData?.unsignedResultUrl as string) || prev.unsignedResultUrl,
         error: task3DHook.error,
       }));
 
@@ -218,8 +346,8 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
     setInputFile(null);
     setUploadedImageUrl(null);
     setUIStep('input');
-    setTransformTask({ taskId: null, resultUrl: null, status: 'idle', error: null });
-    setTask3D({ taskId: null, resultUrl: null, status: 'idle', error: null });
+    setTransformTask({ taskId: null, resultUrl: null, unsignedResultUrl: null, status: 'idle', error: null });
+    setTask3D({ taskId: null, resultUrl: null, unsignedResultUrl: null, status: 'idle', error: null });
     transformTaskHook.reset();
     task3DHook.reset();
     upload.reset();
@@ -229,12 +357,12 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
     if (uiStep === 'transformed' || uiStep === 'transforming') {
       // Go back to input, keep the uploaded image
       setUIStep('input');
-      setTransformTask({ taskId: null, resultUrl: null, status: 'idle', error: null });
+      setTransformTask({ taskId: null, resultUrl: null, unsignedResultUrl: null, status: 'idle', error: null });
       transformTaskHook.reset();
     } else if (uiStep === 'complete' || uiStep === 'generating3d') {
       // Go back to transformed result
       setUIStep('transformed');
-      setTask3D({ taskId: null, resultUrl: null, status: 'idle', error: null });
+      setTask3D({ taskId: null, resultUrl: null, unsignedResultUrl: null, status: 'idle', error: null });
       task3DHook.reset();
     }
   }, [uiStep, transformTaskHook, task3DHook]);
@@ -282,15 +410,17 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
   }, [inputFile, uploadedImageUrl, upload, transformTaskHook, tool.id, selectedReferenceUrl]);
 
   const handleRetryTransform = useCallback(() => {
-    setTransformTask({ taskId: null, resultUrl: null, status: 'idle', error: null });
-    setTask3D({ taskId: null, resultUrl: null, status: 'idle', error: null });
+    setTransformTask({ taskId: null, resultUrl: null, unsignedResultUrl: null, status: 'idle', error: null });
+    setTask3D({ taskId: null, resultUrl: null, unsignedResultUrl: null, status: 'idle', error: null });
     transformTaskHook.reset();
     task3DHook.reset();
     handleTransform();
   }, [transformTaskHook, task3DHook, handleTransform]);
 
   const handleGenerate3D = useCallback(async () => {
-    if (!transformTask.resultUrl || !transformTask.taskId) return;
+    // Use unsignedResultUrl for task creation (never expires), fallback to resultUrl
+    const imageUrlForTask = transformTask.unsignedResultUrl || transformTask.resultUrl;
+    if (!imageUrlForTask || !transformTask.taskId) return;
 
     setTask3D((prev) => ({ ...prev, status: 'processing', error: null }));
     setUIStep('generating3d');
@@ -300,7 +430,7 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
         toolId: tool.id,
         inputParams: {
           step: '3d',
-          imageUrl: transformTask.resultUrl,
+          imageUrl: imageUrlForTask,  // Use unsigned URL for storage
         },
         parentTaskId: transformTask.taskId,
       });
@@ -316,25 +446,13 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
       }));
       setUIStep('transformed');
     }
-  }, [transformTask.resultUrl, transformTask.taskId, task3DHook, tool.id]);
+  }, [transformTask.unsignedResultUrl, transformTask.resultUrl, transformTask.taskId, task3DHook, tool.id]);
 
   const handleRetry3D = useCallback(() => {
-    setTask3D({ taskId: null, resultUrl: null, status: 'idle', error: null });
+    setTask3D({ taskId: null, resultUrl: null, unsignedResultUrl: null, status: 'idle', error: null });
     task3DHook.reset();
     handleGenerate3D();
   }, [task3DHook, handleGenerate3D]);
-
-  const handleCancelTransform = useCallback(() => {
-    transformTaskHook.cancel();
-    setTransformTask((prev) => ({ ...prev, status: 'failed', error: 'Cancelled' }));
-    setUIStep('input');
-  }, [transformTaskHook]);
-
-  const handleCancel3D = useCallback(() => {
-    task3DHook.cancel();
-    setTask3D((prev) => ({ ...prev, status: 'failed', error: 'Cancelled' }));
-    setUIStep('transformed');
-  }, [task3DHook]);
 
   const handleDownload = useCallback(async (url: string, filename: string) => {
     try {
@@ -504,7 +622,6 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
             <div className="max-w-md mx-auto aspect-square">
               <ProgressBar
                 progress={transformProgress}
-                onCancel={handleCancelTransform}
                 message={upload.isUploading ? t('progress.uploading') : t('progress.transforming')}
               />
             </div>
@@ -580,7 +697,6 @@ export function FigMeInterface({ tool }: FigMeInterfaceProps) {
             <div className="max-w-md mx-auto aspect-square">
               <ProgressBar
                 progress={task3DProgress}
-                onCancel={handleCancel3D}
                 message={t('progress.generating3d')}
               />
             </div>

@@ -5,22 +5,25 @@
  *
  * Displays a grid of recent tasks for a specific tool with:
  * - Compact grid layout (4 columns)
- * - Click to view task detail modal
+ * - Click to view task detail modal (or redirect for active tasks)
  * - Link to all tasks page
+ * - Auto-polling for real-time progress updates
  *
  * @module components/tools/shared/recent-tasks
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { useLocale } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ArrowRight01Icon, Loading03Icon } from '@hugeicons/core-free-icons';
-import { TaskCard, type TaskItem } from '@/components/ailab/task-card';
+import { TaskCard, type TaskItem, getEffectiveStatus } from '@/components/ailab/task-card';
 import { TaskDetailModal } from '@/components/ailab/task-detail-modal';
+import { useTaskPolling } from '@/components/ailab/use-task-polling';
 
 interface RecentTasksProps {
   /** Tool ID to filter tasks */
@@ -32,44 +35,36 @@ interface RecentTasksProps {
 export function RecentTasks({ toolId, limit = 4 }: RecentTasksProps) {
   const t = useTranslations('tasks');
   const locale = useLocale();
+  const router = useRouter();
 
   // Build localized link to all tasks page
   const allTasksHref = `/${locale}/assets/tasks`;
-  const [tasks, setTasks] = useState<TaskItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const fetchTasks = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const params = new URLSearchParams({
-        locale,
-        toolId,
-        rootOnly: 'true',
-        includeChildren: 'true',
-        limit: String(limit),
-      });
-      const response = await fetch(`/api/tasks?${params}`);
-      if (response.ok) {
-        const data = await response.json();
-        setTasks(data.tasks);
-      }
-    } catch (error) {
-      console.error('Failed to fetch tasks:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [locale, toolId, limit]);
-
-  useEffect(() => {
-    fetchTasks();
-  }, [fetchTasks]);
+  // Use shared polling hook
+  const { tasks, isLoading } = useTaskPolling({
+    locale,
+    toolId,
+    limit,
+    rootOnly: true,
+    includeChildren: true,
+  });
 
   const handleTaskClick = useCallback((task: TaskItem) => {
-    setSelectedTask(task);
-    setModalOpen(true);
-  }, []);
+    const effectiveStatus = getEffectiveStatus(task);
+
+    // For completed or failed tasks, open the detail modal
+    if (effectiveStatus === 'success' || effectiveStatus === 'failed') {
+      setSelectedTask(task);
+      setModalOpen(true);
+      return;
+    }
+
+    // For processing/pending/waiting tasks, redirect to the tool page to continue
+    const toolUrl = `/${locale}/ai-lab/${task.tool.type.slug}/${task.tool.slug}?taskId=${task.id}`;
+    router.push(toolUrl);
+  }, [locale, router]);
 
   const handleModalClose = useCallback((open: boolean) => {
     setModalOpen(open);
@@ -85,6 +80,8 @@ export function RecentTasks({ toolId, limit = 4 }: RecentTasksProps) {
       processing: t('status.processing'),
       success: t('status.success'),
       failed: t('status.failed'),
+      waiting: t('status.waiting'),
+      continue: t('status.continue'),
     },
   };
 

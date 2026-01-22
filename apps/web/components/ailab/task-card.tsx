@@ -15,7 +15,7 @@
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Image01Icon, CubeIcon } from '@hugeicons/core-free-icons';
+import { Image01Icon, CubeIcon, ArrowRight01Icon } from '@hugeicons/core-free-icons';
 
 /**
  * Task item data structure
@@ -48,6 +48,7 @@ interface TaskCardProps {
   locale: string;
   onClick?: () => void;
   translations: {
+    /** Status labels including 'waiting' and 'continue' for action prompt */
     status: Record<string, string>;
   };
 }
@@ -56,15 +57,17 @@ interface TaskCardProps {
  * Multi-step tools that require additional steps after the first
  * Maps tool slug to the step name that indicates it's the first step
  */
-const MULTI_STEP_TOOLS: Record<string, string> = {
+export const MULTI_STEP_TOOLS: Record<string, string> = {
   'fig-me': 'transform', // transform step needs a 3d child to be complete
 };
 
 /**
  * Get effective status for a task (considers child tasks for multi-step workflows)
  * For multi-step tasks: success only if ALL expected children are success
+ *
+ * Returns 'waiting' for tasks that completed a step but need user action to continue
  */
-function getEffectiveStatus(task: TaskItem): TaskItem['status'] {
+export function getEffectiveStatus(task: TaskItem): TaskItem['status'] | 'waiting' {
   const isMultiStepTool = task.tool.slug in MULTI_STEP_TOOLS;
   const step = task.outputData?.step as string | undefined;
 
@@ -73,11 +76,11 @@ function getEffectiveStatus(task: TaskItem): TaskItem['status'] {
     const firstStepName = MULTI_STEP_TOOLS[task.tool.slug];
     const isFirstStep = step === firstStepName || !step; // No step means it's the initial task
 
-    // If first step is complete but no child tasks yet, show as processing
+    // If first step is complete but no child tasks yet, show as waiting for user action
     if (isFirstStep && task.status === 'success') {
       if (!task.childTasks || task.childTasks.length === 0) {
-        // First step done, waiting for next step to be triggered
-        return 'processing';
+        // First step done, waiting for user to trigger next step
+        return 'waiting';
       }
     }
   }
@@ -232,14 +235,18 @@ function isFinal3DOutput(task: TaskItem): boolean {
   return is3DOutput(task.outputData);
 }
 
+/** Extended status type including 'waiting' for multi-step tasks */
+export type EffectiveStatus = TaskItem['status'] | 'waiting';
+
 /**
- * Status color mapping
+ * Status color mapping (includes 'waiting' for multi-step tasks)
  */
-const statusStyles: Record<TaskItem['status'], string> = {
+const statusStyles: Record<EffectiveStatus, string> = {
   pending: 'bg-yellow-500/80 text-white',
   processing: 'bg-blue-500/80 text-white',
   success: 'bg-green-500/80 text-white',
   failed: 'bg-red-500/80 text-white',
+  waiting: 'bg-orange-500/80 text-white',
 };
 
 export function TaskCard({ task, locale, onClick, translations }: TaskCardProps) {
@@ -303,15 +310,12 @@ export function TaskCard({ task, locale, onClick, translations }: TaskCardProps)
           </div>
         )}
 
-        {/* 3D Badge */}
-        {is3D && effectiveStatus === 'success' && (
-          <div className="absolute top-2 left-2">
-            <Badge variant="secondary" className="bg-black/60 text-white text-xs gap-1">
-              <HugeiconsIcon icon={CubeIcon} className="w-3 h-3" />
-              3D
-            </Badge>
-          </div>
-        )}
+        {/* Status Badge - Top Left */}
+        <div className="absolute top-2 left-2">
+          <Badge className={cn('text-xs h-5', statusStyles[effectiveStatus])}>
+            {translations.status[effectiveStatus]}
+          </Badge>
+        </div>
 
         {/* Processing Overlay - progress bar only, no spinner */}
         {effectiveStatus === 'processing' && (
@@ -321,6 +325,16 @@ export function TaskCard({ task, locale, onClick, translations }: TaskCardProps)
                 className="h-full bg-white transition-all duration-300"
                 style={{ width: `${effectiveProgress}%` }}
               />
+            </div>
+          </div>
+        )}
+
+        {/* Waiting Overlay - shows "Continue" prompt */}
+        {effectiveStatus === 'waiting' && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="bg-orange-500 text-white text-sm px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg">
+              {translations.status.continue || 'Continue'}
+              <HugeiconsIcon icon={ArrowRight01Icon} className="w-4 h-4" />
             </div>
           </div>
         )}
@@ -349,7 +363,7 @@ export function TaskCard({ task, locale, onClick, translations }: TaskCardProps)
         </div>
 
         {/* Badges Row */}
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center gap-1.5">
           {/* Tool Type Badge */}
           <Badge
             variant={task.tool.type.badgeColor as 'default' | 'secondary' | 'outline'}
@@ -357,11 +371,13 @@ export function TaskCard({ task, locale, onClick, translations }: TaskCardProps)
           >
             {task.tool.type.name}
           </Badge>
-
-          {/* Status Badge */}
-          <Badge className={cn('text-xs h-5 ml-auto', statusStyles[effectiveStatus])}>
-            {translations.status[effectiveStatus]}
-          </Badge>
+          {/* 3D Badge - shown for 3D outputs */}
+          {is3D && (
+            <Badge variant="secondary" className="text-xs h-5 gap-1">
+              <HugeiconsIcon icon={CubeIcon} className="w-3 h-3" />
+              3D
+            </Badge>
+          )}
         </div>
       </div>
     </div>
