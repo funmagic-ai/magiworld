@@ -12,7 +12,7 @@
  * @module components/ailab/task-detail-modal
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -24,14 +24,14 @@ import { Button } from '@/components/ui/button';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Download01Icon,
-  Copy01Icon,
-  CheckmarkCircle02Icon,
   CubeIcon,
   Image01Icon,
   Clock01Icon,
   AlertCircleIcon,
+  Loading03Icon,
 } from '@hugeicons/core-free-icons';
 import { ModelViewer } from '@/components/tools/shared/model-viewer';
+import { getValidSignedUrl } from '@/lib/signed-url';
 import type { TaskItem } from './task-card';
 
 interface TaskDetailModalProps {
@@ -43,8 +43,6 @@ interface TaskDetailModalProps {
     status: Record<string, string>;
     step?: Record<string, string>;
     download: string;
-    copyUrl: string;
-    copied: string;
     createdAt: string;
     completedAt: string;
     error: string;
@@ -70,20 +68,30 @@ function is3DOutput(outputData: Record<string, unknown> | null): boolean {
   return false;
 }
 
+interface FinalResult {
+  /** Signed URL for display (may expire) */
+  resultUrl: string | null;
+  /** Unsigned URL for refreshing signed URL */
+  unsignedResultUrl: string | null;
+  is3D: boolean;
+  step: string | undefined;
+  finalTask: TaskItem;
+}
+
 /**
  * Get the final result for a task (considers child tasks for multi-step workflows)
- * Returns the final task and its result URL
+ * Returns both signed and unsigned URLs for expiry handling
  */
-function getFinalResult(task: TaskItem): { resultUrl: string | null; is3D: boolean; step: string | undefined; finalTask: TaskItem } {
+function getFinalResult(task: TaskItem): FinalResult {
   // Check child tasks first (for multi-step workflows like fig-me)
   if (task.childTasks && task.childTasks.length > 0) {
     // Find the last successful child task
     const successfulChildren = task.childTasks.filter((c) => c.status === 'success');
     if (successfulChildren.length > 0) {
       const finalChild = successfulChildren[successfulChildren.length - 1];
-      const resultUrl = finalChild.outputData?.resultUrl as string | undefined;
       return {
-        resultUrl: resultUrl || null,
+        resultUrl: (finalChild.outputData?.resultUrl as string) || null,
+        unsignedResultUrl: (finalChild.outputData?.unsignedResultUrl as string) || null,
         is3D: is3DOutput(finalChild.outputData),
         step: finalChild.outputData?.step as string | undefined,
         finalTask: finalChild,
@@ -92,7 +100,8 @@ function getFinalResult(task: TaskItem): { resultUrl: string | null; is3D: boole
     // If no successful children, show the last child's state
     const lastChild = task.childTasks[task.childTasks.length - 1];
     return {
-      resultUrl: lastChild.outputData?.resultUrl as string | null,
+      resultUrl: (lastChild.outputData?.resultUrl as string) || null,
+      unsignedResultUrl: (lastChild.outputData?.unsignedResultUrl as string) || null,
       is3D: is3DOutput(lastChild.outputData),
       step: lastChild.outputData?.step as string | undefined,
       finalTask: lastChild,
@@ -101,7 +110,8 @@ function getFinalResult(task: TaskItem): { resultUrl: string | null; is3D: boole
 
   // Single task - use its own output
   return {
-    resultUrl: task.outputData?.resultUrl as string | null,
+    resultUrl: (task.outputData?.resultUrl as string) || null,
+    unsignedResultUrl: (task.outputData?.unsignedResultUrl as string) || null,
     is3D: is3DOutput(task.outputData),
     step: task.outputData?.step as string | undefined,
     finalTask: task,
@@ -125,15 +135,59 @@ export function TaskDetailModal({
   locale,
   translations,
 }: TaskDetailModalProps) {
-  const [copied, setCopied] = useState(false);
+  // State for valid signed URL (refreshed if expired)
+  const [validSignedUrl, setValidSignedUrl] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Get final result (considers child tasks for multi-step workflows)
   const finalResult = useMemo(() => {
-    if (!task) return { resultUrl: null, is3D: false, step: undefined, finalTask: task };
+    if (!task) return { resultUrl: null, unsignedResultUrl: null, is3D: false, step: undefined, finalTask: task };
     return getFinalResult(task);
   }, [task]);
 
-  const { resultUrl, is3D, step } = finalResult;
+  const { resultUrl, unsignedResultUrl, is3D, step } = finalResult;
+
+  // Refresh signed URL when modal opens (check expiry)
+  useEffect(() => {
+    if (!open || !resultUrl) {
+      setValidSignedUrl(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const refreshUrl = async () => {
+      // If no unsigned URL, use the signed URL as-is
+      if (!unsignedResultUrl) {
+        setValidSignedUrl(resultUrl);
+        return;
+      }
+
+      setIsRefreshing(true);
+      try {
+        const validUrl = await getValidSignedUrl(resultUrl, unsignedResultUrl);
+        if (!cancelled) {
+          setValidSignedUrl(validUrl);
+        }
+      } catch (error) {
+        console.error('Failed to refresh signed URL:', error);
+        if (!cancelled) {
+          setValidSignedUrl(resultUrl); // Fall back to original
+        }
+      } finally {
+        if (!cancelled) {
+          setIsRefreshing(false);
+        }
+      }
+    };
+
+    refreshUrl();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, resultUrl, unsignedResultUrl]);
 
   const formatDate = useCallback(
     (dateString: string) => {
@@ -150,10 +204,22 @@ export function TaskDetailModal({
   );
 
   const handleDownload = useCallback(async () => {
-    if (!resultUrl || !task) return;
+    if (!task || isDownloading) return;
+
+    setIsDownloading(true);
 
     try {
-      const response = await fetch(resultUrl);
+      // Get valid URL for download (refresh if expired)
+      let downloadUrl = validSignedUrl;
+      if (!downloadUrl && resultUrl && unsignedResultUrl) {
+        downloadUrl = await getValidSignedUrl(resultUrl, unsignedResultUrl);
+      } else if (!downloadUrl) {
+        downloadUrl = resultUrl;
+      }
+
+      if (!downloadUrl) return;
+
+      const response = await fetch(downloadUrl);
       const blob = await response.blob();
 
       // Determine file extension from final task output (handles multi-step workflows)
@@ -171,20 +237,10 @@ export function TaskDetailModal({
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Download failed:', error);
+    } finally {
+      setIsDownloading(false);
     }
-  }, [resultUrl, task, finalResult.finalTask, is3D]);
-
-  const handleCopyUrl = useCallback(async () => {
-    if (!resultUrl) return;
-
-    try {
-      await navigator.clipboard.writeText(resultUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      console.error('Copy failed:', error);
-    }
-  }, [resultUrl]);
+  }, [validSignedUrl, resultUrl, unsignedResultUrl, task, finalResult.finalTask, is3D, isDownloading]);
 
   // Get effective status considering child tasks
   const effectiveStatus = useMemo(() => {
@@ -223,21 +279,26 @@ export function TaskDetailModal({
         <div className="flex-1 overflow-auto px-4 pb-4 flex flex-col min-h-0">
           {/* Preview - fills available space */}
           <div className="relative bg-muted rounded-lg overflow-hidden flex-1 min-h-0">
-            {effectiveStatus === 'success' && resultUrl ? (
+            {effectiveStatus === 'success' && validSignedUrl ? (
               is3D ? (
                 <div className="w-full h-full">
                   {/* Key forces clean remount when switching between different 3D models */}
-                  <ModelViewer key={resultUrl} url={resultUrl} autoRotate allowMaximize className="w-full h-full" />
+                  <ModelViewer key={validSignedUrl} url={validSignedUrl} autoRotate allowMaximize className="w-full h-full" />
                 </div>
               ) : (
                 <div className="flex items-center justify-center p-4 w-full h-full">
                   <img
-                    src={resultUrl}
+                    src={validSignedUrl}
                     alt={task.tool.title}
                     className="max-w-full max-h-full object-contain rounded"
                   />
                 </div>
               )
+            ) : effectiveStatus === 'success' && isRefreshing ? (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm">Loading...</p>
+              </div>
             ) : effectiveStatus === 'failed' ? (
               <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-destructive">
                 <HugeiconsIcon icon={AlertCircleIcon} className="w-10 h-10" />
@@ -279,20 +340,19 @@ export function TaskDetailModal({
             </div>
 
             {/* Right: Actions */}
-            {effectiveStatus === 'success' && resultUrl && (
-              <div className="flex items-center gap-2">
-                <Button onClick={handleDownload} size="sm" className="gap-1.5 h-8">
-                  <HugeiconsIcon icon={Download01Icon} className="w-3.5 h-3.5" />
-                  {translations.download}
-                </Button>
-                <Button onClick={handleCopyUrl} variant="outline" size="sm" className="gap-1.5 h-8">
-                  <HugeiconsIcon
-                    icon={copied ? CheckmarkCircle02Icon : Copy01Icon}
-                    className="w-3.5 h-3.5"
-                  />
-                  {copied ? translations.copied : translations.copyUrl}
-                </Button>
-              </div>
+            {effectiveStatus === 'success' && validSignedUrl && (
+              <Button
+                onClick={handleDownload}
+                disabled={isDownloading}
+                size="sm"
+                className="gap-1.5 h-8 transition-all hover:scale-105 active:scale-95"
+              >
+                <HugeiconsIcon
+                  icon={isDownloading ? Loading03Icon : Download01Icon}
+                  className={`w-3.5 h-3.5 ${isDownloading ? 'animate-spin' : ''}`}
+                />
+                {translations.download}
+              </Button>
             )}
           </div>
         </div>

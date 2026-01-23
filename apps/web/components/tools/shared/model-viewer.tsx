@@ -15,7 +15,7 @@
 
 import { Suspense, useRef, useState, useCallback, useEffect, Component, type ReactNode } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, useGLTF, Center, Environment } from '@react-three/drei';
+import { OrbitControls, useGLTF, Center, Environment, useProgress } from '@react-three/drei';
 import * as THREE from 'three';
 import { Button } from '@/components/ui/button';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -95,6 +95,50 @@ function LoadingFallback() {
       <boxGeometry args={[1, 1, 1]} />
       <meshStandardMaterial color="#4a5568" wireframe />
     </mesh>
+  );
+}
+
+/**
+ * Loading overlay component with rotating cube and progress
+ */
+function LoadingOverlay() {
+  const { progress, active } = useProgress();
+
+  if (!active && progress === 100) return null;
+
+  return (
+    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-gray-900/80 backdrop-blur-sm">
+      {/* Rotating cube icon */}
+      <div className="relative w-16 h-16 mb-4">
+        <div
+          className="w-full h-full border-2 border-primary/50 rounded-lg animate-spin"
+          style={{
+            animationDuration: '3s',
+            transformStyle: 'preserve-3d',
+          }}
+        />
+        <div
+          className="absolute inset-2 border-2 border-primary rounded-lg animate-spin"
+          style={{
+            animationDuration: '2s',
+            animationDirection: 'reverse',
+          }}
+        />
+      </div>
+
+      {/* Progress text */}
+      <p className="text-sm text-white/80 font-medium">
+        Loading {Math.round(progress)}%
+      </p>
+
+      {/* Progress bar */}
+      <div className="w-32 h-1.5 bg-white/20 rounded-full mt-2 overflow-hidden">
+        <div
+          className="h-full bg-primary transition-all duration-300"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -238,11 +282,13 @@ export function ModelViewer({
                 <Scene url={url} autoRotate={autoRotate} />
               </Canvas>
             </CanvasErrorBoundary>
+            {/* Loading overlay for maximized view */}
+            <LoadingOverlay />
             <Button
               onClick={toggleMaximize}
               variant="secondary"
               size="icon"
-              className="absolute top-4 right-4"
+              className="absolute top-4 right-4 z-20"
             >
               <HugeiconsIcon icon={Minimize02Icon} className="w-5 h-5" />
             </Button>
@@ -261,15 +307,19 @@ export function ModelViewer({
         {hasError ? (
           <ErrorFallback onRetry={handleRetry} />
         ) : isReady ? (
-          <CanvasErrorBoundary
-            key={key}
-            fallback={<ErrorFallback onRetry={handleRetry} />}
-            onError={handleError}
-          >
-            <Canvas camera={{ position: [0, 0, 2.5], fov: 50 }}>
-              <Scene url={url} autoRotate={autoRotate} />
-            </Canvas>
-          </CanvasErrorBoundary>
+          <>
+            <CanvasErrorBoundary
+              key={key}
+              fallback={<ErrorFallback onRetry={handleRetry} />}
+              onError={handleError}
+            >
+              <Canvas camera={{ position: [0, 0, 2.5], fov: 50 }}>
+                <Scene url={url} autoRotate={autoRotate} />
+              </Canvas>
+            </CanvasErrorBoundary>
+            {/* Loading overlay - shows progress while model is loading */}
+            <LoadingOverlay />
+          </>
         ) : (
           // Loading placeholder while waiting for valid dimensions
           <div className="w-full h-full flex items-center justify-center">

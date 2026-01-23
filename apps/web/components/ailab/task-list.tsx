@@ -87,8 +87,6 @@ export function TaskList({ locale }: TaskListProps) {
       '3d': t('step.3d'),
     },
     download: t('download'),
-    copyUrl: t('copyUrl'),
-    copied: t('copied'),
     createdAt: t('createdAt'),
     completedAt: t('completedAt'),
     error: t('error'),
